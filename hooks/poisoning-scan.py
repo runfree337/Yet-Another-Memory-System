@@ -33,6 +33,11 @@ import os
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # Suspect ranges by CODE POINT (ASCII hex literals only — never an invisible char in
 # THIS file, or it would flag itself). Covers:
 #   200B–200F zero-width + LTR/RTL marks · 2028–202F separators + embeddings/overrides
@@ -123,7 +128,7 @@ def scan_file(path):
 def staged_text_files():
     try:
         res = subprocess.run(["git", "diff", "--cached", "--name-only"],
-                             capture_output=True, text=True, timeout=10)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     except Exception:
         return []
     return [f for f in res.stdout.splitlines() if f.endswith((".md", ".txt"))]

@@ -67,6 +67,11 @@ import os
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 CHECKS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(CHECKS)  # framework root
 PY = sys.executable or "python3"
@@ -105,7 +110,8 @@ def _json_findings(cmd: list[str]):
     (timeout, script missing…). Never raises — this is an enrichment, never a blocking
     path."""
     try:
-        proc = subprocess.run(cmd + ["--json"], capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(cmd + ["--json"], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=30)
         data = json.loads(proc.stdout)
         return data if isinstance(data, list) else None
     except Exception:
@@ -136,7 +142,8 @@ def run_tier1(as_json: bool) -> int:
         results.append({"channel": "config", "code": 2, "summary": f"CFG-INVALID: {_CFG_ERR}"})
         worst = 2
     for label, cmd in TIER1:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         code = proc.returncode
         worst = max(worst, code)
         tail = (proc.stdout.strip().splitlines() or [""])[-1]

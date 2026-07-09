@@ -106,6 +106,19 @@ the host project's tech-specific linters: `0` clean, `1` only TO-CONFIRM, `2` at
 BLOCKING. This is what lets `checks/README.md §To wire` gate any check on its exit code
 alone, without knowing its internal semantics.
 
+**UTF-8 stdout, unconditionally** — Windows consoles default to cp1252; a report line
+containing `→` or `⨯` would crash `print()` with `UnicodeEncodeError`. Every CLI script in
+this framework carries, right after its imports:
+
+```python
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+```
+
+A new check copies this block verbatim.
+
 ## What this framework already applies, or doesn't
 
 *(The two linters cited under Provenance above aren't embedded in this repo — they served as

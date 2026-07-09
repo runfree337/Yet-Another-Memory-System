@@ -64,7 +64,10 @@ entry (`features/<slug>.md`) + `FEATURE_MAP.md` as index. File↔index concordan
 frontmatter of the `feature` channel (`entrylib.validate_entry`), core body keys (Role/Code/durable
 reference), existence of cited `D-*` ids, absence of transient references, freshness and
 granularity as a *soft* signal. The `FM-GRAN` threshold reads the global settings file:
-`sizes.feature-entry-max-lines` (default 60).
+`sizes.feature-entry-max-lines` (default 60). An **absent or empty channel is said
+explicitly** (text mode): "channel absent — nothing to verify" / "0 entries — … nothing
+verified", never a bare `OK.` a reader would take for a verified channel — an index in
+another format is invisible to this check, not validated by it.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -116,7 +119,9 @@ python3 checks/decisions-check.py --json
 ### `doc-refs-check.py`
 **Intent:** dead/drifted references in the docs. Four rules: **R-DEAD-PATH** (a file path
 cited in a `.md` that no longer/never existed — git heuristic: existed then vanished =
-blocking, never created = to-confirm); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
+blocking, never created = to-confirm; the "existed" lookup runs on **one** cached
+`git log --all --name-only` dump per run, never one `git log` per token — hookable even on a
+large history); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
 matching `decisions/<id>.md` — blocking; inactive without a `decisions/` folder);
 **R-DEAD-SYMBOL** (a backticked composed-PascalCase token, e.g. `` `FooBarManager` ``, found
 nowhere under the code roots — to-confirm); **R-GHOST-ABSENCE** (the reverse: prose says a
@@ -231,7 +236,9 @@ script calls `entrylib` with the `"memory"` channel and aggregates; its only loc
 `M-GRAN` (to-confirm, never blocking): an entry whose body exceeds
 `sizes.memory-entry-max-lines` useful lines (default 40, global settings file) is flagged as
 detail to move into the durable doc, keeping the entry as a pointer — the Memory-channel
-mirror of `FM-GRAN`, closing the gap where `memory/*.md` had no size signal at all.
+mirror of `FM-GRAN`, closing the gap where `memory/*.md` had no size signal at all. An
+**absent or empty channel is said explicitly** (text mode), same convention as
+`feature-map-check.py` — never a bare 0-finding report on a channel the check couldn't see.
 
 Rules surfaced as-is from `entrylib.validate_entry(..., "memory")`:
 `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`, `R-EXT-NO-CONF`, `R-BAD-DATE`,

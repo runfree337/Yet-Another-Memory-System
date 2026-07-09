@@ -54,6 +54,11 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # framework root
 DECISIONS_DIR = os.path.join(FRAMEWORK, "decisions")
 DECISIONS_INDEX = os.path.join(DECISIONS_DIR, "INDEX.md")
@@ -112,7 +117,7 @@ def template_lines(lines):
 def repo_root():
     try:
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                             capture_output=True, text=True, timeout=10).stdout.strip()
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout.strip()
         return out or os.getcwd()
     except Exception:
         return os.getcwd()
@@ -126,17 +131,40 @@ def exists_somewhere(token, file_dir):
                for base in (file_dir, FRAMEWORK, REPO, os.getcwd()))
 
 
+_HISTORICAL_PATHS = None
+
+
+def _historical_paths():
+    # ONE `git log` dump for the whole run, cached. The previous shape — one
+    # `git log --all -1 -- <token>` subprocess per dead token — cost ~0.3 s each on a
+    # real host repo (measured: 630 dead tokens x 2441 commits = 2min20 wall), which
+    # ruled the check out of any hook. `core.quotepath=off` keeps non-ASCII paths
+    # literal (git would otherwise octal-escape them and break the set lookup).
+    global _HISTORICAL_PATHS
+    if _HISTORICAL_PATHS is None:
+        try:
+            out = subprocess.run(
+                ["git", "-c", "core.quotepath=off", "log", "--all",
+                 "--pretty=format:", "--name-only"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=120, cwd=REPO).stdout
+            _HISTORICAL_PATHS = {line.strip() for line in out.splitlines() if line.strip()}
+        except Exception:
+            _HISTORICAL_PATHS = set()   # degrades to TO-CONFIRM, same as the old failure path
+    return _HISTORICAL_PATHS
+
+
 def had_history(token):
     # EXACT path only: a homonymous file (same basename) that disappeared elsewhere does
     # NOT make this reference dead. The `*/basename` glob produced false BLOCKING — it was
     # removed to keep the firm tier at zero false positives. Dead = this exact path
-    # existed.
-    try:
-        out = subprocess.run(["git", "log", "--all", "--oneline", "-1", "--", token],
-                             capture_output=True, text=True, timeout=10, cwd=REPO).stdout
-        return bool(out.strip())
-    except Exception:
-        return False
+    # existed (as a file, or as a directory prefix — same reach as a git pathspec).
+    paths = _historical_paths()
+    t = token.replace("\\", "/").strip("/")
+    if t in paths:
+        return True
+    prefix = t + "/"
+    return any(p.startswith(prefix) for p in paths)
 
 
 def decision_exists(did):
@@ -278,14 +306,14 @@ def gather(args):
     if args.staged:
         try:
             out = subprocess.run(["git", "diff", "--cached", "--name-only"],
-                                 capture_output=True, text=True, timeout=10).stdout
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout
         except Exception:
             return []
         return [f for f in out.splitlines() if f.endswith(".md") and os.path.isfile(f)]
     if args.diff:
         try:
             out = subprocess.run(["git", "diff", "--name-only"],
-                                 capture_output=True, text=True, timeout=10).stdout
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout
         except Exception:
             return []
         return [f for f in out.splitlines() if f.endswith(".md") and os.path.isfile(f)]

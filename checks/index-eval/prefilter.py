@@ -25,6 +25,11 @@ import sys
 
 from lib.lexsim import decide_flag, pairwise
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 FRAMEWORK = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_CONFIG = os.path.join(FRAMEWORK, "index", "index-config.json")
 

@@ -42,6 +42,11 @@ import re
 import sys
 import unicodedata
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # The other channels' index files/dirs — framework constants, hardcoded like in
 # checks/memory-check.py; reading any of them counts as consulting the cartography.
 CHANNEL_PATHS = ("FEATURE_MAP.md", "features/", "MEMORY.md", "memory/", "decisions/")

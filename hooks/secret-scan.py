@@ -33,6 +33,11 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 PATTERNS = [
     ("Anthropic API Key",          re.compile(r"sk-ant-api\d{2}-[A-Za-z0-9_-]{86}-[A-Za-z0-9_-]{6}AA")),
     ("Anthropic Key (short)",      re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")),
@@ -171,7 +176,7 @@ def scan_paths(paths):
 def scan_staged():
     try:
         files = subprocess.run(["git", "diff", "--cached", "--name-only"],
-                               capture_output=True, text=True, timeout=10).stdout.splitlines()
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout.splitlines()
     except Exception:
         return []
     out = []
@@ -180,7 +185,7 @@ def scan_staged():
             continue
         try:
             content = subprocess.run(["git", "show", f":{f}"],
-                                     capture_output=True, text=True, timeout=10).stdout
+                                     capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout
             out += scan_content(content, f)
         except Exception:
             pass

@@ -20,6 +20,11 @@ import json
 import re
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # `-delete` preceded by a space/start (not `--delete` like `git branch --delete`), or
 # `-exec … rm`.
 DESTRUCTIVE = (re.compile(r"(?<![-\w])-delete\b"), re.compile(r"-exec\s+rm\b"))

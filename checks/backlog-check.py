@@ -93,6 +93,11 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib  # noqa: E402
 
@@ -476,7 +481,7 @@ def cmd_stamp(argv: list[str]) -> int:
     staged = "--staged" in argv
     if staged:
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            cwd=ROOT, capture_output=True, text=True)
+                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         files = [f for f in r.stdout.splitlines()
                  if f.replace("\\", "/").startswith("backlog/")
                  and os.path.basename(f.replace("\\", "/")) == "STATE.md"]

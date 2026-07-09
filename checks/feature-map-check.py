@@ -65,6 +65,11 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib  # noqa: E402
 
@@ -158,7 +163,7 @@ def check_index() -> list[Finding]:
 def _git_last_commit_date(relpath: str) -> str | None:
     try:
         r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", relpath],
-                            cwd=ROOT, capture_output=True, text=True, timeout=10)
+                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     except Exception:
         return None
     out = r.stdout.strip()
@@ -265,7 +270,7 @@ def cmd_stamp(argv: list[str]) -> int:
     staged = "--staged" in argv
     if staged:
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            cwd=ROOT, capture_output=True, text=True)
+                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         files = [f for f in r.stdout.splitlines()
                  if f.replace("\\", "/").startswith("features/") and f.endswith(".md")]
     else:
@@ -312,6 +317,18 @@ def main(argv: list[str]) -> int:
         return cmd_stamp(argv)
 
     findings = run()
+    # A silent "OK." on a channel with nothing in it would be indistinguishable from a
+    # verified one — say what was (not) verified. An index in another format (e.g. inline
+    # entries with no `## Entries` section) is INVISIBLE to this check, never validated.
+    # Text mode only: `--json` keeps printing the (empty) findings array.
+    if not findings and not list_entries() and "--json" not in argv:
+        if not os.path.isfile(FMAP) and not os.path.isdir(FEATURES_DIR):
+            print("feature-map-check: no FEATURE_MAP.md and no features/ — Feature channel "
+                  "absent, nothing to verify.")
+        else:
+            print("feature-map-check: 0 entries — empty Feature channel (or an index not in "
+                  "the one-file-per-entry format, which this check cannot see). Nothing verified.")
+        return 0
     if "--json" in argv:
         print(json.dumps([f._asdict() for f in findings], ensure_ascii=False, indent=2))
     else:

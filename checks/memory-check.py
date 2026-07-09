@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integrity check of the "Memory" channel (preferences), agnostic.
+r"""Integrity check of the "Memory" channel (preferences), agnostic.
 
 Format: one fact per file + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index (one
 line per file) — instance of the `ENTRY-TEMPLATE.md` meta-schema. All the
@@ -48,6 +48,11 @@ import os
 import re
 import subprocess
 import sys
+
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib  # noqa: E402
@@ -150,7 +155,7 @@ def cmd_stamp(argv) -> int:
         # cwd=ROOT + ROOT-joined paths, like the two sibling stamps (backlog-check,
         # feature-map-check) — the script must work from any working directory.
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            cwd=ROOT, capture_output=True, text=True)
+                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         files = [f for f in r.stdout.splitlines()
                  if f.replace("\\", "/").startswith("memory/") and f.endswith(".md")]
     else:
@@ -178,6 +183,24 @@ def main(argv) -> int:
     as_json = "--json" in argv
 
     findings = check_config() + audit_memory_dir() + audit_index_concordance()
+
+    # Same convention as feature-map-check.py: an empty or absent channel is SAID, never
+    # summarized as a bare 0-finding report a reader would take for a verified channel.
+    # Text mode only: `--json` keeps printing the (empty) findings array.
+    def _entries():
+        if not os.path.isdir(MEMORY_DIR):
+            return []
+        return [f for f in os.listdir(MEMORY_DIR) if f.endswith(".md")]
+
+    if not findings and not _entries() and not as_json:
+        if not os.path.isfile(MEMORY_MD) and not os.path.isdir(MEMORY_DIR):
+            print("memory-check: no MEMORY.md and no memory/ — Memory channel absent, "
+                  "nothing to verify.")
+        else:
+            print("memory-check: 0 entries — empty Memory channel (or an index not in the "
+                  "one-fact-per-file format, which this check cannot see). Nothing verified.")
+        return 0
+
     bloq = [f for f in findings if f.severity == BLOCKING]
     conf = [f for f in findings if f.severity == TO_CONFIRM]
 

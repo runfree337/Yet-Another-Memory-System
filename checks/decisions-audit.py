@@ -67,6 +67,11 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # …/ai-workflow
 CHECKS = os.path.dirname(os.path.abspath(__file__))
 INDEX_DEFAULT = os.path.join(ROOT, "decisions", "INDEX.md")
@@ -168,7 +173,8 @@ def cmd_tier1(cfg_err: str | None = None) -> int:
         if not os.path.isfile(path):
             print(f"  ⨯ {label}: {script} missing — skipped")
             continue
-        r = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
         worst = max(worst, r.returncode)
         mark = "OK " if r.returncode == 0 else ("?? " if r.returncode == 1 else "!! ")
         tail = (r.stdout.strip().splitlines() or [""])[-1]
