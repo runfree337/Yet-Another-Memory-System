@@ -5,6 +5,8 @@ A **methodological orchestrator** for working with an AI on a software project.
 brings its architecture, its code tools, its doc and its review; YAMS brings **how to work and
 remember** — it *plugs into* the project, it doesn't replace any of that.
 
+This framework was mostly developped with the help of Claude AI
+
 ## The idea
 
 YAMS provides five pieces that fit together:
