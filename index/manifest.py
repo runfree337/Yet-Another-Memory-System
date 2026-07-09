@@ -69,25 +69,25 @@ def save(path, rows):
             f.write(f"{p}\t{rows[p]}\n")
 
 
-def cmd_set(rows_path, chemin, intent):
+def cmd_set(rows_path, path, intent):
     rows = load(rows_path)
-    existed = chemin in rows
-    rows[chemin] = " ".join(intent.split())
+    existed = path in rows
+    rows[path] = " ".join(intent.split())
     save(rows_path, rows)
-    print(("updated" if existed else "added") + f": {chemin}")
+    print(("updated" if existed else "added") + f": {path}")
 
 
-def cmd_rm(rows_path, chemin):
+def cmd_rm(rows_path, path):
     rows = load(rows_path)
-    if rows.pop(chemin, None) is None:
-        print(f"absent: {chemin}")
+    if rows.pop(path, None) is None:
+        print(f"absent: {path}")
         return
     save(rows_path, rows)
-    print(f"removed: {chemin}")
+    print(f"removed: {path}")
 
 
-def cmd_get(rows_path, chemin):
-    print(load(rows_path).get(chemin, ""))
+def cmd_get(rows_path, path):
+    print(load(rows_path).get(path, ""))
 
 
 def cmd_stamp(cfg, base):

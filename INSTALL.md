@@ -77,6 +77,13 @@ flowchart TD
    `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md` from this framework into the host project,
    **only if missing**.
    *Installer:* copies + leaves existing files untouched; explicit `--force` to overwrite.
+   > **Placement assumption — framework at the project root.** The Python scripts locate
+   > their data relative to their own file (`checks/..` = framework root), while the
+   > adapter hooks `cd` to the **project** root (`CLAUDE_PROJECT_DIR`) and call
+   > `checks/…`, `.memory-reports/…` relative to it. Both agree as long as the framework
+   > folders sit at the root of the host repo (the layout step 2 produces). If you vendor
+   > the framework in a subfolder instead, adjust the paths inside
+   > `adapters/claude-code/hooks/*.sh` (and `$YAMS_MEMORY_REPORT_DIR`) accordingly.
 
 3. **Configure the index** — fill in `index/index-config.json` (roots + extensions to index, <!-- template -->
    optional `hub`) for `index-check.py` (read, checks for drift) **and** `index/manifest.py`

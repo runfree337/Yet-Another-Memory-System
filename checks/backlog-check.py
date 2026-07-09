@@ -18,6 +18,7 @@ Rules:
                                   `R-EXT-NO-CONF`, `R-UNVERIFIED`, `R-VERIFIED-NOT-RATIFIED`,
                                   `R-BAD-DATE` ; `entrylib.check_links` for `links:` —
                                   `R-DEAD-LINK`.
+  E-STATE-MISSING (BLOCKING)     `backlog/<id>/` subfolder with no STATE.md.
   E-ID           (BLOCKING)      frontmatter `id` != folder name.
   E-ID-KEBAB     (BLOCKING)      frontmatter `id` not kebab-case.
   E-ID-DUP       (BLOCKING)      `id` already used by another work item.
@@ -99,21 +100,21 @@ TASK_LABEL_MAX_WORDS = 30
 STATE_SIZE_MAX_LINES = 80
 CANON_SECTIONS = {"Tasks", "Remaining"}
 
-# DoD (cf. backlog/README.md). `{cible}` = the work item to remove. Step 1 is a CHECK
+# DoD (cf. backlog/README.md). `{target}` = the work item to remove. Step 1 is a CHECK
 # (capitalization already happened task by task), not heavy lifting.
 CLOSURE_STEPS = [
     ("Durable", "check that no durable content is left unmigrated (STATE.md never carries "
                 "any) — otherwise migrate it now to its home + the affected memories"),
     ("Decision", "log the decision if the closure settles a structural choice"),
-    ("Backlog", "delete {cible} **+ its line in `INDEX.md`**"),
+    ("Backlog", "delete {target} **+ its line in `INDEX.md`**"),
     ("State", "update `DASHBOARD.md`: progress of the affected milestone, hot spots"),
     ("Capitalization", "ask the question \"reusable method learning?\" and route if so"),
 ]
 
 
-def closure_checklist(cible="the work item's folder"):
+def closure_checklist(target="the work item's folder"):
     head = "Closure checklist (DoD — `backlog/README.md`):"
-    rows = [f"  [ ] {i}. **{t}** — {d.format(cible=cible)}"
+    rows = [f"  [ ] {i}. **{t}** — {d.format(target=target)}"
             for i, (t, d) in enumerate(CLOSURE_STEPS, 1)]
     return "\n".join([head, *rows])
 
@@ -132,7 +133,7 @@ TASK_BADGE = re.compile(r"^\[(?P<state>[^\]]*)\]\s*(?P<rest>.*)$")
 DOC_REF = re.compile(r"→\s*(\S+)\s*$")
 
 
-def parse_etat(text):
+def parse_state(text):
     """Returns (headings: [(lineno, title)], sections: {title: [(lineno, bullet_content)]})."""
     headings, sections, current = [], {}, None
     for lineno, line in enumerate(text.splitlines(), start=1):
@@ -217,33 +218,33 @@ def collect_work_items():
 
 def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
     findings: list[Finding] = []
-    etat = os.path.join(cdir, "STATE.md")
-    etat_rel = rel(etat)
-    if not os.path.isfile(etat):
-        findings.append(Finding(BLOCKING, "E-ETAT-MISSING", rel(cdir), 1,
+    state_path = os.path.join(cdir, "STATE.md")
+    state_rel = rel(state_path)
+    if not os.path.isfile(state_path):
+        findings.append(Finding(BLOCKING, "E-STATE-MISSING", rel(cdir), 1,
                                  "work item subfolder with no STATE.md."))
         return findings
 
-    with open(etat, encoding="utf-8") as f:
+    with open(state_path, encoding="utf-8") as f:
         text = f.read()
 
     meta, body, err = entrylib.parse_frontmatter(text)
-    findings += entrylib.validate_entry(etat_rel, meta, "backlog")
-    findings += entrylib.check_links(etat_rel, meta, ROOT)
+    findings += entrylib.validate_entry(state_rel, meta, "backlog")
+    findings += entrylib.check_links(state_rel, meta, ROOT)
 
-    headings, sections = parse_etat(text)
+    headings, sections = parse_state(text)
 
     # E-ID / E-ID-KEBAB / E-ID-DUP
     fid = meta.get("id")
     if fid != cid:
-        findings.append(Finding(BLOCKING, "E-ID", etat_rel, 1,
+        findings.append(Finding(BLOCKING, "E-ID", state_rel, 1,
                                  f"frontmatter `id: {fid}` != folder name « {cid} »."))
     if isinstance(fid, str) and not KEBAB.match(fid):
-        findings.append(Finding(BLOCKING, "E-ID-KEBAB", etat_rel, 1,
+        findings.append(Finding(BLOCKING, "E-ID-KEBAB", state_rel, 1,
                                  f"frontmatter `id: {fid}` is not kebab-case."))
     if fid is not None:
         if fid in seen_ids:
-            findings.append(Finding(BLOCKING, "E-ID-DUP", etat_rel, 1,
+            findings.append(Finding(BLOCKING, "E-ID-DUP", state_rel, 1,
                                      f"id « {fid} » already used by « {seen_ids[fid]} »."))
         else:
             seen_ids[fid] = cid
@@ -254,14 +255,14 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
         expected = milestone_map[cid]
         a = "null (Unplanned)" if expected is None else str(expected)
         m = "null" if milestone is None else str(milestone)
-        findings.append(Finding(BLOCKING, "E-MILESTONE", etat_rel, 1,
+        findings.append(Finding(BLOCKING, "E-MILESTONE", state_rel, 1,
                                  f"frontmatter `milestone: {m}` but the INDEX files this work "
                                  f"item under « {a} »."))
 
     # E-AFTER
     for dep in (meta.get("after") or []):
         if dep not in ids:
-            findings.append(Finding(BLOCKING, "E-AFTER", etat_rel, 1,
+            findings.append(Finding(BLOCKING, "E-AFTER", state_rel, 1,
                                      f"frontmatter `after` points to « {dep} » — no work item by that name."))
 
     # E-DOCS
@@ -273,13 +274,13 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
             det.append("undeclared: " + ", ".join(sorted(actual - declared)))
         if declared - actual:
             det.append("nonexistent: " + ", ".join(sorted(declared - actual)))
-        findings.append(Finding(BLOCKING, "E-DOCS", etat_rel, 1,
+        findings.append(Finding(BLOCKING, "E-DOCS", state_rel, 1,
                                  "frontmatter `docs:` != folder companions (" + " ; ".join(det) + ")."))
 
     # E-STATE-SECTION (soft) — any heading outside Tasks/Remaining
     for lineno, h in headings:
         if h not in CANON_SECTIONS:
-            findings.append(Finding(TO_CONFIRM, "E-STATE-SECTION", f"{etat_rel}:{lineno}",
+            findings.append(Finding(TO_CONFIRM, "E-STATE-SECTION", state_rel,
                                      lineno, f"heading « ## {h} » outside the canonical sections "
                                      "(Tasks/Remaining) — candidate for \"durable content living "
                                      "in the state file\"."))
@@ -287,14 +288,14 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
     # E-STATE-SIZE (soft)
     nb_lines = len(text.splitlines())
     if nb_lines > STATE_SIZE_MAX_LINES:
-        findings.append(Finding(TO_CONFIRM, "E-STATE-SIZE", etat_rel, 1,
+        findings.append(Finding(TO_CONFIRM, "E-STATE-SIZE", state_rel, 1,
                                  f"{nb_lines} lines (> {STATE_SIZE_MAX_LINES}) — candidate for "
                                  "\"durable content living in the state file\", should be emptied "
                                  "into its durable home."))
 
     # E-TASK-SECTION + tasks
     if "Tasks" not in sections:
-        findings.append(Finding(BLOCKING, "E-TASK-SECTION", etat_rel, 1,
+        findings.append(Finding(BLOCKING, "E-TASK-SECTION", state_rel, 1,
                                  "`## Tasks` section absent (mandatory, `backlog/README.md`)."))
     else:
         counts = {s: 0 for s in TASK_STATES}
@@ -303,17 +304,17 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
             state, label, doc = parse_task(raw)
             total += 1
             if state not in TASK_STATES:
-                findings.append(Finding(BLOCKING, "E-TASK-STATE", f"{etat_rel}:{lineno}", lineno,
+                findings.append(Finding(BLOCKING, "E-TASK-STATE", state_rel, lineno,
                                          f"task state « {state or '(absent)'} » outside "
                                          "todo|in-progress|blocked|done."))
             else:
                 counts[state] += 1
             if doc is None and len(label.split()) > TASK_LABEL_MAX_WORDS:
-                findings.append(Finding(BLOCKING, "E-TASK-LEN", f"{etat_rel}:{lineno}", lineno,
+                findings.append(Finding(BLOCKING, "E-TASK-LEN", state_rel, lineno,
                                          f"{len(label.split())}-word label (> {TASK_LABEL_MAX_WORDS}) "
                                          "with no referenced working document (`→ doc.md`)."))
             if doc is not None and not os.path.isfile(os.path.join(cdir, doc)):
-                findings.append(Finding(BLOCKING, "E-TASK-REF", f"{etat_rel}:{lineno}", lineno,
+                findings.append(Finding(BLOCKING, "E-TASK-REF", state_rel, lineno,
                                          f"working document « {doc} » not found in "
                                          f"{rel(cdir)}/."))
 
@@ -321,11 +322,11 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
         started = any(counts[s] for s in ("in-progress", "blocked", "done"))
         all_done = total > 0 and counts["done"] == total
         if all_done and status in ("todo", "in-progress"):
-            findings.append(Finding(TO_CONFIRM, "E-TASK-SYNC", etat_rel, 1,
+            findings.append(Finding(TO_CONFIRM, "E-TASK-SYNC", state_rel, 1,
                                      f"every task is `done` but work item `status: {status}` "
                                      "— ready to close?"))
         if status == "in-progress" and not started:
-            findings.append(Finding(TO_CONFIRM, "E-TASK-SYNC", etat_rel, 1,
+            findings.append(Finding(TO_CONFIRM, "E-TASK-SYNC", state_rel, 1,
                                      "work item `status: in-progress` with no task started at all."))
 
     return findings
@@ -366,17 +367,17 @@ def check_index(work_items, index_text) -> list[Finding]:
             if "<" in tok or ">" in tok or tok in STRUCTURAL:
                 continue
             if re.fullmatch(r"[\w.\-]+\.md", tok) and tok not in basenames:
-                findings.append(Finding(BLOCKING, "I-DEAD-POINTER", f"{rel(INDEX_PATH)}:{lineno}",
+                findings.append(Finding(BLOCKING, "I-DEAD-POINTER", rel(INDEX_PATH),
                                          lineno, f"pointer « {tok} » resolves to no file "
                                          "in the backlog."))
             elif re.fullmatch(r"[\w.\-]+/", tok):
                 name_ = tok.rstrip("/")
                 if name_ not in reldirs and name_ not in ids:
-                    findings.append(Finding(BLOCKING, "I-DEAD-POINTER", f"{rel(INDEX_PATH)}:{lineno}",
+                    findings.append(Finding(BLOCKING, "I-DEAD-POINTER", rel(INDEX_PATH),
                                              lineno, f"pointer « {tok} » resolves to no existing "
                                              "folder."))
         if re.match(r"^\s*[-*]\s*\[[ xX]\]", line):
-            findings.append(Finding(BLOCKING, "I-CHECKBOX", f"{rel(INDEX_PATH)}:{lineno}", lineno,
+            findings.append(Finding(BLOCKING, "I-CHECKBOX", rel(INDEX_PATH), lineno,
                                      "Markdown checkbox in the INDEX — remove `[ ]`/`[x]` (done = "
                                      "removed; status = frontmatter or inline badge)."))
     return findings
@@ -428,13 +429,13 @@ def work_item_ids():
 
 def work_item_state(cid):
     cdir = os.path.join(BACKLOG, cid)
-    etat = os.path.join(cdir, "STATE.md")
-    if not os.path.isdir(cdir) or not os.path.isfile(etat):
+    state_path = os.path.join(cdir, "STATE.md")
+    if not os.path.isdir(cdir) or not os.path.isfile(state_path):
         return None
-    with open(etat, encoding="utf-8") as f:
+    with open(state_path, encoding="utf-8") as f:
         text = f.read()
     meta, _body, _err = entrylib.parse_frontmatter(text)
-    _headings, sections = parse_etat(text)
+    _headings, sections = parse_state(text)
     counts = {s: 0 for s in TASK_STATES}
     tasks = []
     for lineno, raw in sections.get("Tasks", []):
@@ -458,8 +459,8 @@ def _task_counts_suffix(counts):
 def render_state(cid):
     st = work_item_state(cid)
     if st is None:
-        dispo = ", ".join(work_item_ids()) or "(none)"
-        return f"[backlog-check] work item « {cid} » not found (backlog/{cid}/STATE.md).\nWork items: {dispo}"
+        available = ", ".join(work_item_ids()) or "(none)"
+        return f"[backlog-check] work item « {cid} » not found (backlog/{cid}/STATE.md).\nWork items: {available}"
     milestone_label = "Unplanned" if st["milestone"] is None else f"Milestone {st['milestone']}"
     lines = [f"Work item {st['id']} — {st['title']}",
              f"  status : {st['status']}   ·   {milestone_label}   ·   updated {st['updated']}"]
@@ -537,8 +538,8 @@ def main(argv):
         return cmd_stamp(argv)
     if "--checklist" in argv:
         rest = [a for a in argv[argv.index("--checklist") + 1:] if not a.startswith("-")]
-        cible = ("`backlog/" + rest[0].strip("/") + "/`") if rest else "the work item's folder"
-        print(closure_checklist(cible))
+        target = ("`backlog/" + rest[0].strip("/") + "/`") if rest else "the work item's folder"
+        print(closure_checklist(target))
         return 0
     if "--state" in argv:
         rest = [a for a in argv[argv.index("--state") + 1:] if not a.startswith("-")]

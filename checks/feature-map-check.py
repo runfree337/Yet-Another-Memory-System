@@ -76,14 +76,14 @@ DOC_KEY_VALUE = re.compile(r"^\*\*\s*Doc[^:*]*:?\*{0,2}\s*", re.IGNORECASE)
 CODE_PATH = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
 DECISION_MENTION = re.compile(r"\bD-\d{4}-\d{2}-\d{2}-\d{2}\b")
 TRANSIENT = re.compile(r"\bbacklog/")
-GRAN_SEUIL = 60
+GRAN_MAX_LINES = 60
 
 
 def rel(path: str) -> str:
     return os.path.relpath(path, ROOT)
 
 
-def list_fiches() -> list[str]:
+def list_entries() -> list[str]:
     if not os.path.isdir(FEATURES_DIR):
         return []
     return sorted(f for f in os.listdir(FEATURES_DIR) if f.endswith(".md"))
@@ -145,7 +145,7 @@ def _git_last_commit_date(relpath: str) -> str | None:
     return out or None
 
 
-def check_freshness(fiche_path: str, meta: dict, body: str) -> list[Finding]:
+def check_freshness(entry_path: str, meta: dict, body: str) -> list[Finding]:
     """FM-FRESH — `updated` older than the last commit touching a `**Code:**` path.
 
     Tolerant: a nonexistent path (dead-path, already `doc-refs-check.py`) or unversioned
@@ -165,7 +165,7 @@ def check_freshness(fiche_path: str, meta: dict, body: str) -> list[Finding]:
             continue
         commit_date = _git_last_commit_date(p)
         if commit_date and commit_date > str(updated):
-            findings.append(Finding(TO_CONFIRM, "FM-FRESH", rel(fiche_path), 1,
+            findings.append(Finding(TO_CONFIRM, "FM-FRESH", rel(entry_path), 1,
                 f"« {p} » modified on {commit_date}, entry « updated: {updated} » "
                 "— entry possibly stale."))
     return findings
@@ -175,7 +175,7 @@ def check_freshness(fiche_path: str, meta: dict, body: str) -> list[Finding]:
 # One entry — frontmatter (entrylib) + core body keys + safeguards            #
 # --------------------------------------------------------------------------- #
 
-def check_fiche(fname: str) -> list[Finding]:
+def check_entry(fname: str) -> list[Finding]:
     path = os.path.join(FEATURES_DIR, fname)
     findings: list[Finding] = []
     with open(path, encoding="utf-8") as fh:
@@ -223,9 +223,9 @@ def check_fiche(fname: str) -> list[Finding]:
                                      f"id « {d} » cited in the body but decisions/{d}.md not found."))
 
     useful = [l for l in body_lines if l.strip() and not l.strip().startswith("|---")]
-    if len(useful) > GRAN_SEUIL:
+    if len(useful) > GRAN_MAX_LINES:
         findings.append(Finding(TO_CONFIRM, "FM-GRAN", rel(path), 1,
-                                 f"{len(useful)} useful lines (> {GRAN_SEUIL}) -> consider "
+                                 f"{len(useful)} useful lines (> {GRAN_MAX_LINES}) -> consider "
                                  "splitting (two subjects?)."))
 
     findings += check_freshness(path, meta, body)
@@ -270,8 +270,8 @@ def cmd_stamp(argv: list[str]) -> int:
 
 def run() -> list[Finding]:
     findings = list(check_index())
-    for fname in list_fiches():
-        findings += check_fiche(fname)
+    for fname in list_entries():
+        findings += check_entry(fname)
     return findings
 
 
