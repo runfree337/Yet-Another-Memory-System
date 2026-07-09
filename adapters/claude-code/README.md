@@ -22,12 +22,16 @@
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py`, `hooks/normative-write-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
 | `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
 | `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` | <!-- template -->
+| `hooks/index-nudge.sh` | `index/index-config.json` (`roots`, `manifest`, `hub`) + the channel indexes (`FEATURE_MAP.md`, `MEMORY.md`, manifest) | `PostToolUse(Grep\|Glob)` | <!-- template -->
+| `hooks/tests/index-hooks-test.sh` | end-to-end tests of `index-nudge.sh` + `index-usage-flush.sh` on a throwaway fixture — run by hand, never wired | — |
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
 | `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
 
 All `.sh` scripts are **silent on success**, except `security-guards.sh` (blocks with a message on
-`exit 2`, as prescribed by the guards it calls) and `pre-commit-stamp.sh` (never writes as a
-blocking step — cf. `checks/README.md §Pre-commit wiring`). Each script detects `python3`/`python`
+`exit 2`, as prescribed by the guards it calls), `pre-commit-stamp.sh` (never writes as a
+blocking step — cf. `checks/README.md §Pre-commit wiring`) and `index-nudge.sh` (its whole job is
+to *speak* — a JSON `additionalContext` — but only under the strict conditions listed in its
+header, at most once per zone per session, and it never alters or blocks anything). Each script detects `python3`/`python`
 and resolves the repo root via `$CLAUDE_PROJECT_DIR` (provided by Claude Code) or, failing that,
 `git rev-parse --show-toplevel` — no hardcoded absolute path.
 
@@ -109,6 +113,17 @@ imposed wiring — each block can be adopted separately.
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/index-nudge.sh\""
+          }
+        ]
+      }
     ]
   }
 }
@@ -139,6 +154,18 @@ imposed wiring — each block can be adopted separately.
   `index-usage-flush.sh` above: it only appends a line to a session-scoped tmp file, it doesn't
   read `index-config.json` itself (no per-call config parsing, kept fast and dependency-free);
   the zone classification happens once, at flush time.
+- `PostToolUse(Grep|Glob)` carries `index-nudge.sh` — the **active** half of the index-usage
+  story: where tracker/flush *measure* bypasses after the fact, the nudge intervenes at the
+  moment one happens. It **never substitutes** the cartography for the search (the map is a
+  derived representation — an entry that lies is worse than none, `FEATURE_MAP.md`; and a
+  targeted grep is often pre-edit verification, where only the real file counts): the search
+  runs untouched, and *next to* its raw results the hook injects one `additionalContext` note —
+  consult the index, plus up to 3 entries matching the search terms, each with its `updated`
+  date so the agent calibrates trust itself. Strictly conditioned (broad search only, covered
+  zone only, no cartography consultation yet this session — read from the tracker's log when
+  installed —, once per zone per session), silent no-op otherwise, never blocking. Works
+  without the tracker; with it, a session that already consulted any channel index is never
+  nudged. Tested end-to-end by `hooks/tests/index-hooks-test.sh`.
 - The semantic audit (`skills/decisions-audit.md`, `skills/memory-audit.md`) **never** appears in
   `settings.json` — it's not a hook, cf. `checks/README.md §Semantic — agent,
   memory<->code`. It triggers via skill (on demand) or the OS cron job's report loop

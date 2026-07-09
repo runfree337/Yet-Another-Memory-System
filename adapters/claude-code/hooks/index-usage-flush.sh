@@ -14,14 +14,21 @@
 #
 # Schema: date,session_id,duration_min,index_reads,covered_zone_reads,
 #         covered_zone_searches,bypass
-#   index_reads = index *consultations* this session — a Read or Grep/Glob targeting
-#            the configured manifest path or its directory (index/manifest.tsv,
-#            index/INDEX.md by default — WORKFLOW.md's navigation channel).
+#   index_reads = cartography *consultations* this session — a Read or Grep/Glob
+#            targeting the configured manifest path or its directory (index/
+#            manifest.tsv, index/INDEX.md by default — WORKFLOW.md's navigation
+#            channel), OR one of the other channels' index files/dirs
+#            (FEATURE_MAP.md/features/, MEMORY.md/memory/, decisions/): routing that
+#            happened via the Feature/Memory/Decision channel is a consultation too,
+#            not a bypass.
 #   covered_zone_reads/searches = Read / Grep+Glob calls landing under one of the
 #            configured `roots` — the zones the navigation index is supposed to
 #            spare a blind sweep of.
-#   bypass = covered_zone_searches when index_reads == 0 this session (= searched a
-#            covered zone without ever consulting the index first).
+#   bypass = the BROAD covered searches when index_reads == 0 this session (= swept
+#            a covered zone without ever consulting the cartography first). A
+#            TARGETED search — its logged path resolves to an existing single file —
+#            never counts: knowing already which file to grep is the outcome the
+#            index exists to produce, wherever that routing came from.
 
 set +e
 
@@ -39,40 +46,82 @@ SESSION_ID="${CLAUDE_CODE_SESSION_ID:-unknown}"
 LOG="${TMPDIR:-/tmp}/yams-index-usage-${SESSION_ID}.log"
 [ -f "$LOG" ] || exit 0
 
-# Derive the covered-zone regex from `roots`, and the index-consultation regex from
-# the directory of `manifest` (defaults: index/index-config.example.json). Two lines
-# on stdout on success; exits 3 if the config has no usable `roots` (same graceful
-# no-op as checks/index-check.py when roots/extensions are empty).
-CFG_OUT=$("$PY" - "$CONFIG" <<'PYEOF'
+# Classify the log against the config (covered zones from `roots`, consultation
+# paths from the directory of `manifest` + the channel constants). One line on
+# stdout on success: "index_reads covered_reads covered_searches bypass". Exits 3
+# if the config has no usable `roots` (same graceful no-op as checks/index-check.py
+# when roots/extensions are empty). Done in python rather than grep -c because the
+# broad-vs-targeted distinction needs a file-existence test per logged search.
+COUNTS=$("$PY" - "$ROOT" "$CONFIG" "$LOG" <<'PYEOF'
 import json
 import os
-import re
 import sys
 
+# The other channels' index files/dirs — framework constants, hardcoded like in
+# checks/memory-check.py; reading any of them counts as consulting the cartography.
+CHANNEL_PATHS = ("FEATURE_MAP.md", "features/", "MEMORY.md", "memory/", "decisions/")
+
+root, config_path, log_path = sys.argv[1:4]
+root_abs = os.path.abspath(root).replace("\\", "/")
+
 try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
+    with open(config_path, encoding="utf-8") as fh:
         cfg = json.load(fh)
 except (OSError, json.JSONDecodeError):
     sys.exit(3)
 
-roots = cfg.get("roots") or []
+roots = [r.rstrip("/") for r in (cfg.get("roots") or []) if r and r.strip("/")]
 if not roots:
     sys.exit(3)
 
-covered_re = "|".join(re.escape(r.rstrip("/")) + "/" for r in roots)
-
 manifest = cfg.get("manifest", "index/manifest.tsv")
-index_dir = os.path.dirname(manifest) or "index"
-index_re = re.escape(index_dir) + "/"
+index_dir = (os.path.dirname(manifest) or "index").rstrip("/")
+consult = CHANNEL_PATHS + (index_dir + "/",)
 
-print(covered_re)
-print(index_re)
+
+def norm(p):
+    """Repo-relative form of a logged path (Claude Code often passes absolute)."""
+    p = p.replace("\\", "/").rstrip("/")
+    if p == root_abs:
+        return "."
+    if p.startswith(root_abs + "/"):
+        return p[len(root_abs) + 1:]
+    return p
+
+
+index_reads = covered_reads = covered_searches = broad_searches = 0
+try:
+    lines = open(log_path, encoding="utf-8").read().splitlines()
+except OSError:
+    sys.exit(3)
+
+for line in lines:
+    if line.startswith("#") or "|" not in line:
+        continue
+    tool, raw = line.split("|", 1)
+    p = norm(raw)
+    if any(p == c.rstrip("/") or p.startswith(c) for c in consult):
+        index_reads += 1
+        continue
+    # Covered? Same containment as before: a root at the start of the normalized
+    # path, or appearing anywhere in the raw string (glob/pattern fallbacks).
+    covered = any(p == r or p.startswith(r + "/") or (r + "/") in raw for r in roots)
+    if not covered:
+        continue
+    if tool == "Read":
+        covered_reads += 1
+    elif tool in ("Grep", "Glob"):
+        covered_searches += 1
+        # Targeted (logged path = an existing single file) never feeds bypass.
+        if not os.path.isfile(os.path.join(root, p)):
+            broad_searches += 1
+
+bypass = broad_searches if index_reads == 0 else 0
+print(index_reads, covered_reads, covered_searches, bypass)
 PYEOF
 )
 [ $? -ne 0 ] && exit 0
-COVERED_RE=$(printf '%s\n' "$CFG_OUT" | sed -n '1p')
-INDEX_RE=$(printf '%s\n' "$CFG_OUT" | sed -n '2p')
-[ -z "$COVERED_RE" ] && exit 0
+[ -z "$COUNTS" ] && exit 0
 
 CSV="${YAMS_MEMORY_REPORT_DIR:-.memory-reports}/index-usage.csv"
 mkdir -p "$(dirname "$CSV")"
@@ -83,12 +132,7 @@ NOW=$(date -u +%s)
 DURATION=$(( (NOW - START + 30) / 60 ))
 DATE=$(date -u +%Y-%m-%d)
 
-INDEX_READS=$(grep -cE "^(Read|Grep|Glob)\|.*${INDEX_RE}" "$LOG")
-COVERED_READS=$(grep -cE "^Read\|.*(${COVERED_RE})" "$LOG")
-COVERED_SEARCHES=$(grep -cE "^(Grep|Glob)\|.*(${COVERED_RE})" "$LOG")
-
-BYPASS=0
-[[ "$INDEX_READS" -eq 0 && "$COVERED_SEARCHES" -gt 0 ]] && BYPASS=$COVERED_SEARCHES
+read -r INDEX_READS COVERED_READS COVERED_SEARCHES BYPASS <<< "$COUNTS"
 
 # Skip writing entirely if the session never touched anything relevant.
 TOTAL=$((INDEX_READS + COVERED_READS + COVERED_SEARCHES))
