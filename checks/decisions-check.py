@@ -159,6 +159,13 @@ def rule_d6(by_id: dict) -> list:
 
     for idv, (path, meta) in sorted(by_id.items()):
         rb = meta.get("replaced-by")
+        if isinstance(rb, list):
+            # A malformed entry must be FLAGGED, never crash the check (a list is
+            # unhashable — it would blow up the by_id lookups below).
+            findings.append(Finding(BLOCKING, "D6", path, 1,
+                                     f"replaced-by must be a single id, got a list "
+                                     f"({', '.join(map(str, rb))}) — chain revocations instead"))
+            rb = None
         if rb:
             if rb not in by_id:
                 findings.append(Finding(BLOCKING, "D6", path, 1,
@@ -179,7 +186,7 @@ def rule_d6(by_id: dict) -> list:
     for start in by_id:
         chain = []
         cur = start
-        while cur in by_id:
+        while isinstance(cur, str) and cur in by_id:
             if cur in chain:
                 cycle = tuple(sorted(chain[chain.index(cur):]))
                 if cycle not in reported:

@@ -12,7 +12,9 @@ Modes:
   poisoning-scan.py [paths…]      scans the given files
   poisoning-scan.py --staged      scans the git-**staged** .md/.txt (pre-commit / CI)
   poisoning-scan.py               scans the usual instruction files present
-  poisoning-scan.py --stdin-json  Claude Code adapter (reads tool_input.file_path)
+  poisoning-scan.py --stdin-json  Claude Code adapter (PreToolUse Write/Edit): scans the
+                                  INCOMING content (tool_input.content / new_string) —
+                                  the injection vector — never the stale on-disk file.
 
 Exit 2 = suspect chars detected (BLOCK); 0 otherwise. Read-only.
 """
@@ -33,17 +35,26 @@ DEFAULT_NAMES = ["CLAUDE.md", "AGENTS.md", ".cursorrules",
                  os.path.join(".github", "copilot-instructions.md")]
 
 
-def scan_file(path):
+def scan_text(text, label):
     out = []
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for i, line in enumerate(fh, 1):
-                for col, ch in enumerate(line, 1):
-                    if ord(ch) in SUSPECT:
-                        out.append((path, i, col, hex(ord(ch))))
-    except (OSError, UnicodeDecodeError):
-        pass
+    for i, line in enumerate(text.split("\n"), 1):
+        for col, ch in enumerate(line, 1):
+            if ord(ch) in SUSPECT:
+                out.append((label, i, col, hex(ord(ch))))
     return out
+
+
+def scan_file(path):
+    # Read as BYTES then decode with surrogateescape: an invalid UTF-8 byte must NOT
+    # silently skip the whole file (that would let an attacker bypass the scan by
+    # appending one stray byte). Escaped bytes land in U+DC80–DCFF — outside SUSPECT —
+    # so the real invisible chars are still caught.
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read()
+    except OSError:
+        return []
+    return scan_text(raw.decode("utf-8", errors="surrogateescape"), path)
 
 
 def staged_text_files():
@@ -75,16 +86,21 @@ def main():
     a = ap.parse_args()
 
     if a.stdin_json:
+        # PreToolUse Write/Edit: the poisoned payload is the INCOMING content
+        # (tool_input.content / new_string), not the on-disk file — which still holds
+        # the PRE-write state (or nothing at all for a new file). Scanning the disk
+        # here would miss exactly the injection this guard exists to block.
         try:
             data = json.load(sys.stdin)
-            p = (data.get("tool_input") or {}).get("file_path")
-            a.paths = [p] if p else []
         except Exception:
             return 0
-
-    findings = []
-    for f in gather(a):
-        findings += scan_file(f)
+        ti = data.get("tool_input") or {}
+        content = ti.get("content") or ti.get("new_string") or ""
+        findings = scan_text(content, ti.get("file_path") or "(tool_input)")
+    else:
+        findings = []
+        for f in gather(a):
+            findings += scan_file(f)
     if not findings:
         return 0
     print("BLOCKED: invisible/bidi Unicode characters detected (possible poisoning).",

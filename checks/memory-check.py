@@ -111,8 +111,10 @@ def cmd_stamp(argv) -> int:
     staged = "--staged" in argv
 
     if staged:
+        # cwd=ROOT + ROOT-joined paths, like the two sibling stamps (backlog-check,
+        # feature-map-check) — the script must work from any working directory.
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            capture_output=True, text=True)
+                            cwd=ROOT, capture_output=True, text=True)
         files = [f for f in r.stdout.splitlines()
                  if f.replace("\\", "/").startswith("memory/") and f.endswith(".md")]
     else:
@@ -120,12 +122,13 @@ def cmd_stamp(argv) -> int:
 
     changed = []
     for f in files:
-        if not os.path.isfile(f):
+        full = f if os.path.isabs(f) else os.path.join(ROOT, f)
+        if not os.path.isfile(full):
             continue
-        if entrylib.stamp_updated(f, today):
+        if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", f])
+                subprocess.run(["git", "add", "--", f], cwd=ROOT)
 
     print(f"memory-check: --stamp — {len(changed)} memory/*.md stamped {today}.")
     return 0

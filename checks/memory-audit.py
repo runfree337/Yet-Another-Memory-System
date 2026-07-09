@@ -128,13 +128,6 @@ def run_tier1(as_json: bool) -> int:
     return worst
 
 
-def usage() -> int:
-    print("usage: memory-audit.py [--tier1] [--json]", file=sys.stderr)
-    print("  --tier1  runs the 4 integrity checks (feature, decisions, memory, backlog)", file=sys.stderr)
-    print("  (default) equivalent to --tier1", file=sys.stderr)
-    return 0
-
-
 def main(argv) -> int:
     as_json = "--json" in argv
     return run_tier1(as_json)

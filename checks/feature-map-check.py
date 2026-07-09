@@ -259,7 +259,7 @@ def cmd_stamp(argv: list[str]) -> int:
         if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", f], cwd=ROOT)
+                subprocess.run(["git", "add", "--", f], cwd=ROOT)
     print(f"feature-map-check: --stamp — {len(changed)} entrie(s) stamped {today}.")
     return 0
 

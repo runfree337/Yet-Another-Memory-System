@@ -245,17 +245,28 @@ def stamp_updated(path: str, date_str: str) -> bool:
     """Rewrites the `updated` frontmatter field of `path` (and only that field).
 
     Shared `--stamp` pattern (cf. `backlog-check.py --stamp`). Returns `True` if the file
-    was modified, `False` if `updated` was already `date_str` (or the field is absent —
-    no-op).
+    was modified, `False` if `updated` was already `date_str` (or the field/frontmatter
+    is absent — no-op). Strictly bounded to the `--- … ---` block: an `updated:` line in
+    the BODY (e.g. a quoted template) is never touched.
     """
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
-    new_text = re.sub(r"(?m)^updated:.*$", f"updated: {date_str}", text, count=1)
-    if new_text == text:
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
         return False
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(new_text)
-    return True
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        return False
+    for i in range(1, end):
+        if lines[i].startswith("updated:"):
+            new_line = f"updated: {date_str}\n"
+            if lines[i] == new_line:
+                return False
+            lines[i] = new_line
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("".join(lines))
+            return True
+    return False
 
 
 DECISION_ID = re.compile(r"^D-\d{4}-\d{2}-\d{2}-\d{2}$")
@@ -393,6 +404,16 @@ def _selftest() -> int:
         check("updated: 2026-07-09" in text, "stamp_updated: date rewritten")
         check("id: x" in text, "stamp_updated: other keys untouched")
         check(not stamp_updated(p, "2026-07-09"), "stamp_updated: no-op if already up to date")
+
+    # stamp_updated — an `updated:` line in the BODY is never touched (frontmatter only)
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "entry.md")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("---\nid: x\n---\nquoted template:\nupdated: 2020-01-01\n")
+        check(not stamp_updated(p, "2026-07-09"),
+              "stamp_updated: no-op when the frontmatter has no updated field")
+        check("updated: 2020-01-01" in open(p, encoding="utf-8").read(),
+              "stamp_updated: body updated: line untouched")
 
     # check_index_concordance — a dead id repeated on the same line doesn't double the finding
     with tempfile.TemporaryDirectory() as td:

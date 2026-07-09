@@ -287,13 +287,13 @@ for git or manual use) and a **Claude Code adapter entry** (`--stdin-json`, read
 |---|---|---|
 | `paths…` | files/paths to scan | — |
 | `--staged` | scans staged git content | disabled |
-| `--stdin-json` | reads `{tool_name, tool_input}` on stdin, extracts `tool_input.file_path` | disabled |
+| `--stdin-json` | reads `{tool_name, tool_input}` on stdin, scans the **incoming content** (`tool_input.content` / `new_string`) — the injection vector, never the stale on-disk file | disabled |
 
 **Exit codes:** `0` clean (or unreadable JSON in `--stdin-json` mode — never fails the hook) · `2` suspicious characters found → **block**.
 
 ```bash
 python3 hooks/poisoning-scan.py --staged
-echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md"}}' | python3 hooks/poisoning-scan.py --stdin-json
+echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"}}' | python3 hooks/poisoning-scan.py --stdin-json
 ```
 
 ### `secret-scan.py`

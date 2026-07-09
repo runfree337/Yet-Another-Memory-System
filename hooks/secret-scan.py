@@ -3,7 +3,9 @@
 
 Ported from the reference scanner (18 patterns: Anthropic, OpenAI, AWS, GitHub, Slack,
 Stripe, Google, RSA, JWT, SendGrid, Twilio, generic high-entropy assignment). False
-positive suppression: pure comment lines, environment variable references.
+positive suppression: pure comment lines, environment variable references. Assumed
+false negative: a bare key pasted on a comment line WITHOUT `=`/`:` is skipped by the
+comment suppression — the zero-FP tier trades that corner for never crying wolf.
 
 Portable (stdlib only). An **installer** wires it in: Claude Code (`PreToolUse` on
 `Bash`/`Write`/`Edit`), Git (`pre-commit`), CI.

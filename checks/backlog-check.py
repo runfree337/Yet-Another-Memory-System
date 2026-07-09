@@ -349,6 +349,9 @@ def check_index(work_items, index_text) -> list[Finding]:
                                      "a `<id>/` subfolder with STATE.md (abandoned tier)."))
 
     for cid, cdir in work_items:
+        # Substring test on purpose (any mention counts as "cited"). Assumed false
+        # negative: an orphan whose id is a prefix of another cited id slips through —
+        # zero-FP wins over recall here.
         if (cid + "/") not in index_text and cid not in index_text:
             findings.append(Finding(BLOCKING, "I-ORPHAN", rel(cdir), 1,
                                      f"« {cid}/ » is cited nowhere in INDEX.md."))
@@ -394,7 +397,8 @@ def cmd_stamp(argv: list[str]) -> int:
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
                             cwd=ROOT, capture_output=True, text=True)
         files = [f for f in r.stdout.splitlines()
-                 if f.replace("\\", "/").startswith("backlog/") and f.endswith("STATE.md")]
+                 if f.replace("\\", "/").startswith("backlog/")
+                 and os.path.basename(f.replace("\\", "/")) == "STATE.md"]
     else:
         files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
 
@@ -406,7 +410,7 @@ def cmd_stamp(argv: list[str]) -> int:
         if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", f], cwd=ROOT)
+                subprocess.run(["git", "add", "--", f], cwd=ROOT)
     print(f"backlog-check: --stamp — {len(changed)} STATE.md stamped {today}.")
     return 0
 
@@ -442,7 +446,7 @@ def work_item_state(cid):
         "id": meta.get("id", cid), "title": meta.get("title"), "status": meta.get("status"),
         "milestone": _norm_milestone(meta.get("milestone")), "updated": meta.get("updated"),
         "docs": meta.get("docs") or [], "tasks": tasks, "task_counts": counts,
-        "reste": [content for _, content in sections.get("Remaining", [])],
+        "remaining": [content for _, content in sections.get("Remaining", [])],
     }
 
 
@@ -467,9 +471,9 @@ def render_state(cid):
     for t in st["tasks"]:
         tail = f" → {t['doc']}" if t["doc"] else ""
         lines.append(f"  - [{t['state']}] {t['label']}{tail}")
-    if st["reste"]:
-        lines.append(f"\n## Remaining ({len(st['reste'])})")
-        lines.extend("  " + it for it in st["reste"])
+    if st["remaining"]:
+        lines.append(f"\n## Remaining ({len(st['remaining'])})")
+        lines.extend("  " + it for it in st["remaining"])
     return "\n".join(lines)
 
 
