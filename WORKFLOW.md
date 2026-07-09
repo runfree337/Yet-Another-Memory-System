@@ -23,7 +23,17 @@ Le **travail ouvert** (le *todo*) vit dans `backlog/` — distinct des trois mé
 
 - `backlog/INDEX.md` : la liste du non-bâti, **lue en premier**. Statut par entrée (`à faire` / `en cours`) ; un chantier **fini est retiré**.
 - **La chaîne** : `spec` → `backlog` (décidé, pas bâti) → *en cours, découpé en tâches* → à la livraison, le contenu **migre vers le durable** et l'item quitte le backlog.
-- **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **capitalisation**.
+- **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **état mis à jour** (`TABLEAU_DE_BORD.md`) → **capitalisation**.
+
+## Le pilotage — plan / état / todo
+
+Trois rôles, jamais confondus :
+
+- **Le plan** (l'ordre, le séquenceur) — les groupes **jalon** de `backlog/INDEX.md` (`### Jalon N — <nom>`). Pas de document séparé : le jalon *est* le plan, il ordonne les chantiers.
+- **L'état** (où on en est, pour reprendre) — `TABLEAU_DE_BORD.md` : avancement par jalon + points chauds, en 1 page, mis à jour **à la clôture** d'un chantier (`backlog/README.md §DoD`).
+- **Le todo** (le travail pas-encore-fait) — `backlog/INDEX.md` (§Le travail en cours, ci-dessus).
+
+La vue détaillée et **live** des statuts (`checks/backlog-check.py --board`) reste **générée** ; jamais dupliquée à la main dans `TABLEAU_DE_BORD.md`.
 
 ## Les trois mémoires (ce que l'IA persiste hors de son contexte)
 
@@ -45,6 +55,7 @@ flowchart TB
     MEM --> PERSO
     MEM --> CANAUX
     MEM --> NAV
+    MEM -.->|"transitoire — fourni par le framework,<br/>mais pas une mémoire"| BL
     MEM -.->|"le framework s'y branche,<br/>ne le possède pas"| HORS
 
     PERSO["MÉMOIRE PERSONNELLE — auto-memory<br/>machine-locale, jamais versionnée<br/>écrite automatiquement par l'IA,<br/>sans validation"]
@@ -58,20 +69,23 @@ flowchart TB
 
     NAV["Canal de NAVIGATION — index/INDEX.md<br/>retrouver un fichier sans tout lire<br/>PAS une mémoire au sens propre —<br/>une carte, pas un fait"]
 
+    BL["backlog/ — TRANSITOIRE<br/>fourni par le FRAMEWORK<br/>le TODO, pas un fait établi —<br/>PAS une mémoire"]
+
     subgraph HORS["Apporté par LE PROJET — pas par le framework"]
         direction LR
         FAIT["doc d'archi durable<br/>ce que le système EST<br/>(comportement, structure)"]
-        BL["backlog/<br/>le TODO — pas un fait établi"]
     end
 
     classDef perso fill:#2a3a4a,stroke:#3498db,color:#fff
     classDef partage fill:#2a4a2a,stroke:#27ae60,color:#fff
     classDef nav fill:#3a2a4a,stroke:#9b59b6,color:#fff
     classDef hors fill:#4a2020,stroke:#888,color:#ccc,stroke-dasharray: 4 3
+    classDef transitoire fill:#4a3a20,stroke:#e67e22,color:#fff
     class PERSO perso
     class CANAUX,MEMCH,FEATCH,DECCH partage
     class NAV nav
-    class HORS,FAIT,BL hors
+    class HORS,FAIT hors
+    class BL transitoire
 ```
 
 ### Détail par canal — ce qui le gouverne
@@ -84,7 +98,7 @@ flowchart TB
 | **Validation** | aucune | provenance + confiance avant promotion (`MEMORY.md`) ; intégrité mécanique par `checks/memory-check.py` (source externe sans confiance = bloquant) ; staleness par `memory-audit.md` (étage 2) | vérifiée par le contrôle d'intégrité (fiche complète, ancre valide) ; fraîcheur sémantique par `memory-audit.md` (étage 2) | `INDEX.md` scanné **avant** toute nouvelle direction structurelle ; contradiction → révocation tracée, jamais un écrasement silencieux | contrôle de dérive au démarrage + à la clôture, silence si rien n'a bougé |
 | **Si elle a tort** | ne trompe que toi | trompe toute l'équipe | envoie sur le mauvais fichier | fait re-débattre un choix déjà tranché | fait chercher au mauvais endroit |
 
-Le **Fait** (doc d'archi durable — ce que le système *est*) n'est **pas** un canal du framework : c'est **le projet** qui l'apporte et le maintient (`WORKFLOW.md §Où ranger quoi` : « la doc d'archi durable du projet »). Le framework s'y **branche** (« mettre à jour le durable » à l'étape 4 de la boucle) sans en définir le format ni le lieu. Même chose pour le **backlog** : le travail pas-encore-fait, distinct des mémoires (§Le travail en cours).
+Le **Fait** (doc d'archi durable — ce que le système *est*) n'est **pas** un canal du framework : c'est **le projet** qui l'apporte et le maintient (`WORKFLOW.md §Où ranger quoi` : « la doc d'archi durable du projet »). Le framework s'y **branche** (« mettre à jour le durable » à l'étape 4 de la boucle) sans en définir le format ni le lieu. Le **backlog**, lui, est bien **fourni par le framework** (contrairement au Fait) — mais ce n'est pas pour autant un canal mémoire : il reste **transitoire** (le travail pas-encore-fait), jamais **durable** (un fait établi) ; voir §Le travail en cours.
 
 ## Où ranger quoi — le routeur de placement
 

@@ -71,7 +71,8 @@ flowchart TD
    *Installeur :* sonde et n'écrase rien (idempotent).
 
 2. **Échafauder la structure** — copier `decisions/`, `backlog/`, `checks/`, `hooks/`, `MEMORY.md`,
-   `FEATURE_MAP.md`, `WORKFLOW.md` depuis ce framework vers le projet hôte, **si absents**.
+   `FEATURE_MAP.md`, `TABLEAU_DE_BORD.md`, `WORKFLOW.md` depuis ce framework vers le projet hôte,
+   **si absents**.
    *Installeur :* copie + ne touche pas l'existant ; `--force` explicite pour réécraser.
 
 3. **Configurer l'index** — remplir `index/index-config.json` (racines + extensions à indexer,

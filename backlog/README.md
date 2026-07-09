@@ -24,6 +24,7 @@ L'`INDEX.md` **regroupe** les chantiers par **jalon** : un sous-titre `### Jalon
 1. **Durable écrit** — la doc qui décrit *ce qui existe* (côté projet) + les mémoires touchées (`FEATURE_MAP`…). Le durable *porte le contenu*, pas une promesse.
 2. **Décision** enregistrée si la clôture acte un choix structurel.
 3. **Backlog vidé** — le chantier + sa ligne d'`INDEX.md` sont **retirés** (ou statut mis à jour si partiel).
-4. **Capitalisation** — poser la question « apprentissage de méthode réutilisable ? » et la router si oui.
+4. **État mis à jour** — `TABLEAU_DE_BORD.md` : avancement du jalon concerné, points chauds (résolus retirés / nouveaux ajoutés), ligne de date.
+5. **Capitalisation** — poser la question « apprentissage de méthode réutilisable ? » et la router si oui.
 
 > Tant que ces étapes ne sont pas faites, le chantier **n'est pas clos**. L'étape de validation se branche sur le rituel du projet (sa skill de review, etc.) — le process n'en impose aucun.
