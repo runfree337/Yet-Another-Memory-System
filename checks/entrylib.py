@@ -22,6 +22,7 @@ Usage:
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -39,6 +40,57 @@ Finding = namedtuple("Finding", "severity rule path line msg")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SOURCE_RE = re.compile(r"^(inferred|human|external:.+)$")
 CONFIDENCE_VALUES = {"verified", "unverified"}
+
+
+# --------------------------------------------------------------------------- #
+# Global settings — checks-config.json at the repo root (optional).           #
+# One file, one section per concern (audit / sizes / guards); absent file =   #
+# every consumer falls back to its built-in defaults (today's behavior).      #
+# Canonical schema + defaults: checks-config.example.json at the repo root.   #
+# --------------------------------------------------------------------------- #
+
+CHECKS_CONFIG_NAME = "checks-config.json"
+
+
+def load_checks_config(root: str):
+    """Reads `<root>/checks-config.json` — the optional global settings file.
+
+    Returns `(config, error)`: `({}, None)` if the file is absent (defaults apply),
+    `({}, "message")` if present but broken (unreadable, invalid JSON, top level not
+    an object) — the caller surfaces that as a BLOCKING `CFG-INVALID` finding rather
+    than silently ignoring a config the user believes active. Never raises.
+    """
+    path = os.path.join(root, CHECKS_CONFIG_NAME)
+    if not os.path.isfile(path):
+        return {}, None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as e:
+        return {}, f"{CHECKS_CONFIG_NAME}: unreadable ({e})"
+    if not isinstance(data, dict):
+        return {}, f"{CHECKS_CONFIG_NAME}: top level must be a JSON object"
+    return data, None
+
+
+def cfg_get(cfg: dict, path, default):
+    """Nested lookup: `cfg_get(cfg, ("sizes", "memory-entry-max-lines"), 40)`.
+
+    Returns `default` when the path is missing or the value's type doesn't match
+    the default's (a string where a number is expected is a typo, not a setting;
+    a JSON `true` is never accepted for a number). Keys starting with `_` are
+    comments by convention (`_README`, `_comment`) and are simply never looked up.
+    """
+    cur = cfg
+    for key in path:
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = cur[key]
+    if isinstance(default, bool) != isinstance(cur, bool):
+        return default
+    if default is not None and not isinstance(cur, type(default)):
+        return default
+    return cur
 
 
 # --------------------------------------------------------------------------- #
@@ -424,6 +476,34 @@ def _selftest() -> int:
             fh.write("- [D-2099-01-01-01](D-2099-01-01-01.md) — ghost\n")
         fs = check_index_concordance(idx, d, r"D-\d{4}-\d{2}-\d{2}-\d{2}")
         check(len(fs) == 1, "concordance: repeated dead id on the line -> a single finding")
+
+    # load_checks_config — absent, valid, broken JSON, non-object top level
+    with tempfile.TemporaryDirectory() as td:
+        cfg, err = load_checks_config(td)
+        check(cfg == {} and err is None, "load_checks_config: absent file -> ({}, None)")
+        p = os.path.join(td, CHECKS_CONFIG_NAME)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write('{"sizes": {"memory-entry-max-lines": 25}}')
+        cfg, err = load_checks_config(td)
+        check(err is None and cfg.get("sizes", {}).get("memory-entry-max-lines") == 25,
+              "load_checks_config: valid file parsed")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("{broken")
+        cfg, err = load_checks_config(td)
+        check(cfg == {} and err is not None, "load_checks_config: broken JSON -> ({}, error)")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write('[1, 2]')
+        cfg, err = load_checks_config(td)
+        check(cfg == {} and err is not None, "load_checks_config: non-object top level -> error")
+
+    # cfg_get — hit, miss, type mismatch, bool-vs-int, nested miss
+    cfg = {"sizes": {"memory-entry-max-lines": 25, "bad": "40", "flag": True}}
+    check(cfg_get(cfg, ("sizes", "memory-entry-max-lines"), 40) == 25, "cfg_get: nested hit")
+    check(cfg_get(cfg, ("sizes", "absent"), 40) == 40, "cfg_get: missing key -> default")
+    check(cfg_get(cfg, ("audit", "batch-size"), 33) == 33, "cfg_get: missing section -> default")
+    check(cfg_get(cfg, ("sizes", "bad"), 40) == 40, "cfg_get: type mismatch -> default")
+    check(cfg_get(cfg, ("sizes", "flag"), 40) == 40, "cfg_get: JSON true never a number")
+    check(cfg_get({}, ("guards", "extra-watched-files"), []) == [], "cfg_get: empty cfg -> default list")
 
     # check_links — decision id, path, slug; dead and alive
     with tempfile.TemporaryDirectory() as td:

@@ -1,0 +1,26 @@
+{
+  "_README": "Global settings for the checks and guards. Copy to `checks-config.json` at the repo root and adjust. Every key is OPTIONAL — set only what you change; an absent file or key means the defaults below (built into the scripts, today's behavior). A present-but-broken file is a BLOCKING finding (CFG-INVALID), never silently ignored. Method-calibration constants (index-eval scorer/sufficiency thresholds) are deliberately NOT here: they define what the metric means and are not per-project taste.",
+
+  "_audit": "When the deterministic report (`checks/decisions-audit.py --report`) recommends spending a tier-2 (LLM) audit, and how it batches. `volume-alert` = entry count per channel at which the channel is worth auditing; `pending-*` = ratification-inbox nudges; `pending-stale-days` also drives the stale marker of `memory-audit.py --pending`.",
+  "audit": {
+    "volume-alert": { "decision": 285, "feature": 150, "memory": 150 },
+    "batch-size": 33,
+    "pending-alert-count": 5,
+    "pending-alert-days": 30,
+    "pending-stale-days": 30
+  },
+
+  "_sizes": "Granularity signals (TO-CONFIRM, never blocking): an oversized entry is a hint that its content belongs in the durable doc, not a fault. Units: lines of useful content, words for labels.",
+  "sizes": {
+    "feature-entry-max-lines": 60,
+    "memory-entry-max-lines": 40,
+    "backlog-state-max-lines": 80,
+    "backlog-task-label-max-words": 30
+  },
+
+  "_guards": "EXTENSION-ONLY, fail-closed: a repo-local config can ADD surveillance (extra instruction files for the poisoning scan, extra path-regex allowlist entries for the secret scan) but can never disable a guard or remove a built-in pattern — otherwise poisoned content could switch off the alarm by editing this file. An invalid entry (bad regex) is skipped, the guard keeps running.",
+  "guards": {
+    "extra-watched-files": [],
+    "extra-secret-allowlist-paths": []
+  }
+}
