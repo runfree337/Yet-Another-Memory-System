@@ -88,13 +88,23 @@ python3 checks/decisions-check.py --json
 ```
 
 ### `doc-refs-check.py`
-**Intent:** dead file references in the docs — a path cited in a `.md` that
-no longer/never existed. Git heuristic (existed then vanished = blocking; never created = to-confirm).
+**Intent:** dead/drifted references in the docs. Four rules: **R-DEAD-PATH** (a file path
+cited in a `.md` that no longer/never existed — git heuristic: existed then vanished =
+blocking, never created = to-confirm); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
+matching `decisions/<id>.md` — blocking; inactive without a `decisions/` folder);
+**R-DEAD-SYMBOL** (a backticked composed-PascalCase token, e.g. `` `FooBarManager` ``, found
+nowhere under the code roots — to-confirm); **R-GHOST-ABSENCE** (the reverse: prose says a
+symbol is missing/not yet built while it *does* exist in code — to-confirm, and deliberately
+**not** suppressed by the NEG word list, since it fires exactly on those lines). The two
+symbol rules are agnostic: they read `roots`/`extensions` from `index/index-config.json` <!-- template -->
+(created at install time, schema: `index/index-config.example.json`) and stay silently
+INACTIVE without that config — the framework never hardcodes a project's code layout.
 
 | Parameter | Effect | Default |
 |---|---|---|
-| `paths…` | limits the scan to these paths/files | whole corpus if omitted and `--staged` also absent → see `gather()` |
+| `paths…` | limits the scan to these paths/files | whole corpus if omitted and `--staged`/`--diff` also absent → see `gather()` |
 | `--staged` | scans **staged** git content instead of disk | disabled |
+| `--diff` | scans **modified-but-unstaged** `.md` files | disabled |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING".
 
@@ -109,8 +119,36 @@ separate list to keep in sync with the docs.
 ```bash
 python3 checks/doc-refs-check.py                 # script's default corpus
 python3 checks/doc-refs-check.py --staged         # pre-commit
+python3 checks/doc-refs-check.py --diff           # pre-review, unstaged working tree
 python3 checks/doc-refs-check.py Docs/architecture/  # one subfolder
 ```
+
+### `checks/index-eval/prefilter.py`
+**Intent:** Tier 0 lexical prefilter for the **index-eval** method — per-group evaluation of
+whether `manifest.tsv` intent phrases add semantic lift over bare file names (full method +
+LLM-judged orchestration recipe: `checks/index-eval/README.md`). Reads `index/index-config.json` <!-- template -->
+(`manifest`, optional `eval-groups`, else groups derive from the manifest's own first-level
+directories) and flags which groups are lexically confusable — near-duplicate intents
+(`checks/index-eval/lib/lexsim.py`, pairwise Jaccard) — worth spending an LLM-judged routing
+pass on. **Inactive without configuration**, like `index-check.py`.
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `group prefix…` | limits the prefilter to these path prefixes | `eval-groups` from the config, else derived from the manifest |
+| `--config <path>` | path to the config file | `index/index-config.json` | <!-- template -->
+
+**Exit codes:** `0` ran (or no config / empty manifest — inactive, not an error) · `2` manifest missing or config unreadable.
+
+```bash
+python3 checks/index-eval/prefilter.py                       # requires index/index-config.json
+python3 checks/index-eval/prefilter.py src/combat/ src/ui/    # explicit groups only
+```
+
+The scoring/verdict half (`checks/index-eval/lib/scorer.py`, `checks/index-eval/lib/sufficiency.py`,
+`checks/index-eval/lib/reporter.py`) and the LLM-judged orchestration (needs generator + two
+routers + deterministic anti-leakage guard, `checks/index-eval/lib/guard.py`) are not standalone
+scripts — `checks/index-eval/README.md` is the canonical recipe;
+`adapters/claude-code/skills/index-eval.md` is its Claude Code packaging.
 
 ### `index-check.py`
 <!-- template -->

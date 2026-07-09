@@ -19,9 +19,9 @@ its tooled execution):
 1. Run the deterministic prefilter from the repo root:
    `python3 checks/index-eval/prefilter.py [group prefix…]`
    → one JSON dict per group. Without arguments, evaluates `eval-groups` from
-   `index/index-config.json`, or the groups derived from the manifest's own first-level
+   `index/index-config.json`, or the groups derived from the manifest's own first-level <!-- template -->
    directories if that key is absent. **Exits 0 with a plain message when there's no
-   `index/index-config.json`** — nothing to prefilter, nothing else to do.
+   `index/index-config.json`** — nothing to prefilter, nothing else to do. <!-- template -->
 2. Select the groups to evaluate: `flagged == true` ∪ any group named explicitly on the
    command line. Any `too_small == true` group → verdict **Not evaluated** directly, no LLM
    call (`checks/index-eval/README.md §Uniform result schema`).

@@ -21,7 +21,7 @@
 | `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, before `git commit` |
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
 | `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
-| `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` |
+| `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` | <!-- template -->
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
 | `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
 
@@ -119,8 +119,10 @@ imposed wiring — each block can be adopted separately.
   more hook per check you want recalled in detail before end of session; the `SessionStart` sweep
   already covers all 6 in aggregate. Add `memory-check`/`feature-map-check`/`doc-refs-check` the
   same way if wanted. `index-usage-flush.sh` is listed alongside them — same trigger, but it
+  <!-- template -->
   aggregates a metric (`.memory-reports/index-usage.csv`) instead of flagging a drift; silent
   unless the config (`index/index-config.json`) is missing or the session log is empty, in
+  <!-- /template -->
   which case it's a silent no-op too.
 - `PreToolUse(Bash)` carries **two** hooks: `security-guards.sh` (secret-scan + destructive-guard,
   each reading `tool_name`/`tool_input` from its own `--stdin-json`) and `pre-commit-stamp.sh`

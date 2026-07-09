@@ -13,7 +13,7 @@
 
 ## Purpose
 
-For each **group** of the per-file index (`index/manifest.tsv`, `path<TAB>intent`, one
+For each **group** of the per-file index (`index/manifest.tsv`, `path<TAB>intent`, one <!-- template -->
 line per file — see `index/INDEX.md`), measure whether the **intent** column adds real
 semantic **lift** over the bare **file name**, and render a verdict:
 
@@ -49,24 +49,24 @@ tested on independent ground.
    the verdict. The **reporter** (`lib/reporter.py`) renders the final markdown.
 
 Nothing in this pipeline is Unity- or project-specific: it reads and writes only
-`index/manifest.tsv` and `index/index-config.json`, both already generalized by
+`index/manifest.tsv` and `index/index-config.json`, both already generalized by <!-- template -->
 `checks/index-check.py` / `index/manifest.py`.
 
 **Scope (v1, YAGNI):** no `intent-only` mode, no automatic hook, no auto-rewrite of
 intents. This method only **measures and reports** — rewriting an intent stays a
 manual, human-reviewed edit via `index/manifest.py set`.
 
-## Configuration — `index/index-config.json`
+## Configuration — `index/index-config.json` <!-- template -->
 
 Same file as `checks/index-check.py` / `index/manifest.py` (schema:
 `index/index-config.example.json`), two keys read by `prefilter.py`:
 
-- **`manifest`** (default `index/manifest.tsv`) — same key/default as `index-check.py`.
+- **`manifest`** (default `index/manifest.tsv`) — same key/default as `index-check.py`. <!-- template -->
 - **`eval-groups`** (optional array of path prefixes, e.g. `["src/combat/", "src/ui/"]`)
   — the groups prefiltered by default when `prefilter.py` runs with no explicit
   argument. **If absent**, groups are **derived** from the first-level directory
   prefixes actually present in the manifest (`prefilter.derive_groups` — e.g.
-  `src/foo/bar.py` yields group `src/`, in first-seen order, deduplicated). A manifest
+  `src/foo/bar.py` yields group `src/`, in first-seen order, deduplicated). A manifest <!-- template -->
   with root-level files only (no directory structure) yields no group either way.
 
 Without a config file at all, there is nothing to evaluate (the project hasn't opted
@@ -77,7 +77,7 @@ into per-file index evaluation) → `prefilter.py` prints a clear message and ex
 
 Imports resolve from `checks/index-eval/` (the scripts' cwd; `lib/` and the package
 root are on `sys.path` from there). `prefilter.py` itself runs from **the repo root**
-(pass `--config <path>` if `index/index-config.json` isn't at the default location) —
+(pass `--config <path>` if `index/index-config.json` isn't at the default location) — <!-- template -->
 it resolves the manifest relative to the config's `base`.
 
 > **Orchestrator imports.** Any orchestrator code calling `lib.guard.is_contaminated`

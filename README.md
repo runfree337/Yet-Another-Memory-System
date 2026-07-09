@@ -65,12 +65,15 @@ project's standards", and wiring closure into the existing ritual (e.g. the revi
 - `index/INDEX.md` — navigation (template); `index/manifest.py` maintains the per-file detail
   on write (`set`/`rm`/`get`/`stamp`).
 - `checks/` — the process's **deterministic checks** (channel integrity, cross-links, dead doc
-  references…) to be wired into a hook or CI; `checks/entrylib.py` is the single shared
-  validator behind them.
+  references — paths, decision ids, code symbols…) to be wired into a hook or CI;
+  `checks/entrylib.py` is the single shared validator behind them. `checks/index-eval/` goes one
+  step further: it measures whether the index's intent phrases actually earn their keep over
+  bare file names (lexical prefilter + LLM-judged recipe).
 - `hooks/` — **universal guardrails** (security: secrets, poisoning, destructive commands),
   portable.
 - `adapters/claude-code/` — ready-to-wire **Claude Code adapter**: hook scripts + skill
-  templates materializing the wiring tables.
+  templates materializing the wiring tables — including the **index-usage metrics** pair
+  (does the navigation index actually get consulted?).
 - `SCRIPTS.md` — **reference** for every script under `checks/`, `hooks/` and `index/`: intent +
   parameters + exit codes.
 - `knowledge-capture.md` — agnostic routing for a method-level learning (the "is it worth

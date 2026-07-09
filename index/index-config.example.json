@@ -6,5 +6,7 @@
   "extensions": [".py", ".md"],
   "ignore": ["**/vendor/**", "**/node_modules/**", "**/__pycache__/**"],
   "hub": null,
-  "_hub": "Optional — path to a file (e.g. 'index/INDEX.md') carrying a '> Last updated: ...' line that `manifest.py stamp` will maintain (date + short commit). null = stamp disabled, no-op."
+  "_hub": "Optional — path to a file (e.g. 'index/INDEX.md') carrying a '> Last updated: ...' line that `manifest.py stamp` will maintain (date + short commit). null = stamp disabled, no-op.",
+  "eval-groups": null,
+  "_eval-groups": "Optional — array of manifest path prefixes (e.g. ['src/combat/', 'src/ui/']) that checks/index-eval/prefilter.py evaluates as groups. null/absent = groups derive from the manifest's own first-level directories."
 }
