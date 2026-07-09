@@ -13,6 +13,10 @@ badge. Two tiers: inline / subfolder.
 Follows `checks/TEMPLATE.md`: 5-field `Finding` namedtuple, two verdicts, pure rules.
 
 Rules:
+  CFG-INVALID    (BLOCKING)      `checks-config.json` present at the repo root but broken
+                                  (unreadable, malformed JSON, non-object top level) — see
+                                  `entrylib.load_checks_config`. Surfaced once per run so
+                                  a bad config is never silently ignored.
   (R-*)          (see entrylib) `entrylib.validate_entry(path, meta, "backlog")` per STATE.md —
                                   `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`,
                                   `R-EXT-NO-CONF`, `R-UNVERIFIED`, `R-VERIFIED-NOT-RATIFIED`,
@@ -27,9 +31,10 @@ Rules:
   E-DOCS         (BLOCKING)      `docs:` != exactly the folder's companion `.md` files.
   E-TASK-SECTION (BLOCKING)      `## Tasks` section absent from STATE.md.
   E-TASK-STATE   (BLOCKING)      task state outside `todo|in-progress|blocked|done`.
-  E-TASK-LEN     (BLOCKING)      task label > 30 words WITHOUT a referenced working document
-                                  (simple word count: the `[state]` badge and `→ doc.md`
-                                  excluded).
+  E-TASK-LEN     (BLOCKING)      task label > `sizes.backlog-task-label-max-words` words
+                                  (`checks-config.json`, default 30) WITHOUT a referenced
+                                  working document (simple word count: the `[state]`
+                                  badge and `→ doc.md` excluded).
   E-TASK-REF     (BLOCKING)      referenced working document (`→ doc.md`) not found in the
                                   work item's folder.
   E-TASK-SYNC    (TO-CONFIRM)    work item <-> tasks mismatch: all `done` but work item
@@ -43,9 +48,10 @@ Rules:
   E-IMPACT-EMPTY (TO-CONFIRM)    every task `done` and `impacts` absent/empty — "ready to
                                   close with no declared durable impact — really nothing to
                                   migrate?". Never fires while tasks remain open.
-  E-STATE-SIZE   (TO-CONFIRM)    STATE.md > 80 lines — candidate for "durable content living
-                                  in the state file" (soft anti-accumulation guard, never
-                                  blocking).
+  E-STATE-SIZE   (TO-CONFIRM)    STATE.md > `sizes.backlog-state-max-lines` lines
+                                  (`checks-config.json`, default 80) — candidate for
+                                  "durable content living in the state file" (soft
+                                  anti-accumulation guard, never blocking).
   E-STATE-SECTION(TO-CONFIRM)    `## …` heading outside the canonical sections
                                   (`Tasks`/`Remaining`) — soft, never blocking.
   I-FLAT         (BLOCKING)      flat `.md` file at the top level of `backlog/` (other than
@@ -98,15 +104,29 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # …/ai-wor
 BACKLOG = os.path.join(ROOT, "backlog")
 INDEX_PATH = os.path.join(BACKLOG, "INDEX.md")
 
+# Global settings (checks-config.json, optional) — loaded once. `_CFG_ERR` is surfaced
+# as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
+_CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
+
 # Structural names at the backlog's top level — never work item pointers.
 STRUCTURAL = {"STATE.md", "INDEX.md", "README.md", "STATE.template.md"}
 
 KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 TASK_STATES = {"todo", "in-progress", "blocked", "done"}
-TASK_LABEL_MAX_WORDS = 30
-STATE_SIZE_MAX_LINES = 80
+TASK_LABEL_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "backlog-task-label-max-words"), 30)
+STATE_SIZE_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "backlog-state-max-lines"), 80)
 CANON_SECTIONS = {"Tasks", "Remaining"}
+
+
+def check_config() -> list[Finding]:
+    """CFG-INVALID — `checks-config.json` present but broken. Surfaced once per run so
+    a broken config (unreadable, malformed JSON, non-object top level) never silently
+    falls back to defaults without the team knowing — same convention as
+    `feature-map-check.py`/`memory-check.py`."""
+    if _CFG_ERR:
+        return [Finding(BLOCKING, "CFG-INVALID", entrylib.CHECKS_CONFIG_NAME, 1, _CFG_ERR)]
+    return []
 
 # `impacts:` closed vocabulary — a channel keyword or a target path (see check_impacts).
 IMPACT_KEYWORDS = {"decision", "feature", "memory"}
@@ -578,7 +598,7 @@ def run() -> list[Finding]:
     milestone_map = index_milestone_map(index_text)
     seen_ids: dict = {}
 
-    findings: list[Finding] = []
+    findings: list[Finding] = list(check_config())
     for cid, cdir in work_items:
         findings += check_work_item(cid, cdir, ids, milestone_map, seen_ids)
     findings += check_index(work_items, index_text)

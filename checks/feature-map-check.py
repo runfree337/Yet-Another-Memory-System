@@ -9,6 +9,10 @@ channel). Fixes NOTHING — flags.
 Follows `checks/TEMPLATE.md`: 5-field `Finding` namedtuple, two verdicts, pure rules.
 
 Rules:
+  CFG-INVALID    (BLOCKING)      `checks-config.json` present at the repo root but broken
+                                  (unreadable, malformed JSON, non-object top level) — see
+                                  `entrylib.load_checks_config`. Surfaced once per run so
+                                  a bad config is never silently ignored.
   FM-INDEX       (BLOCKING)      `features/*.md` <-> `FEATURE_MAP.md` concordance, via
                                   `entrylib.check_index_concordance` — surfaces
                                   `R-ORPHAN-FILE` (entry with no index line) and
@@ -32,7 +36,9 @@ Rules:
                                   one of the paths cited by `**Code:**` — entry possibly
                                   stale. Soft: an unversioned/nonexistent path is ignored
                                   (already covered by other rules, no double signal).
-  FM-GRAN        (TO-CONFIRM)    body > ~60 useful lines -> candidate "two subjects".
+  FM-GRAN        (TO-CONFIRM)    body > `sizes.feature-entry-max-lines` useful lines
+                                  (`checks-config.json`, default 60) -> candidate "two
+                                  subjects".
 
 Note: `TRANSIENT` (where the host project's backlog lives) depends on layout — the
 default below covers THIS repo (`backlog/`).
@@ -70,13 +76,27 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # …/ai-wor
 FMAP = os.path.join(ROOT, "FEATURE_MAP.md")
 FEATURES_DIR = os.path.join(ROOT, "features")
 
+# Global settings (checks-config.json, optional) — loaded once. `_CFG_ERR` is surfaced
+# as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
+_CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
+
 ROLE_KEY = re.compile(r"^\*\*\s*Role\b", re.IGNORECASE)
 DOC_KEY = re.compile(r"^\*\*\s*Doc\b", re.IGNORECASE)
 DOC_KEY_VALUE = re.compile(r"^\*\*\s*Doc[^:*]*:?\*{0,2}\s*", re.IGNORECASE)
 CODE_PATH = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
 DECISION_MENTION = re.compile(r"\bD-\d{4}-\d{2}-\d{2}-\d{2}\b")
 TRANSIENT = re.compile(r"\bbacklog/")
-GRAN_MAX_LINES = 60
+GRAN_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "feature-entry-max-lines"), 60)
+
+
+def check_config() -> list[Finding]:
+    """CFG-INVALID — `checks-config.json` present but broken. Surfaced once per run so
+    a broken config (unreadable, malformed JSON, non-object top level) never silently
+    falls back to defaults without the team knowing — same convention as
+    `backlog-check.py`/`memory-check.py`."""
+    if _CFG_ERR:
+        return [Finding(BLOCKING, "CFG-INVALID", entrylib.CHECKS_CONFIG_NAME, 1, _CFG_ERR)]
+    return []
 
 
 def rel(path: str) -> str:
@@ -269,7 +289,8 @@ def cmd_stamp(argv: list[str]) -> int:
 # --------------------------------------------------------------------------- #
 
 def run() -> list[Finding]:
-    findings = list(check_index())
+    findings = list(check_config())
+    findings += check_index()
     for fname in list_entries():
         findings += check_entry(fname)
     return findings

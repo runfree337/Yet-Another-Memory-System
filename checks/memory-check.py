@@ -14,6 +14,7 @@ Rule table (id -> severity -> what it proves):
 
 | Rule                         | Severity      | Proves |
 |-------------------------------|---------------|--------|
+| `CFG-INVALID`                 | BLOCKING-AUTO | `checks-config.json` present at the repo root but broken (unreadable, malformed JSON, non-object top level) — see `entrylib.load_checks_config`. |
 | `R-NO-FRONTMATTER`           | BLOCKING-AUTO | `memory/<slug>.md` doesn't start with a `--- … ---` block. |
 | `R-MISSING-KEY`               | BLOCKING-AUTO | a required channel key (`id/source/confidence/created/updated`) is missing or empty. |
 | `R-BAD-VALUE`                 | BLOCKING-AUTO | `source:` or `confidence:` doesn't respect its closed vocabulary (`inferred\|human\|external:<ref>`, `verified\|unverified`). |
@@ -25,10 +26,12 @@ Rule table (id -> severity -> what it proves):
 | `R-UNVERIFIED`                | TO-CONFIRM    | `confidence: unverified` — candidate for semantic audit (tier 2, `memory-audit.md`), not an error in itself. |
 | `R-VERIFIED-NOT-RATIFIED`     | TO-CONFIRM    | `confidence: verified` with no `ratified` field — human ratification not tracked. |
 | `R-DEAD-LINK` (to-confirm)    | TO-CONFIRM    | `links:` cites an entry slug not found in `memory/`/`features/`/`backlog/` — the target channel might just not be populated yet. |
+| `M-GRAN`                      | TO-CONFIRM    | entry body > `sizes.memory-entry-max-lines` useful lines (`checks-config.json`, default 40) — granularity hint: one fact per file, long detail belongs in the durable doc (cf. `MEMORY.md`), never blocking. |
 
 These ids are the channel's API — stable, grep-able, cited by `checks/memory-audit.md`
 and the docs. Each rule's detail is defined once in `checks/entrylib.py`; this file never
-redefines them.
+redefines them (`M-GRAN` is the one rule local to this script — no channel elsewhere had
+a size signal on memory entries).
 
 Read-only by default. Fixes nothing — flags. `--stamp` is the only write (see below),
 scoped to the `updated` field.
@@ -57,6 +60,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # framework 
 MEMORY_MD = os.path.join(ROOT, "MEMORY.md")
 MEMORY_DIR = os.path.join(ROOT, "memory")
 
+# Global settings (checks-config.json, optional) — loaded once. `_CFG_ERR` is surfaced
+# as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
+_CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
+GRAN_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "memory-entry-max-lines"), 40)
+
 # A memory entry has no rigid id grammar (unlike `D-YYYY-MM-DD-NN` on the decisions side)
 # — a bare `.md` isn't enough to prove a reference (`MEMORY.md` mentions
 # `ENTRY-TEMPLATE.md`, `memory-audit.md`… constantly). So we anchor on the template's
@@ -69,12 +77,30 @@ def rel(path: str) -> str:
     return os.path.relpath(path, ROOT)
 
 
+def check_config() -> list:
+    """CFG-INVALID — `checks-config.json` present but broken. Surfaced once per run so
+    a broken config (unreadable, malformed JSON, non-object top level) never silently
+    falls back to defaults without the team knowing — same convention as
+    `feature-map-check.py`/`backlog-check.py`."""
+    if _CFG_ERR:
+        return [Finding(BLOCKING, "CFG-INVALID", entrylib.CHECKS_CONFIG_NAME, 1, _CFG_ERR)]
+    return []
+
+
+def _useful_body_lines(body: str) -> list[str]:
+    """Same filter as `feature-map-check.py`'s FM-GRAN rule: blank lines and Markdown
+    table separator rows (`|---`) don't count as "content" — keeps the two channels'
+    line count directly comparable."""
+    return [l for l in body.splitlines() if l.strip() and not l.strip().startswith("|---")]
+
+
 # --------------------------------------------------------------------------- #
 # Pure rules — delegate to entrylib, this script only aggregates.             #
 # --------------------------------------------------------------------------- #
 
 def audit_memory_dir() -> list:
-    """Frontmatter + cross-references of every `memory/<slug>.md`, via `entrylib`."""
+    """Frontmatter + cross-references of every `memory/<slug>.md`, via `entrylib`, plus
+    the local `M-GRAN` granularity rule (see file header)."""
     findings: list = []
     if not os.path.isdir(MEMORY_DIR):
         return findings
@@ -83,10 +109,20 @@ def audit_memory_dir() -> list:
             continue
         fpath = os.path.join(MEMORY_DIR, fname)
         text = open(fpath, encoding="utf-8").read()
-        meta, _body, _err = entrylib.parse_frontmatter(text)
+        meta, body, _err = entrylib.parse_frontmatter(text)
         path = rel(fpath)
         findings += entrylib.validate_entry(path, meta, "memory")
         findings += entrylib.check_links(path, meta, ROOT)
+
+        # No frontmatter -> R-NO-FRONTMATTER already fired above; `body` would then be
+        # unreliable (raw text or empty depending on the failure) — skip M-GRAN, no
+        # double signal on an already-broken file.
+        useful = _useful_body_lines(body) if meta else []
+        if len(useful) > GRAN_MAX_LINES:
+            findings.append(Finding(TO_CONFIRM, "M-GRAN", path, 1,
+                f"{len(useful)} useful lines (> {GRAN_MAX_LINES}) — one fact per file; "
+                "long detail belongs in the durable doc, cf. MEMORY.md — move the detail "
+                "there and keep this entry as a pointer."))
     return findings
 
 
@@ -141,7 +177,7 @@ def main(argv) -> int:
 
     as_json = "--json" in argv
 
-    findings = audit_memory_dir() + audit_index_concordance()
+    findings = check_config() + audit_memory_dir() + audit_index_concordance()
     bloq = [f for f in findings if f.severity == BLOCKING]
     conf = [f for f in findings if f.severity == TO_CONFIRM]
 
