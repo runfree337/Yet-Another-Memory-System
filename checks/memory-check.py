@@ -1,66 +1,68 @@
 #!/usr/bin/env python3
 """Contrôle d'intégrité du canal « Mémoire » (préférences), agnostique.
 
-Format : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index
-(une ligne par fichier) — même motif que l'auto-memory personnelle de l'outil, appliqué
-à la mémoire PARTAGÉE. Le frontmatter est chargeable mécaniquement (pas de regex sur une
-ligne de prose) : deux clés, `source:` et `confiance:`, entre deux lignes `---`.
+Format : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index (une ligne
+par fichier) — instance du méta-schéma `GABARIT-ENTREE.md`. Toute la logique de frontmatter/
+concordance/liens vit dans la bibliothèque partagée `checks/entrylib.py` (un seul endroit définit
+ce qu'est une entrée mémoire valide, réutilisé par `decisions-check.py` / `feature-map-check.py` /
+`backlog-check.py`) — ce script se contente d'appeler `entrylib` avec le canal `"memory"` et
+d'agréger.
 
-Suit `GABARIT.md` : `Finding` namedtuple, deux verdicts, règles pures, code retour 0/1/2.
+Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts, code retour 0/1/2.
 
-Règles :
-  R-NO-FRONTMATTER (BLOQUANT) — `memory/<slug>.md` ne commence pas par un bloc `---`.
-  R-EXT-NO-CONF    (BLOQUANT) — `source: externe:...` sans champ `confiance:` du tout.
-  R-ORPHAN-FILE    (BLOQUANT) — `memory/<slug>.md` existe mais aucune ligne de `MEMORY.md`
-                                 ne le référence (`memory/<slug>.md`).
-  R-DEAD-INDEX     (BLOQUANT) — une ligne de `MEMORY.md` référence `memory/<slug>.md` et
-                                 le fichier n'existe pas.
-  R-UNVERIFIED  (À-CONFIRMER) — `confiance: à vérifier` : candidate pour l'audit sémantique
-                                 (étage 2, `memory-audit.md`) — pas une erreur en soi.
+Table des règles (id → sévérité → ce qu'elle prouve) :
 
-Lecture seule. Ne corrige rien — signale.
+| Règle                      | Sévérité      | Prouve |
+|-----------------------------|---------------|--------|
+| `R-NO-FRONTMATTER`          | BLOQUANT-AUTO | `memory/<slug>.md` ne commence pas par un bloc `--- … ---`. |
+| `R-MISSING-KEY`              | BLOQUANT-AUTO | une clé requise du canal (`id/source/confidence/created/updated`) est absente ou vide. |
+| `R-BAD-VALUE`                | BLOQUANT-AUTO | `source:` ou `confidence:` ne respecte pas son vocabulaire fermé (`inferred\|human\|external:<réf>`, `verified\|unverified`). |
+| `R-EXT-NO-CONF`              | BLOQUANT-AUTO | `source: external:...` sans champ `confidence` du tout — une source externe DOIT porter une confiance. |
+| `R-BAD-DATE`                 | BLOQUANT-AUTO | `created`/`updated` n'est pas au format `AAAA-MM-JJ`. |
+| `R-DEAD-LINK` (bloquant)     | BLOQUANT-AUTO | `links:` cite un id de décision `D-*` ou un chemin qui n'existe pas sur disque. |
+| `R-ORPHAN-FILE`              | BLOQUANT-AUTO | `memory/<slug>.md` existe mais aucune ligne de `MEMORY.md` ne le référence. |
+| `R-DEAD-INDEX`               | BLOQUANT-AUTO | une ligne de `MEMORY.md` référence `memory/<slug>.md` et le fichier n'existe pas. |
+| `R-UNVERIFIED`               | À-CONFIRMER   | `confidence: unverified` — candidate pour l'audit sémantique (étage 2, `memory-audit.md`), pas une erreur en soi. |
+| `R-VERIFIED-NOT-RATIFIED`    | À-CONFIRMER   | `confidence: verified` sans champ `ratified` — ratification humaine non tracée. |
+| `R-DEAD-LINK` (à-confirmer)  | À-CONFIRMER   | `links:` cite un slug d'entrée introuvable dans `memory/`/`features/`/`backlog/` — le canal cible n'est peut-être pas encore peuplé. |
+
+Ces ids sont l'API du canal — stables, grep-ables, cités par `checks/memory-audit.md` et les
+docs. Le détail de chaque règle est défini une seule fois dans `checks/entrylib.py` ; ce fichier
+ne les redéfinit jamais.
+
+Lecture seule par défaut. Ne corrige rien — signale. `--stamp` est la seule écriture (voir plus
+bas), bornée au champ `updated`.
 
 Usage :
   python3 checks/memory-check.py                 # MEMORY.md + memory/ par défaut
   python3 checks/memory-check.py --json
+  python3 checks/memory-check.py --stamp --staged # pré-commit uniquement
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import subprocess
 import sys
-from collections import namedtuple
 
-BLOQUANT = "BLOQUANT-AUTO"
-CONFIRMER = "À-CONFIRMER"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import entrylib  # noqa: E402
 
-Finding = namedtuple("Finding", "severity rule path line msg")
+BLOQUANT = entrylib.BLOQUANT
+CONFIRMER = entrylib.CONFIRMER
+Finding = entrylib.Finding
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # …/ai-workflow
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # racine du framework
 MEMORY_MD = os.path.join(ROOT, "MEMORY.md")
 MEMORY_DIR = os.path.join(ROOT, "memory")
 
-INDEX_LINK_RE = re.compile(r"\(memory/([\w.-]+\.md)\)")
-
-
-def _norm(s: str) -> str:
-    return s.strip().lower().replace("é", "e").replace("à", "a")
-
-
-def parse_frontmatter(text: str):
-    """Retourne (dict clé->valeur, a_frontmatter: bool). Ne lève jamais."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}, False
-    fm = {}
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return fm, True
-        if ":" in line:
-            k, v = line.split(":", 1)
-            fm[_norm(k)] = v.strip()
-    return fm, False  # jamais de second '---' → frontmatter mal formé
+# Une entrée mémoire n'a pas de grammaire d'id rigide (contrairement à `D-AAAA-MM-JJ-NN` côté
+# décisions) — un `.md` nu ne suffit pas à prouver une référence (`MEMORY.md` en parle sans arrêt
+# de `GABARIT-ENTREE.md`, `memory-audit.md`…). On ancre donc sur la FORME de lien du gabarit :
+# soit un nom de fichier nu (`entries_dir`, ex. `mem-slug.md`), soit `(memory/<slug>.md)` dans le
+# texte de l'index — jamais un `.md` flottant en prose.
+ID_RE = re.compile(r"(?<=\(memory/)[\w.-]+\.md(?=\))|^[\w.-]+\.md$")
 
 
 def rel(path: str) -> str:
@@ -68,11 +70,12 @@ def rel(path: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Règles pures                                                                 #
+# Règles pures — délèguent à entrylib, ce script ne fait qu'agréger.           #
 # --------------------------------------------------------------------------- #
 
-def audit_memory_dir() -> list[Finding]:
-    findings: list[Finding] = []
+def audit_memory_dir() -> list:
+    """Frontmatter + liens croisés de chaque `memory/<slug>.md`, via `entrylib`."""
+    findings: list = []
     if not os.path.isdir(MEMORY_DIR):
         return findings
     for fname in sorted(os.listdir(MEMORY_DIR)):
@@ -80,49 +83,59 @@ def audit_memory_dir() -> list[Finding]:
             continue
         fpath = os.path.join(MEMORY_DIR, fname)
         text = open(fpath, encoding="utf-8").read()
-        fm, closed = parse_frontmatter(text)
+        meta, _body, _err = entrylib.parse_frontmatter(text)
+        path = rel(fpath)
+        findings += entrylib.validate_entry(path, meta, "memory")
+        findings += entrylib.check_links(path, meta, ROOT)
+    return findings
 
-        if not closed:
-            findings.append(Finding(BLOQUANT, "R-NO-FRONTMATTER", rel(fpath), 1,
-                                     "pas de frontmatter --- ... --- en tête de fichier"))
+
+def audit_index_concordance() -> list:
+    """Concordance `memory/<slug>.md` ⟺ lignes de `MEMORY.md`, via `entrylib`."""
+    findings = entrylib.check_index_concordance(MEMORY_MD, MEMORY_DIR, ID_RE)
+    return [f._replace(path=rel(f.path)) for f in findings]
+
+
+# --------------------------------------------------------------------------- #
+# --stamp — même triple garde-fou que backlog-check.py : scope stagé,         #
+# champ mécanique (`updated`) seul, jamais bloquant.                          #
+# --------------------------------------------------------------------------- #
+
+def cmd_stamp(argv) -> int:
+    """Pose `updated: <aujourd'hui>` sur les `memory/*.md` cités (ou stagés avec --staged) et
+    re-stage. À câbler au pré-commit — la date du frontmatter suit la date du commit,
+    mécaniquement (zéro pourrissement). Scope stagé uniquement : ne tire jamais un fichier hors
+    du commit en cours."""
+    import datetime
+    today = datetime.date.today().isoformat()
+    staged = "--staged" in argv
+
+    if staged:
+        r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+                            capture_output=True, text=True)
+        files = [f for f in r.stdout.splitlines()
+                 if f.replace("\\", "/").startswith("memory/") and f.endswith(".md")]
+    else:
+        files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
+
+    changed = []
+    for f in files:
+        if not os.path.isfile(f):
             continue
+        if entrylib.stamp_updated(f, today):
+            changed.append(f)
+            if staged:
+                subprocess.run(["git", "add", f])
 
-        source = fm.get("source", "")
-        conf = _norm(fm.get("confiance", ""))
-        if source.lower().startswith("externe") and not fm.get("confiance"):
-            findings.append(Finding(BLOQUANT, "R-EXT-NO-CONF", rel(fpath), 1,
-                                     "source externe sans champ confiance:"))
-        if conf == "a verifier":
-            findings.append(Finding(CONFIRMER, "R-UNVERIFIED", rel(fpath), 1,
-                                     "confiance: à vérifier — candidate pour l'audit sémantique"))
-    return findings
-
-
-def audit_index_concordance() -> list[Finding]:
-    findings: list[Finding] = []
-    files = set()
-    if os.path.isdir(MEMORY_DIR):
-        files = {f for f in os.listdir(MEMORY_DIR) if f.endswith(".md")}
-
-    indexed = set()
-    if os.path.isfile(MEMORY_MD):
-        with open(MEMORY_MD, encoding="utf-8") as fh:
-            for lineno, line in enumerate(fh, start=1):
-                for m in INDEX_LINK_RE.finditer(line):
-                    fname = m.group(1)
-                    indexed.add(fname)
-                    if fname not in files:
-                        findings.append(Finding(BLOQUANT, "R-DEAD-INDEX", rel(MEMORY_MD), lineno,
-                                                 f"référence memory/{fname} — fichier introuvable"))
-
-    for fname in sorted(files - indexed):
-        findings.append(Finding(BLOQUANT, "R-ORPHAN-FILE", rel(os.path.join(MEMORY_DIR, fname)), 1,
-                                 "existe mais n'est référencé par aucune ligne de MEMORY.md"))
-    return findings
+    print(f"memory-check : --stamp — {len(changed)} memory/*.md daté(s) à {today}.")
+    return 0
 
 
 # --------------------------------------------------------------------------- #
 def main(argv) -> int:
+    if "--stamp" in argv:
+        return cmd_stamp(argv)
+
     as_json = "--json" in argv
 
     findings = audit_memory_dir() + audit_index_concordance()

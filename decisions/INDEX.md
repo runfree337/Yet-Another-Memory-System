@@ -1,6 +1,9 @@
 # Décisions — INDEX
 
-> Une ligne par décision **structurelle**, scannable en premier. Format : `D-AAAA-MM-JJ-NN — <titre court> · <invariant en 1 phrase>`. Détail dans `D-*.md`. Protocole : `README.md`.
+> Une ligne par décision **structurelle**, scannable en premier. Format :
+> `- [D-AAAA-MM-JJ-NN](D-AAAA-MM-JJ-NN.md) — <titre court> · <invariant en 1 phrase>`.
+> Détail dans `D-*.md` (frontmatter `status` ⟺ la section ci-dessous, cf. `README.md`).
+> Protocole : `README.md`.
 
 ## Actives
 
@@ -8,4 +11,4 @@
 
 ## Archivées
 
-<!-- décisions caduques déplacées ici -->
+<!-- décisions caduques déplacées ici (status: archived, ou revoked sans contrainte vivante) -->

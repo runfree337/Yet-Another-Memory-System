@@ -1,68 +1,105 @@
 #!/usr/bin/env python3
-"""Contrôle déterministe du backlog (zéro faux positif) — version agnostique.
+"""Contrôle déterministe du backlog (zéro faux positif), agnostique.
 
-Vérifie mécaniquement les invariants de `backlog/README.md` — NE corrige rien,
-**signale**. Premier étage du motif deux-niveaux (script → revue sémantique).
-À câbler pour tourner automatiquement (hook de fin de tâche / session, ou CI ;
-voir `checks/README.md`).
+Vérifie mécaniquement les invariants de `backlog/README.md` — NE corrige rien, **signale**.
+Premier étage du motif deux-niveaux (script → revue sémantique). Format : un chantier doc-backed
+= un **sous-dossier** `backlog/<id>/` dont l'`ETAT.md` ouvre par un **frontmatter** aux clés
+anglaises (`id/title/status/milestone/after/docs/updated`) — instance de `GABARIT-ENTREE.md`
+(canal « backlog »), généralisé via `entrylib.py` comme `feature-map-check.py`. La ligne
+d'`INDEX.md` d'un doc-backed ne porte que titre + cible + gist (sans badge) ; un item inline
+(pas de doc) garde son badge `[todo]`/`[in-progress]`. Deux paliers : inline / sous-dossier.
 
-Modèle : un chantier doc-backed = un **sous-dossier** `backlog/<id>/` dont l'`ETAT.md`
-ouvre par un **frontmatter YAML** (`id/titre/statut/jalon/apres/docs/maj`) — **source de
-vérité de l'état**. La ligne d'`INDEX.md` ne porte que titre + cible + gist (sans badge) ;
-un item inline (pas de doc) garde son badge. Deux paliers : inline / sous-dossier.
+Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
 
-Vérifs (déterministes, zéro-FP visé) :
-  F1  Tout sous-dossier `backlog/<id>/` a un `ETAT.md` avec un frontmatter portant les
-      champs requis (`id/titre/statut/jalon/maj`), `statut` ∈ {à faire, en cours}, `maj` en YYYY-MM-DD.
-  F2  `id` du frontmatter = nom du dossier, kebab-case, unique entre chantiers.
-  F3  `statut` concorde avec les rubriques (à faire ⟺ tout est dans Reste, sinon en cours).
-  F4  `jalon` concorde avec le groupe `### Jalon N` de l'INDEX (null ⟺ hors Jalon).
-  F5  Chaque `apres:` pointe un `id` de chantier existant.
-  F6  `docs:` = exactement les `.md` compagnons du dossier (hors `ETAT.md`).
-  Fr  Tout titre `## …` de l'`ETAT.md` ∈ rubriques canoniques ∪ préambule (Intention/Gain) ∪ Clôture.
-  E4  Pas d'orphelin : tout dossier de `backlog/` est cité dans `INDEX.md`, tout pointeur résout,
-      et aucun fichier plat de chantier au premier niveau (palier abandonné).
-  E6  `INDEX.md` ne porte pas de case Markdown `- [ ]`/`- [x]`.
-  C3  (info) Item d'ETAT « en surpoids » (> 6 sous-puces, ou ligne physique > 400 chars) →
-      extraire le détail en doc compagnon (`docs:`), l'ETAT ne garde qu'une ligne de renvoi (README §4).
-  I1  (info) Signal de clôture : `ETAT.md` tout en *Documenté* → chantier prêt à clôturer.
+Règles :
+  (R-*)          (voir entrylib) `entrylib.validate_entry(path, meta, "backlog")` par ETAT.md —
+                                  `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`,
+                                  `R-EXT-NO-CONF`, `R-UNVERIFIED`, `R-VERIFIED-NOT-RATIFIED`,
+                                  `R-BAD-DATE` ; `entrylib.check_links` pour les `links:` —
+                                  `R-DEAD-LINK`.
+  E-ID           (BLOQUANT)      frontmatter `id` ≠ nom du dossier.
+  E-ID-KEBAB     (BLOQUANT)      frontmatter `id` pas en kebab-case.
+  E-ID-DUP       (BLOQUANT)      `id` déjà utilisé par un autre chantier.
+  E-MILESTONE    (BLOQUANT)      `milestone` du frontmatter ≠ groupe `### Jalon N` de l'INDEX.
+  E-AFTER        (BLOQUANT)      `after:` pointe un id de chantier qui n'existe pas.
+  E-DOCS         (BLOQUANT)      `docs:` ≠ exactement les `.md` compagnons du dossier.
+  E-TASK-SECTION (BLOQUANT)      rubrique `## Tâches` absente de l'ETAT.md.
+  E-TASK-STATE   (BLOQUANT)      état de tâche hors `todo|in-progress|blocked|done`.
+  E-TASK-LEN     (BLOQUANT)      libellé de tâche > 30 mots SANS document de travail référencé
+                                  (comptage simple : le badge `[état]` et le `→ doc.md` exclus).
+  E-TASK-REF     (BLOQUANT)      document de travail cité (`→ doc.md`) introuvable dans le
+                                  dossier du chantier.
+  E-TASK-SYNC    (À-CONFIRMER)   incohérence chantier⟺tâches : toutes `done` mais chantier
+                                  `todo`/`in-progress` (signal « prêt à clore ») — ou l'inverse,
+                                  chantier `in-progress` sans aucune tâche entamée.
+  E-STATE-SIZE   (À-CONFIRMER)   ETAT.md > 80 lignes — candidat « du durable vit dans l'état »
+                                  (garde anti-accumulation, soft — jamais bloquant).
+  E-STATE-SECTION(À-CONFIRMER)   titre `## …` hors rubriques canoniques (`Tâches`/`Reste`) —
+                                  soft, jamais bloquant.
+  I-FLAT         (BLOQUANT)      fichier `.md` plat au premier niveau de `backlog/` (hors
+                                  `INDEX.md`/`README.md`/`ETAT.gabarit.md`) — palier abandonné.
+  I-ORPHAN       (BLOQUANT)      dossier `backlog/<id>/` cité nulle part dans `INDEX.md`.
+  I-DEAD-POINTER (BLOQUANT)      pointeur `` `<id>/` `` ou `` `<fichier>.md` `` de `INDEX.md`
+                                  qui ne résout vers rien.
+  I-CHECKBOX     (BLOQUANT)      case Markdown `- [ ]`/`- [x]` dans `INDEX.md` (fini = retiré ;
+                                  statut = frontmatter pour les doc-backed, badge pour les autres).
 
-Vues : `--board` (chantiers par jalon, statut + comptes par rubrique) · `--state <id>`
-(un chantier, rubriques déroulées). Les deux acceptent `--json`. `--checklist [<id>]`
-émet le gabarit de clôture (DoD).
+Vues : `--board` (chantiers par jalon, statut + compteurs de tâches par état) · `--state <id>`
+(un chantier, tâches déroulées). Les deux acceptent `--json`. `--checklist [<id>]` émet le
+gabarit de clôture (DoD, `backlog/README.md`).
 
-Code retour : 2 si ≥1 erreur (F*/E*), 0 sinon (I* neutre).
-Usage : python3 checks/backlog-check.py [--json|--board|--state <id>|--checklist [<id>]]
+`--stamp [fichiers…]` / `--stamp --staged` : pose `updated: <aujourd'hui>` via
+`entrylib.stamp_updated` sur les `ETAT.md` cités (ou stagés avec `--staged`, scope strict
+`backlog/**/ETAT.md`, re-stage git après écriture) — même triple garde-fou que
+`feature-map-check.py --stamp` : scope stagé strict, un seul champ mécanique, jamais bloquant.
+
+Usage :
+  python3 checks/backlog-check.py                     # rapport texte
+  python3 checks/backlog-check.py --json               # sortie JSON des findings
+  python3 checks/backlog-check.py --board               # vue d'ensemble
+  python3 checks/backlog-check.py --state <id>           # un chantier déroulé
+  python3 checks/backlog-check.py --stamp --staged        # pré-commit uniquement
+  python3 checks/backlog-check.py --checklist [<id>]        # gabarit de clôture (DoD)
+Code retour : 0 propre, 1 seulement des À-CONFIRMER, 2 au moins un BLOQUANT.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 
-ERREUR = "ERREUR"
-INFO = "INFO"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import entrylib  # noqa: E402
 
-RUBRIQUES = {"Documenté", "Fini", "À valider", "En cours", "Reste"}
-RUBRIQUE_ORDER = ["Documenté", "Fini", "À valider", "En cours", "Reste"]
-RUBRIQUES_NON_TERMINALES = {"Fini", "À valider", "En cours", "Reste"}
-STATUTS = {"à faire", "en cours"}
-REQUIS = ("id", "titre", "statut", "jalon", "maj")
-STRUCTURAL = {"ETAT.md", "INDEX.md", "README.md"}  # noms structurels, pas des pointeurs de chantier
+BLOQUANT = entrylib.BLOQUANT
+CONFIRMER = entrylib.CONFIRMER
+Finding = entrylib.Finding
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # …/ai-workflow
+BACKLOG = os.path.join(ROOT, "backlog")
+INDEX_PATH = os.path.join(BACKLOG, "INDEX.md")
+
+# Noms structurels au premier niveau du backlog — jamais des pointeurs de chantier.
+STRUCTURAL = {"ETAT.md", "INDEX.md", "README.md", "ETAT.gabarit.md"}
 
 KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BACKLOG = os.path.join(ROOT, "backlog")
+TASK_STATES = {"todo", "in-progress", "blocked", "done"}
+TASK_LABEL_MAX_WORDS = 30
+STATE_SIZE_MAX_LINES = 80
+CANON_SECTIONS = {"Tâches", "Reste"}
 
-# DoD agnostique de clôture (cf. backlog/README.md). `{cible}` = le chantier à supprimer.
+# DoD (cf. backlog/README.md). `{cible}` = le chantier à supprimer. Étape 1 = un CONTRÔLE
+# (la capitalisation s'est déjà faite tâche par tâche), pas un gros œuvre.
 CLOSURE_STEPS = [
-    ("Durable", "écrire/mettre à jour la doc durable (ce qui existe) + les mémoires touchées "
-                "— porte le contenu, pas une promesse"),
+    ("Durable", "contrôler qu'il ne reste pas de durable non migré (l'ETAT.md n'en porte "
+                "jamais) — sinon le migrer maintenant vers son foyer + les mémoires touchées"),
     ("Décision", "enregistrer la décision si la clôture acte un choix structurel"),
     ("Backlog", "supprimer {cible} **+ sa ligne dans `INDEX.md`**"),
+    ("État", "mettre à jour `TABLEAU_DE_BORD.md` : avancement du jalon concerné, points chauds"),
     ("Capitalisation", "poser la question « apprentissage de méthode réutilisable ? » et router si oui"),
 ]
 
@@ -74,91 +111,73 @@ def closure_checklist(cible="le dossier du chantier"):
     return "\n".join([head, *rows])
 
 
-def add(out, severity, rule, path, msg):
-    out.append({"severity": severity, "rule": rule, "path": path, "msg": msg})
+def rel(path: str) -> str:
+    return os.path.relpath(path, ROOT)
 
 
 # --------------------------------------------------------------------------- #
-# Parsing — frontmatter + corps de l'ETAT.md
+# Parsing du corps de l'ETAT.md — titres H2 + tâches de la rubrique `Tâches`  #
 # --------------------------------------------------------------------------- #
 
 H2 = re.compile(r"^##\s+(.+?)\s*$")
-COMMENT = re.compile(r"\s+#.*$")
+TOP_BULLET = re.compile(r"^-\s+(.*)$")           # bullet top-level (pas de retrait)
+TASK_BADGE = re.compile(r"^\[(?P<state>[^\]]*)\]\s*(?P<rest>.*)$")
+DOC_REF = re.compile(r"→\s*(\S+)\s*$")
 
 
-def parse_scalar(val):
-    val = val.strip()
-    if val in ("", "null", "~"):
-        return None
-    if val == "[]":
-        return []
-    if val.startswith("[") and val.endswith("]"):
-        inner = val[1:-1].strip()
-        return [x.strip().strip("'\"") for x in inner.split(",") if x.strip()] if inner else []
-    if re.fullmatch(r"-?\d+", val):
-        return int(val)
-    return val.strip("'\"")
-
-
-def parse_frontmatter(text):
-    if not text.startswith("---"):
-        return None
-    lines = text.splitlines()
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    if end is None:
-        return None
-    fm = {}
-    for line in lines[1:end]:
-        raw = COMMENT.sub("", line).rstrip()
-        if not raw.strip() or ":" not in raw:
-            continue
-        key, _, val = raw.partition(":")
-        fm[key.strip()] = parse_scalar(val)
-    return fm
-
-
-def parse_etat_body(text):
+def parse_etat(text):
+    """Retourne (headings: [(lineno, titre)], sections: {titre: [(lineno, contenu_du_bullet)]})."""
     headings, sections, current = [], {}, None
-    for line in text.splitlines():
+    for lineno, line in enumerate(text.splitlines(), start=1):
         m = H2.match(line)
         if m:
             current = m.group(1).strip()
-            headings.append(current)
-            sections[current] = []
+            headings.append((lineno, current))
+            sections.setdefault(current, [])
             continue
         if current is not None:
-            s = line.strip()
-            if s.startswith("- ") and s.strip("- ").strip() not in ("", "—", "-"):
-                sections[current].append(s)
+            bm = TOP_BULLET.match(line)
+            if bm:
+                sections[current].append((lineno, bm.group(1)))
     return headings, sections
 
 
-def is_allowed_heading(h):
-    return h in RUBRIQUES or h.startswith(("Intention", "Gain", "Clôture", "Cloture"))
-
-
-def derived_statut(sections):
-    started = any(sections.get(r) for r in ("Documenté", "Fini", "À valider", "En cours"))
-    return "en cours" if started else "à faire"
+def parse_task(content):
+    """Une ligne de tâche (déjà sans le `- ` de tête) → (etat, libellé, doc_ref|None)."""
+    m = TASK_BADGE.match(content)
+    state = m.group("state").strip() if m else ""
+    rest = m.group("rest").strip() if m else content.strip()
+    dm = DOC_REF.search(rest)
+    if dm:
+        doc = dm.group(1).strip("`")
+        label = rest[:dm.start()].strip()
+    else:
+        doc = None
+        label = rest.strip()
+    return state, label, doc
 
 
 # --------------------------------------------------------------------------- #
-# Parsing de l'INDEX.md — jalon par chantier
+# Parsing de l'INDEX.md — jalon par chantier (titres de groupe restent en FR) #
 # --------------------------------------------------------------------------- #
 
 H3_JALON = re.compile(r"^###\s+Jalon\s+(\d+)")
+H3_ANY = re.compile(r"^###\s+")
 H2_ANY = re.compile(r"^##\s+")
 ENTRY_TOK = re.compile(r"→\s*`([\w.\-]+)/`")  # entrée canonique « → `<id>/` »
 
 
 def index_jalon_map(index_text):
+    """Groupe courant = dernier `### Jalon N` vu ; tout autre titre (`### Non planifié`, ou un
+    `##` de plus haut niveau) le réinitialise à `None` — sinon un chantier sous « Non planifié »
+    hériterait à tort du dernier jalon numéroté rencontré plus haut dans le fichier."""
     mapping, current = {}, None
     for line in index_text.splitlines():
         mj = H3_JALON.match(line)
         if mj:
             current = int(mj.group(1))
             continue
-        if H2_ANY.match(line):
+        if H3_ANY.match(line) or H2_ANY.match(line):
             current = None
             continue
         if line.lstrip().startswith("- "):
@@ -168,214 +187,229 @@ def index_jalon_map(index_text):
     return mapping
 
 
+def _norm_milestone(v):
+    if v is None:
+        return None
+    if isinstance(v, int):
+        return v
+    s = str(v).strip()
+    return int(s) if re.fullmatch(r"-?\d+", s) else s
+
+
 # --------------------------------------------------------------------------- #
-# Règles
+# Un chantier — frontmatter (entrylib) + tâches + garde-fous                  #
 # --------------------------------------------------------------------------- #
 
-def collect_chantiers(backlog):
-    if not os.path.isdir(backlog):
-        return []
-    return [(n, os.path.join(backlog, n)) for n in sorted(os.listdir(backlog))
-            if os.path.isdir(os.path.join(backlog, n)) and not n.startswith(".")]
-
-
-# Seuils C3 (« item d'ETAT en surpoids ») — advisory. Voir backlog/README.md §4.
-C3_SUBS_MAX = 6    # > 6 sous-puces sous un même item = journal imbriqué à externaliser
-C3_LINE_MAX = 400  # ligne physique de rubrique > 400 chars = pavé à externaliser
-
-
-def check_etat_overweight(text, etat_rel, out):
-    """C3 (info, advisory) — un item de rubrique « en surpoids » (trop de sous-puces, ou
-    une ligne physique trop longue) devrait migrer son détail dans un **doc compagnon**
-    (déclaré dans `docs:`), l'ETAT ne gardant qu'une **ligne de renvoi** (intent + statut +
-    référence). Réalise la discipline du README §4 (ETAT = statut par tâche + renvois, PAS un
-    journal). Ne s'applique qu'aux rubriques canoniques (pas au préambule Intention/Gain)."""
-    in_rubric = False
-    parent = None  # (lineno, libellé) du bullet top-level courant
-    subs = 0
-    lineno = 0
-
-    def flush():
-        nonlocal parent, subs
-        if parent is not None and subs > C3_SUBS_MAX:
-            ln, label = parent
-            add(out, INFO, "C3-item-surpoids", f"{etat_rel}:{ln}",
-                f"item « {label} » porte {subs} sous-puces (> {C3_SUBS_MAX}) — extraire le "
-                f"détail en doc compagnon (`docs:`), ne laisser qu'une ligne de renvoi.")
-        parent, subs = None, 0
-
-    for line in text.splitlines():
-        lineno += 1
-        m = H2.match(line)
-        if m:
-            flush()
-            in_rubric = m.group(1).strip() in RUBRIQUES
-            continue
-        if not in_rubric:
-            continue
-        if len(line) > C3_LINE_MAX:
-            add(out, INFO, "C3-ligne-longue", f"{etat_rel}:{lineno}",
-                f"ligne de {len(line)} chars (> {C3_LINE_MAX}) — pavé à externaliser en doc "
-                f"compagnon, ne laisser qu'une ligne de renvoi dans l'ETAT.")
-        bm = re.match(r"( *)[-*] (.*)", line)
-        if bm:
-            if len(bm.group(1)) == 0:      # bullet top-level
-                flush()
-                parent = (lineno, bm.group(2)[:40])
-                subs = 0
-            elif parent is not None:        # sous-puce (indentée)
-                subs += 1
-    flush()
-
-
-def check_backlog(out):
+def collect_chantiers():
     if not os.path.isdir(BACKLOG):
-        return
-    index_path = os.path.join(BACKLOG, "INDEX.md")
-    index_text = ""
-    if os.path.isfile(index_path):
-        with open(index_path, encoding="utf-8") as f:
-            index_text = f.read()
+        return []
+    return [(n, os.path.join(BACKLOG, n)) for n in sorted(os.listdir(BACKLOG))
+            if os.path.isdir(os.path.join(BACKLOG, n)) and not n.startswith(".")]
 
-    chantiers = collect_chantiers(BACKLOG)
+
+def check_chantier(cid, cdir, ids, jalon_map, seen_ids) -> list[Finding]:
+    findings: list[Finding] = []
+    etat = os.path.join(cdir, "ETAT.md")
+    etat_rel = rel(etat)
+    if not os.path.isfile(etat):
+        findings.append(Finding(BLOQUANT, "E-ETAT-MISSING", rel(cdir), 1,
+                                 "sous-dossier chantier sans ETAT.md."))
+        return findings
+
+    with open(etat, encoding="utf-8") as f:
+        text = f.read()
+
+    meta, body, err = entrylib.parse_frontmatter(text)
+    findings += entrylib.validate_entry(etat_rel, meta, "backlog")
+    findings += entrylib.check_links(etat_rel, meta, ROOT)
+
+    headings, sections = parse_etat(text)
+
+    # E-ID / E-ID-KEBAB / E-ID-DUP
+    fid = meta.get("id")
+    if fid != cid:
+        findings.append(Finding(BLOQUANT, "E-ID", etat_rel, 1,
+                                 f"frontmatter `id: {fid}` ≠ nom du dossier « {cid} »."))
+    if isinstance(fid, str) and not KEBAB.match(fid):
+        findings.append(Finding(BLOQUANT, "E-ID-KEBAB", etat_rel, 1,
+                                 f"frontmatter `id: {fid}` n'est pas en kebab-case."))
+    if fid is not None:
+        if fid in seen_ids:
+            findings.append(Finding(BLOQUANT, "E-ID-DUP", etat_rel, 1,
+                                     f"id « {fid} » déjà utilisé par « {seen_ids[fid]} »."))
+        else:
+            seen_ids[fid] = cid
+
+    # E-MILESTONE
+    milestone = _norm_milestone(meta.get("milestone"))
+    if cid in jalon_map and milestone != jalon_map[cid]:
+        attendu = jalon_map[cid]
+        a = "null (Non planifié)" if attendu is None else str(attendu)
+        m = "null" if milestone is None else str(milestone)
+        findings.append(Finding(BLOQUANT, "E-MILESTONE", etat_rel, 1,
+                                 f"frontmatter `milestone: {m}` mais l'INDEX range ce chantier "
+                                 f"sous « {a} »."))
+
+    # E-AFTER
+    for dep in (meta.get("after") or []):
+        if dep not in ids:
+            findings.append(Finding(BLOQUANT, "E-AFTER", etat_rel, 1,
+                                     f"frontmatter `after` pointe « {dep} » — aucun chantier de ce nom."))
+
+    # E-DOCS
+    declared = set(meta.get("docs") or [])
+    actual = {fn for fn in os.listdir(cdir) if fn.endswith(".md") and fn != "ETAT.md"}
+    if declared != actual:
+        det = []
+        if actual - declared:
+            det.append("non déclarés : " + ", ".join(sorted(actual - declared)))
+        if declared - actual:
+            det.append("inexistants : " + ", ".join(sorted(declared - actual)))
+        findings.append(Finding(BLOQUANT, "E-DOCS", etat_rel, 1,
+                                 "frontmatter `docs:` ≠ compagnons du dossier (" + " ; ".join(det) + ")."))
+
+    # E-STATE-SECTION (soft) — tout titre hors Tâches/Reste
+    for lineno, h in headings:
+        if h not in CANON_SECTIONS:
+            findings.append(Finding(CONFIRMER, "E-STATE-SECTION", f"{etat_rel}:{lineno}",
+                                     lineno, f"titre « ## {h} » hors rubriques canoniques "
+                                     "(Tâches/Reste) — candidat « du durable vit dans l'état »."))
+
+    # E-STATE-SIZE (soft)
+    nb_lines = len(text.splitlines())
+    if nb_lines > STATE_SIZE_MAX_LINES:
+        findings.append(Finding(CONFIRMER, "E-STATE-SIZE", etat_rel, 1,
+                                 f"{nb_lines} lignes (> {STATE_SIZE_MAX_LINES}) — candidat "
+                                 "« du durable vit dans l'état », à vider vers son foyer durable."))
+
+    # E-TASK-SECTION + tâches
+    if "Tâches" not in sections:
+        findings.append(Finding(BLOQUANT, "E-TASK-SECTION", etat_rel, 1,
+                                 "rubrique `## Tâches` absente (obligatoire, `backlog/README.md`)."))
+    else:
+        counts = {s: 0 for s in TASK_STATES}
+        total = 0
+        for lineno, raw in sections["Tâches"]:
+            state, label, doc = parse_task(raw)
+            total += 1
+            if state not in TASK_STATES:
+                findings.append(Finding(BLOQUANT, "E-TASK-STATE", f"{etat_rel}:{lineno}", lineno,
+                                         f"état de tâche « {state or '(absent)'} » hors "
+                                         "todo|in-progress|blocked|done."))
+            else:
+                counts[state] += 1
+            if doc is None and len(label.split()) > TASK_LABEL_MAX_WORDS:
+                findings.append(Finding(BLOQUANT, "E-TASK-LEN", f"{etat_rel}:{lineno}", lineno,
+                                         f"libellé de {len(label.split())} mots (> {TASK_LABEL_MAX_WORDS}) "
+                                         "sans document de travail référencé (`→ doc.md`)."))
+            if doc is not None and not os.path.isfile(os.path.join(cdir, doc)):
+                findings.append(Finding(BLOQUANT, "E-TASK-REF", f"{etat_rel}:{lineno}", lineno,
+                                         f"document de travail « {doc} » introuvable dans "
+                                         f"{rel(cdir)}/."))
+
+        status = meta.get("status")
+        started = any(counts[s] for s in ("in-progress", "blocked", "done"))
+        all_done = total > 0 and counts["done"] == total
+        if all_done and status in ("todo", "in-progress"):
+            findings.append(Finding(CONFIRMER, "E-TASK-SYNC", etat_rel, 1,
+                                     f"toutes les tâches sont `done` mais chantier `status: {status}` "
+                                     "— prêt à clore ?"))
+        if status == "in-progress" and not started:
+            findings.append(Finding(CONFIRMER, "E-TASK-SYNC", etat_rel, 1,
+                                     "chantier `status: in-progress` sans aucune tâche entamée."))
+
+    return findings
+
+
+# --------------------------------------------------------------------------- #
+# INDEX.md — orphelins, pointeurs morts, cases Markdown                      #
+# --------------------------------------------------------------------------- #
+
+def check_index(chantiers, index_text) -> list[Finding]:
+    findings: list[Finding] = []
     ids = {cid for cid, _ in chantiers}
-    jalon_map = index_jalon_map(index_text)
-    seen_ids = {}
 
-    for name in sorted(os.listdir(BACKLOG)):
-        if name in ("INDEX.md", "README.md") or name.startswith("."):
+    for name in sorted(os.listdir(BACKLOG)) if os.path.isdir(BACKLOG) else []:
+        if name in STRUCTURAL or name.startswith("."):
             continue
         full = os.path.join(BACKLOG, name)
         if os.path.isfile(full) and name.endswith(".md"):
-            add(out, ERREUR, "E4-fichier-plat", os.path.relpath(full, ROOT),
-                "fichier plat au premier niveau du backlog — un chantier = un sous-dossier `<id>/` "
-                "avec ETAT.md (palier fichier plat abandonné).")
+            findings.append(Finding(BLOQUANT, "I-FLAT", rel(full), 1,
+                                     "fichier plat au premier niveau du backlog — un chantier = "
+                                     "un sous-dossier `<id>/` avec ETAT.md (palier abandonné)."))
 
     for cid, cdir in chantiers:
-        rel_dir = os.path.relpath(cdir, ROOT)
         if (cid + "/") not in index_text and cid not in index_text:
-            add(out, ERREUR, "E4-orphelin", rel_dir,
-                f"« {cid}/ » n'est cité nulle part dans INDEX.md (chantier sans entrée d'index).")
+            findings.append(Finding(BLOQUANT, "I-ORPHAN", rel(cdir), 1,
+                                     f"« {cid}/ » n'est cité nulle part dans INDEX.md."))
 
-        etat = os.path.join(cdir, "ETAT.md")
-        if not os.path.isfile(etat):
-            add(out, ERREUR, "F1-etat-manquant", rel_dir, "sous-dossier chantier sans ETAT.md.")
-            continue
-        with open(etat, encoding="utf-8") as f:
-            etat_text = f.read()
-        etat_rel = os.path.relpath(etat, ROOT)
-        fm = parse_frontmatter(etat_text)
-        headings, sections = parse_etat_body(etat_text)
-
-        # C3 — item de rubrique « en surpoids » → externaliser en doc compagnon (advisory).
-        check_etat_overweight(etat_text, etat_rel, out)
-
-        for h in headings:
-            if not is_allowed_heading(h):
-                add(out, ERREUR, "Fr-rubrique", etat_rel,
-                    f"titre « ## {h} » hors rubriques canoniques "
-                    "(Documenté/Fini/À valider/En cours/Reste, préambule Intention/Gain, ou Clôture).")
-
-        if fm is None:
-            add(out, ERREUR, "F1-frontmatter", etat_rel,
-                "ETAT.md sans frontmatter YAML en tête (`--- … ---`).")
-            continue
-        for champ in REQUIS:
-            if champ not in fm or (fm[champ] is None and champ != "jalon"):
-                add(out, ERREUR, "F1-champ", etat_rel,
-                    f"frontmatter : champ requis « {champ} » absent ou vide.")
-        statut = fm.get("statut")
-        if statut is not None and statut not in STATUTS:
-            add(out, ERREUR, "F1-statut", etat_rel,
-                f"frontmatter `statut: {statut}` invalide (attendu : à faire | en cours).")
-        maj = fm.get("maj")
-        if isinstance(maj, str) and not DATE.match(maj):
-            add(out, ERREUR, "F1-maj", etat_rel, f"frontmatter `maj: {maj}` mal formé (YYYY-MM-DD).")
-
-        fid = fm.get("id")
-        if fid != cid:
-            add(out, ERREUR, "F2-id", etat_rel,
-                f"frontmatter `id: {fid}` ≠ nom du dossier « {cid} ».")
-        if isinstance(fid, str) and not KEBAB.match(fid):
-            add(out, ERREUR, "F2-kebab", etat_rel, f"frontmatter `id: {fid}` n'est pas en kebab-case.")
-        if fid in seen_ids:
-            add(out, ERREUR, "F2-doublon", etat_rel,
-                f"id « {fid} » déjà utilisé par « {seen_ids[fid]} ».")
-        elif fid is not None:
-            seen_ids[fid] = cid
-
-        derived = derived_statut(sections)
-        if statut in STATUTS and statut != derived:
-            add(out, ERREUR, "F3-statut-incoherent", etat_rel,
-                f"frontmatter `statut: {statut}` mais le contenu est « {derived} ».")
-
-        jalon = fm.get("jalon")
-        if cid in jalon_map and jalon != jalon_map[cid]:
-            attendu = jalon_map[cid]
-            a = "null (Non planifié)" if attendu is None else str(attendu)
-            j = "null" if jalon is None else str(jalon)
-            add(out, ERREUR, "F4-jalon-incoherent", etat_rel,
-                f"frontmatter `jalon: {j}` mais l'INDEX range ce chantier sous « {a} ».")
-
-        for dep in (fm.get("apres") or []):
-            if dep not in ids:
-                add(out, ERREUR, "F5-apres", etat_rel,
-                    f"frontmatter `apres` pointe « {dep} » — aucun chantier de ce nom.")
-
-        declared = set(fm.get("docs") or [])
-        actual = {fn for fn in os.listdir(cdir) if fn.endswith(".md") and fn != "ETAT.md"}
-        if declared != actual:
-            det = []
-            if actual - declared:
-                det.append("non déclarés : " + ", ".join(sorted(actual - declared)))
-            if declared - actual:
-                det.append("inexistants : " + ", ".join(sorted(declared - actual)))
-            add(out, ERREUR, "F6-docs", etat_rel,
-                "frontmatter `docs:` ≠ compagnons du dossier (" + " ; ".join(det) + ").")
-
-        if sections.get("Documenté") and not any(
-            sections.get(r) for r in RUBRIQUES_NON_TERMINALES
-        ):
-            add(out, INFO, "I1-cloture", etat_rel,
-                "tout est en « Documenté » → chantier prêt à clôturer (dérouler la DoD).")
-
-    # E4 — pointeurs d'INDEX.md (gabarits `<...>` ignorés).
     basenames, reldirs = set(), set()
-    for dp, dirs, files in os.walk(BACKLOG):
+    for _dp, dirs, files in os.walk(BACKLOG):
         basenames.update(files)
         reldirs.update(dirs)
-    for tok in re.findall(r"`([^`]+)`", index_text):
-        tok = tok.strip()
-        if "<" in tok or ">" in tok or tok in STRUCTURAL:
+    for lineno, line in enumerate(index_text.splitlines(), start=1):
+        for tok in re.findall(r"`([^`]+)`", line):
+            tok = tok.strip()
+            if "<" in tok or ">" in tok or tok in STRUCTURAL:
+                continue
+            if re.fullmatch(r"[\w.\-]+\.md", tok) and tok not in basenames:
+                findings.append(Finding(BLOQUANT, "I-DEAD-POINTER", f"{rel(INDEX_PATH)}:{lineno}",
+                                         lineno, f"pointeur « {tok} » ne résout vers aucun fichier "
+                                         "du backlog."))
+            elif re.fullmatch(r"[\w.\-]+/", tok):
+                name_ = tok.rstrip("/")
+                if name_ not in reldirs and name_ not in ids:
+                    findings.append(Finding(BLOQUANT, "I-DEAD-POINTER", f"{rel(INDEX_PATH)}:{lineno}",
+                                             lineno, f"pointeur « {tok} » ne résout vers aucun "
+                                             "dossier existant."))
+        if re.match(r"^\s*[-*]\s*\[[ xX]\]", line):
+            findings.append(Finding(BLOQUANT, "I-CHECKBOX", f"{rel(INDEX_PATH)}:{lineno}", lineno,
+                                     "case Markdown dans l'INDEX — retirer `[ ]`/`[x]` (fini = "
+                                     "retiré ; statut = frontmatter ou badge inline)."))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
+# --stamp — pose `updated` seul, jamais bloquant                              #
+# --------------------------------------------------------------------------- #
+
+def cmd_stamp(argv: list[str]) -> int:
+    """Pose `updated: aujourd'hui` sur les ETAT.md cités (ou stagés avec `--staged`) + re-stage.
+    Même triple garde-fou que `feature-map-check.py --stamp` : scope stagé strict
+    (`backlog/**/ETAT.md` uniquement), un seul champ mécanique (`entrylib.stamp_updated` ne
+    touche que `updated`), jamais bloquant (code retour toujours 0)."""
+    today = datetime.date.today().isoformat()
+    staged = "--staged" in argv
+    if staged:
+        r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+                            cwd=ROOT, capture_output=True, text=True)
+        files = [f for f in r.stdout.splitlines()
+                 if f.replace("\\", "/").startswith("backlog/") and f.endswith("ETAT.md")]
+    else:
+        files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
+
+    changed = []
+    for f in files:
+        full = f if os.path.isabs(f) else os.path.join(ROOT, f)
+        if not os.path.isfile(full):
             continue
-        if re.fullmatch(r"[\w.\-]+\.md", tok) and tok not in basenames:
-            add(out, ERREUR, "E4-pointeur", "backlog/INDEX.md",
-                f"pointeur « {tok} » ne résout vers aucun fichier du backlog.")
-        elif re.fullmatch(r"[\w.\-]+/", tok):
-            name_ = tok.rstrip("/")
-            if name_ not in reldirs and not os.path.isdir(os.path.join(ROOT, name_)):
-                add(out, ERREUR, "E4-pointeur", "backlog/INDEX.md",
-                    f"pointeur « {tok} » ne résout vers aucun dossier existant.")
-
-
-def check_index_checkboxes(out):
-    index_path = os.path.join(BACKLOG, "INDEX.md")
-    if not os.path.isfile(index_path):
-        return
-    with open(index_path, encoding="utf-8") as f:
-        for i, line in enumerate(f.read().splitlines(), 1):
-            if re.match(r"^\s*[-*]\s*\[[ xX]\]", line):
-                add(out, ERREUR, "E6-checkbox", f"backlog/INDEX.md:{i}",
-                    "case Markdown dans l'INDEX — retirer `[ ]`/`[x]` (fini = retiré ; statut = "
-                    "frontmatter pour les doc-backed, badge inline pour les autres).")
+        if entrylib.stamp_updated(full, today):
+            changed.append(f)
+            if staged:
+                subprocess.run(["git", "add", f], cwd=ROOT)
+    print(f"backlog-check : --stamp — {len(changed)} ETAT.md daté(s) à {today}.")
+    return 0
 
 
 # --------------------------------------------------------------------------- #
-# Vues --board / --state
+# Vues --board / --state                                                      #
 # --------------------------------------------------------------------------- #
+
+TASK_STATE_DISPLAY_ORDER = ["done", "in-progress", "blocked", "todo"]
+
 
 def chantier_ids():
-    return [cid for cid, _ in collect_chantiers(BACKLOG)]
+    return [cid for cid, _ in collect_chantiers()]
 
 
 def chantier_state(cid):
@@ -385,19 +419,26 @@ def chantier_state(cid):
         return None
     with open(etat, encoding="utf-8") as f:
         text = f.read()
-    fm = parse_frontmatter(text) or {}
-    _, sections = parse_etat_body(text)
-    rubriques = {r: sections.get(r, []) for r in RUBRIQUE_ORDER}
+    meta, _body, _err = entrylib.parse_frontmatter(text)
+    _headings, sections = parse_etat(text)
+    counts = {s: 0 for s in TASK_STATES}
+    tasks = []
+    for lineno, raw in sections.get("Tâches", []):
+        state, label, doc = parse_task(raw)
+        if state in TASK_STATES:
+            counts[state] += 1
+        tasks.append({"line": lineno, "state": state, "label": label, "doc": doc})
     return {
-        "id": fm.get("id", cid), "titre": fm.get("titre"), "statut": fm.get("statut"),
-        "jalon": fm.get("jalon"), "maj": fm.get("maj"), "docs": fm.get("docs") or [],
-        "rubriques": rubriques, "compte": {r: len(v) for r, v in rubriques.items()},
-        "statut_derive": derived_statut(sections),
+        "id": meta.get("id", cid), "title": meta.get("title"), "status": meta.get("status"),
+        "milestone": _norm_milestone(meta.get("milestone")), "updated": meta.get("updated"),
+        "docs": meta.get("docs") or [], "tasks": tasks, "task_counts": counts,
+        "reste": [content for _, content in sections.get("Reste", [])],
     }
 
 
-def _counts_suffix(compte):
-    return " · ".join(f"{r} {compte.get(r, 0)}" for r in RUBRIQUE_ORDER if compte.get(r, 0))
+def _task_counts_suffix(counts):
+    parts = [f"{counts[s]} {s}" for s in TASK_STATE_DISPLAY_ORDER if counts.get(s)]
+    return " / ".join(parts)
 
 
 def render_state(cid):
@@ -405,19 +446,20 @@ def render_state(cid):
     if st is None:
         dispo = ", ".join(chantier_ids()) or "(aucun)"
         return f"[backlog-check] chantier « {cid} » introuvable (backlog/{cid}/ETAT.md).\nChantiers : {dispo}"
-    jalon = "Non planifié" if st["jalon"] is None else f"Jalon {st['jalon']}"
-    lines = [f"Chantier {st['id']} — {st['titre']}",
-             f"  statut : {st['statut']}   ·   {jalon}   ·   maj {st['maj']}"]
-    if st["statut"] not in (None, st["statut_derive"]):
-        lines.append(f"  ⚠ incohérent : rubriques → « {st['statut_derive']} »")
+    jalon = "Non planifié" if st["milestone"] is None else f"Jalon {st['milestone']}"
+    lines = [f"Chantier {st['id']} — {st['title']}",
+             f"  status : {st['status']}   ·   {jalon}   ·   updated {st['updated']}"]
+    suffix = _task_counts_suffix(st["task_counts"])
+    lines.append("  tâches : " + (suffix if suffix else "—"))
     if st["docs"]:
         lines.append("  docs   : " + ", ".join(st["docs"]))
-    suffix = _counts_suffix(st["compte"])
-    lines.append("  compte : " + (suffix if suffix else "—"))
-    for r in RUBRIQUE_ORDER:
-        items = st["rubriques"][r]
-        lines.append(f"\n## {r} ({len(items)})")
-        lines.extend("  " + it for it in items)
+    lines.append(f"\n## Tâches ({len(st['tasks'])})")
+    for t in st["tasks"]:
+        tail = f" → {t['doc']}" if t["doc"] else ""
+        lines.append(f"  - [{t['state']}] {t['label']}{tail}")
+    if st["reste"]:
+        lines.append(f"\n## Reste ({len(st['reste'])})")
+        lines.extend("  " + it for it in st["reste"])
     return "\n".join(lines)
 
 
@@ -425,19 +467,19 @@ def render_board():
     rows = [chantier_state(cid) or {"id": cid} for cid in chantier_ids()]
     if not rows:
         return "[backlog-check] aucun chantier doc-backed."
-    rows.sort(key=lambda s: (s.get("jalon") is None,
-                             s.get("jalon") if s.get("jalon") is not None else 0, s.get("id")))
-    icon = {"à faire": "○", "en cours": "◐"}
+    rows.sort(key=lambda s: (s.get("milestone") is None,
+                              s.get("milestone") if s.get("milestone") is not None else 0, s.get("id")))
+    icon = {"todo": "○", "in-progress": "◐"}
     lines, cur = ["Backlog — chantiers par jalon (statuts live) :"], object()
     for s in rows:
-        jalon = s.get("jalon")
-        grp = "Non planifié" if jalon is None else f"Jalon {jalon}"
+        milestone = s.get("milestone")
+        grp = "Non planifié" if milestone is None else f"Jalon {milestone}"
         if grp != cur:
             cur = grp
             lines.append(f"\n### {grp}")
-        statut = s.get("statut") or "?"
-        line = f"  {icon.get(statut, '·')} [{statut}] {s.get('id')} — {s.get('titre') or s.get('id')}"
-        suffix = _counts_suffix(s.get("compte") or {})
+        status = s.get("status") or "?"
+        line = f"  {icon.get(status, '·')} [{status}] {s.get('id')} — {s.get('title') or s.get('id')}"
+        suffix = _task_counts_suffix(s.get("task_counts") or {})
         if suffix:
             line += f"   ({suffix})"
         lines.append(line)
@@ -445,66 +487,35 @@ def render_board():
 
 
 # --------------------------------------------------------------------------- #
-# Rendu / CLI
+# Rendu / CLI                                                                  #
 # --------------------------------------------------------------------------- #
 
-def run():
-    out = []
-    check_backlog(out)
-    check_index_checkboxes(out)
-    return out
+def run() -> list[Finding]:
+    chantiers = collect_chantiers()
+    index_text = ""
+    if os.path.isfile(INDEX_PATH):
+        with open(INDEX_PATH, encoding="utf-8") as f:
+            index_text = f.read()
+    ids = {cid for cid, _ in chantiers}
+    jalon_map = index_jalon_map(index_text)
+    seen_ids: dict = {}
+
+    findings: list[Finding] = []
+    for cid, cdir in chantiers:
+        findings += check_chantier(cid, cdir, ids, jalon_map, seen_ids)
+    findings += check_index(chantiers, index_text)
+    return findings
 
 
-def render_text(out):
-    if not out:
+def render_text(findings: list[Finding]) -> str:
+    if not findings:
         return "backlog-check : OK."
-    order = {ERREUR: 0, INFO: 1}
-    out = sorted(out, key=lambda f: (order[f["severity"]], f["rule"], f["path"]))
-    lines, cur = [], None
-    for f in out:
-        if f["severity"] != cur:
-            cur = f["severity"]
-            lines.append(f"\n{cur} :")
-        lines.append(f"  [{f['rule']}] {f['path']} — {f['msg']}")
-        if f["rule"] == "I1-cloture":
-            cible = "`" + os.path.dirname(f["path"]) + "/`"
-            for row in closure_checklist(cible).splitlines():
-                lines.append("    " + row.lstrip())
-    return "\n".join(lines).lstrip("\n")
-
-
-def cmd_stamp(argv):
-    """Pose `maj = aujourd'hui` sur les ETAT.md cités (ou indexés avec --staged) + re-stage.
-    À câbler au PRÉ-COMMIT (hook git pre-commit, ou l'équivalent de ton outil) → la date du
-    frontmatter = la date du commit, mécaniquement (zéro pourrissement). Scope stagé uniquement :
-    ne tire jamais un fichier non indexé dans le commit."""
-    import datetime
-    import subprocess
-    today = datetime.date.today().isoformat()
-    staged = "--staged" in argv
-    if staged:
-        r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                           capture_output=True, text=True)
-        files = [f for f in r.stdout.splitlines()
-                 if ("/backlog/" in f.replace("\\", "/") or f.replace("\\", "/").startswith("backlog/"))
-                 and f.endswith("ETAT.md")]
-    else:
-        files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
-    changed = []
-    for f in files:
-        if not os.path.isfile(f):
-            continue
-        with open(f, encoding="utf-8") as fh:
-            text = fh.read()
-        new = re.sub(r"(?m)^maj:.*$", "maj: " + today, text, count=1)
-        if new != text:
-            with open(f, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(new)
-            changed.append(f)
-            if staged:
-                subprocess.run(["git", "add", f])
-    print(f"backlog-check : --stamp — {len(changed)} ETAT.md daté(s) à {today}.")
-    return 0
+    bloq = [f for f in findings if f.severity == BLOQUANT]
+    conf = [f for f in findings if f.severity == CONFIRMER]
+    lines = [f"{f.severity:14} {f.path}:{f.line}  {f.rule}  {f.msg}"
+             for f in sorted(findings, key=lambda f: (f.severity != BLOQUANT, f.path, f.line))]
+    lines.append(f"\n— {len(findings)} finding(s) : {len(bloq)} bloquant-auto, {len(conf)} à-confirmer")
+    return "\n".join(lines)
 
 
 def main(argv):
@@ -530,12 +541,18 @@ def main(argv):
         else:
             print(render_board())
         return 0
-    out = run()
+
+    findings = run()
     if "--json" in argv:
-        print(json.dumps(out, ensure_ascii=False, indent=2))
+        print(json.dumps([f._asdict() for f in findings], ensure_ascii=False, indent=2))
     else:
-        print(render_text(out))
-    return 2 if any(f["severity"] == ERREUR for f in out) else 0
+        print(render_text(findings))
+
+    if any(f.severity == BLOQUANT for f in findings):
+        return 2
+    if any(f.severity == CONFIRMER for f in findings):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

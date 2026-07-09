@@ -217,13 +217,15 @@ def check_index_concordance(index_path: str, entries_dir: str, id_pattern) -> li
                 files[m.group(0)] = fname
 
     indexed = set()
+    reported = set()  # un id mort n'est signalé qu'une fois, même répété (ex. `[id](id.md)`)
     if os.path.isfile(index_path):
         with open(index_path, encoding="utf-8") as fh:
             for lineno, line in enumerate(fh, start=1):
                 for m in pat.finditer(line):
                     idv = m.group(0)
                     indexed.add(idv)
-                    if idv not in files:
+                    if idv not in files and idv not in reported:
+                        reported.add(idv)
                         findings.append(Finding(BLOQUANT, "R-DEAD-INDEX", index_path, lineno,
                                                  f"référence « {idv} » — fichier introuvable dans {entries_dir}"))
 
@@ -390,6 +392,16 @@ def _selftest() -> int:
         check("updated: 2026-07-09" in text, "stamp_updated: date réécrite")
         check("id: x" in text, "stamp_updated: autres clés intactes")
         check(not stamp_updated(p, "2026-07-09"), "stamp_updated: no-op si déjà à jour")
+
+    # check_index_concordance — un id mort répété sur la même ligne ne double pas le finding
+    with tempfile.TemporaryDirectory() as td:
+        d = os.path.join(td, "entries")
+        os.makedirs(d)
+        idx = os.path.join(td, "INDEX.md")
+        with open(idx, "w", encoding="utf-8") as fh:
+            fh.write("- [D-2099-01-01-01](D-2099-01-01-01.md) — fantôme\n")
+        fs = check_index_concordance(idx, d, r"D-\d{4}-\d{2}-\d{2}-\d{2}")
+        check(len(fs) == 1, "concordance: id mort répété sur la ligne -> un seul finding")
 
     # check_links — id de décision, chemin, slug ; morts et vivants
     with tempfile.TemporaryDirectory() as td:

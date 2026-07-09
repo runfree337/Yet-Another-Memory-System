@@ -2,15 +2,78 @@
 
 Le *pourquoi* des choix **structurels** : pivot d'organisation, abandon d'une piste, choix d'un outil, périmètre tranché, convention transverse.
 
+Ce canal est une **instance** de `../GABARIT-ENTREE.md` (le méta-schéma commun à toute entrée
+mémoire — un fichier + une ligne d'index, frontmatter commun). Ce qui suit ne redéfinit que ce
+qui est **propre au canal Décision** ; les clés communes (`id`, `source`, `confidence`, `created`,
+`updated`, `links`, `ratified`) et leur cycle de vie vivent dans `GABARIT-ENTREE.md`.
+
 1. **Un fichier par décision** : `D-AAAA-MM-JJ-NN.md` + **sa ligne dans `INDEX.md`**, écrits **au même moment**.
 2. **On lit `INDEX.md` d'abord** (1 ligne par décision). Le détail ne s'ouvre qu'au besoin du *pourquoi*.
-3. **Format d'un `D-*.md`** :
-   - **Décision** : ce qui est tranché.
-   - **Pourquoi** : la raison + les alternatives écartées.
-   - **Invariant** : la règle qui survit (vérifiable).
-4. **Révocation** : une décision qui en contredit une autre le signale. Si l'ancienne **a été implémentée**, elle passe à « révoquée → D-X » aux **deux** endroits (ligne conservée : « ne pas réintroduire X » reste vivant). Si elle n'a **jamais été implémentée**, la **supprimer** (le successeur absorbe l'alternative rejetée) — pas de tombstone pour du jamais-bâti. Doute = conserver.
-5. **Archivage** : une décision caduque **sort de l'index actif** (déplacée sous « Archivées »). La ligne quitte l'index **dès qu'une autorité vivante tient sa porte** — un **successeur encore indexé**, un **test-garde**, la **doc d'archi** ; elle ne **reste** que si la décision archivée est l'**unique gardienne** d'une contrainte vivante (« ne pas réintroduire X » sans autre domicile). Ainsi l'index **rétrécit** au lieu de croître sans fin (un index *append-only* finit illisible) ; le **registre permanent** reste les fichiers archivés + git. **Vérifier qu'une option déjà écartée ne ressort pas = consulter l'index actif ET les archivées.**
-6. **Provenance** : une décision est **ratifiée par un humain** (un choix d'équipe, pas une inférence non vérifiée). Si elle découle d'un contenu externe, le noter dans le *Pourquoi*.
+3. **Format d'un `D-*.md`** — un frontmatter au-dessus de trois rubriques en prose libre :
+
+   ```
+   ---
+   id: D-2026-07-09-01
+   status: active
+   source: human
+   confidence: verified
+   created: 2026-07-09
+   updated: 2026-07-09
+   replaces: []
+   replaced-by: null
+   links: []
+   ratified: raphael, 2026-07-09
+   ---
+
+   **Décision** : ce qui est tranché.
+
+   **Pourquoi** : la raison + les alternatives écartées.
+
+   **Invariant** : la règle qui survit (vérifiable).
+   ```
+
+   Clés **communes** (`GABARIT-ENTREE.md`) : `id`, `source`, `confidence`, `created`, `updated`,
+   `links`, `ratified`. Clés **propres au canal** :
+
+   | Clé | Sens |
+   |---|---|
+   | `status` | `active \| revoked \| archived` — **obligatoire** pour ce canal. |
+   | `replaces` | `[<ids>]` — décisions que celle-ci remplace (réciproque de `replaced-by`). |
+   | `replaced-by` | `<id>` — décision qui remplace celle-ci, une fois révoquée. |
+
+   Le **corps** garde ses trois rubriques canoniques, chacune amorcée par une puce en gras —
+   **Décision** / **Pourquoi** / **Invariant** — vérifiées mécaniquement par
+   `checks/decisions-check.py` (règle `D4`). C'est la forme canonique retenue (par opposition à
+   des titres `##`) : elle correspond à ce que ce protocole documentait déjà avant frontmatter,
+   aucune migration de corps existant à faire.
+4. **Révocation** : une décision qui en contredit une autre passe `status: revoked` et pointe
+   `replaced-by: <id-du-successeur>` ; le successeur porte la réciproque
+   `replaces: [<id-revoked>, …]`. C'est désormais une **transition de `status` + liens,
+   vérifiable mécaniquement** (`checks/decisions-check.py`, règle `D6` : la cible de
+   `replaced-by` existe, la réciprocité `replaces` tient, aucun cycle) — plus une pure discipline
+   de prose. Le fond ne change pas : si l'ancienne décision **a été implémentée**, elle reste un
+   **tombstone** — fichier conservé (`status: revoked`), ligne conservée dans `INDEX.md` (« ne
+   pas réintroduire X » reste vivant). Si elle n'a **jamais été implémentée**, elle est
+   **supprimée** (fichier + ligne d'INDEX) et le successeur absorbe l'alternative rejetée — pas
+   de tombstone pour du jamais-bâti. Doute = conserver.
+5. **Archivage** : une décision caduque passe `status: archived` **et** sa ligne migre sous
+   `## Archivées` de `INDEX.md` — les deux **à la fois**. C'est désormais une **transition de
+   `status` + section d'index, vérifiable mécaniquement** (`checks/decisions-check.py`, règle
+   `D5` : une entrée `archived` référencée sous `## Actives`, ou une `active` référencée sous
+   `## Archivées`, est bloquante). La ligne quitte l'index actif dès qu'une **autorité vivante
+   tient sa porte** — un successeur encore indexé (`replaced-by` résolu, cf. `D6`), un
+   test-garde, la doc d'archi ; elle ne **reste** sous Actives que si la décision `revoked` est
+   l'**unique gardienne** d'une contrainte vivante (pas d'autre domicile pour « ne pas
+   réintroduire X »). Ainsi l'index **rétrécit** au lieu de croître sans fin (un index
+   *append-only* finit illisible) ; le **registre permanent** reste les fichiers archivés + git.
+   **Vérifier qu'une option déjà écartée ne ressort pas = consulter l'index actif ET les
+   archivées.**
+6. **Provenance** : `source` / `confidence` / `ratified` suivent le **cycle de vie commun**
+   défini par `../GABARIT-ENTREE.md §Cycle de vie de la confiance` — une décision est
+   **ratifiée par un humain** (`confidence: verified` + `ratified: <qui>, <AAAA-MM-JJ>`), pas une
+   inférence non vérifiée laissée telle quelle. Si elle découle d'un contenu externe
+   (`source: external:<réf>`, `confidence` alors obligatoire — sinon bloquant, `R-EXT-NO-CONF`),
+   le noter aussi dans le *Pourquoi*.
 
 > Un fichier par décision (vs un gros fichier unique) = aucun conflit quand plusieurs contributeurs en ajoutent en parallèle.
 

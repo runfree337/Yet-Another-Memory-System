@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) — le cas MUTANT (checks/README.md §Câblage pré-commit).
 #
-# Seul câblage qui ÉCRIT plutôt que signaler : pose maj=aujourd'hui sur les ETAT.md STAGÉS,
+# Seul câblage qui ÉCRIT plutôt que signaler : pose updated=aujourd'hui sur les entrées STAGÉES
+# des trois canaux stampables (backlog/ETAT.md, features/*.md, memory/*.md),
 # AVANT que `git commit` ne s'exécute, puis les re-stage — la date du frontmatter devient
 # mécaniquement la date du commit, sans bump manuel qui pourrit.
 #
@@ -27,6 +28,8 @@ cd "$ROOT" || exit 0
 PY=$(command -v python3 || command -v python)
 [ -z "$PY" ] && exit 0
 
-"$PY" checks/backlog-check.py --stamp --staged >/dev/null 2>&1
+"$PY" checks/backlog-check.py     --stamp --staged >/dev/null 2>&1
+"$PY" checks/feature-map-check.py --stamp --staged >/dev/null 2>&1
+"$PY" checks/memory-check.py      --stamp --staged >/dev/null 2>&1
 
 exit 0   # ne bloque jamais — la correction est silencieuse, git commit voit le stamp

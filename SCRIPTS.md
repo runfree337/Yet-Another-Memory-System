@@ -9,51 +9,82 @@
 ## `checks/` — contrôles de méthode (Tier 1, déterministe)
 
 ### `backlog-check.py`
-**Intention :** intégrité du `backlog/` (modèle frontmatter) — chaque chantier doc-backed a un
-`ETAT.md` avec un frontmatter complet et cohérent (`id/titre/statut/jalon/apres/docs/maj`).
+**Intention :** intégrité du `backlog/` (modèle frontmatter, canal Backlog du gabarit commun
+d'entrée mémoire) — chaque chantier doc-backed a un `ETAT.md` avec un frontmatter complet et
+cohérent (`id/title/status/milestone/after/docs/updated`, validé via `entrylib.validate_entry`)
+et une rubrique `## Tâches` obligatoire (une ligne par tâche, état `todo/in-progress/blocked/done`,
+libellé ≤ 30 mots ou renvoi `→ doc-de-travail.md`).
 
 | Paramètre | Effet | Défaut |
 |---|---|---|
 | *(aucun)* | lance le contrôle complet, imprime le rapport texte | — |
-| `--json` | même contrôle, sortie JSON | désactivé |
-| `--board` | vue chantiers-par-jalon avec comptes (état live tiré des frontmatters) | — |
-| `--state <id>` | déroule un chantier précis ; sans `<id>` liste les ids valides | — |
-| `--stamp [fichiers…]` | **écrit** `maj: <aujourd'hui>` sur les `ETAT.md` cités, ré-enregistre le fichier | agit sur les fichiers passés en argument |
+| `--json` | même contrôle, sortie JSON des findings | désactivé |
+| `--board` | vue chantiers-par-jalon avec compteurs de tâches par état (état live tiré des frontmatters + rubrique `## Tâches`) | — |
+| `--state <id>` | déroule un chantier précis (tâches + compteurs) ; sans `<id>` liste les ids valides | — |
+| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `ETAT.md` cités via `entrylib.stamp_updated`, ré-enregistre le fichier | agit sur les fichiers passés en argument |
 | `--stamp --staged` | même effet que `--stamp`, mais scope = `ETAT.md` **stagés** en git (`git diff --cached`), et **re-stage** après écriture | à câbler en pré-commit |
-| `--checklist [id]` | imprime la checklist de clôture pour un chantier | — |
+| `--checklist [id]` | imprime la checklist de clôture (DoD, 5 étapes) pour un chantier | — |
 
-**Codes de sortie :** `0` propre · `1` id introuvable (`--state` sans hit) · `2` au moins une erreur `E*` sur le contrôle par défaut.
-**Seule écriture du dossier `checks/` :** `--stamp` mute le champ `maj` et rien d'autre — borné, mécanique, jamais bloquant (cf. `checks/README.md §Câblage pré-commit`).
+**Codes de sortie :** `0` propre · `1` seulement des À-CONFIRMER (`--state` sans hit renvoie aussi `1`) · `2` au moins un BLOQUANT-AUTO.
+**Écriture (mode `--stamp`) :** mute le champ `updated` et rien d'autre — borné, mécanique, jamais bloquant (cf. `checks/README.md §Câblage pré-commit`). Même mode sur `feature-map-check.py` et `memory-check.py`.
 
 ```bash
 python3 checks/backlog-check.py                 # rapport texte
-python3 checks/backlog-check.py --board          # vue d'ensemble
+python3 checks/backlog-check.py --board          # vue d'ensemble (avec compteurs de tâches)
 python3 checks/backlog-check.py --stamp --staged # pré-commit uniquement
 ```
 
 ### `feature-map-check.py`
-**Intention :** structure de `FEATURE_MAP.md` — chaque fiche porte ses clés-cœur (Rôle, ≥1 chemin
-de code, ≥1 référence durable), les ancres Sommaire↔fiches concordent, aucune référence transitoire.
+**Intention :** intégrité du canal Feature (modèle `entrylib`) — un fichier par fiche
+(`features/<slug>.md`) + `FEATURE_MAP.md` en index. Concordance fichier↔index, frontmatter du
+canal `feature` (`entrylib.validate_entry`), clés-cœur du corps (Rôle/Code/réf durable),
+existence des ids `D-*` cités, absence de référence transitoire, fraîcheur et granularité en
+signal *soft*.
 
 | Paramètre | Effet | Défaut |
 |---|---|---|
-| *(aucun)* | rapport texte, trié erreurs puis candidats | — |
-| `--json` | sortie JSON des findings (`severity`, `rule`, `where`, `msg`) | désactivé |
+| *(aucun)* | rapport texte, trié bloquants puis à-confirmer | — |
+| `--json` | sortie JSON des findings (`Finding` à 5 champs) | désactivé |
+| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les fiches citées | agit sur les fichiers passés en argument |
+| `--stamp --staged` | même effet, mais scope = `features/*.md` **stagés** en git, et **re-stage** après écriture | à câbler en pré-commit |
 
-**Codes de sortie :** `0` propre · `1` au moins un candidat (`FM4`, granularité — *soft*) · `2` au moins une erreur dure (`FM1`/`FM2`/`FM5`).
+**Codes de sortie :** `0` propre · `1` uniquement des À-CONFIRMER (`FM-FRESH`, `FM-GRAN` — soft)
+· `2` au moins un BLOQUANT (`FM-INDEX`, frontmatter `entrylib`, `FM1-*`, `FM-DECISION`,
+`FM-TRANSIENT`).
+**Écriture (mode `--stamp`) :** mute le champ `updated` et rien d'autre — borné, mécanique,
+jamais bloquant (même garde-fou que `backlog-check.py --stamp`).
 
 ```bash
 python3 checks/feature-map-check.py
+python3 checks/feature-map-check.py --stamp --staged   # pré-commit uniquement
 ```
 
 ### `decisions-check.py`
-**Intention :** concordance stricte entre les fichiers `decisions/D-*.md` et les lignes de
-`decisions/INDEX.md`, par identifiant — aucun paramètre, aucune option, un seul mode.
+**Intention :** intégrité du canal **Décision** (instance de `GABARIT-ENTREE.md`, cf.
+`decisions/README.md`) — sept règles, de la concordance fichier↔INDEX au graphe de révocation.
+Importe `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
 
-**Codes de sortie :** `0` propre · `2` au moins un écart (`D1` fichier orphelin, `D2` ligne d'INDEX sans fichier).
+| Règle | Sévérité | Ce qu'elle prouve |
+|---|---|---|
+| `D1` | bloquant | `decisions/D-*.md` orphelin (absent de `INDEX.md`) |
+| `D2` | bloquant | id cité dans `INDEX.md` sans fichier `D-….md` |
+| `D3` | bloquant/à-confirmer | frontmatter complet et valide pour le canal `decision` (`entrylib.validate_entry`) |
+| `D4` | bloquant | rubriques canoniques (`**Décision**`/`**Pourquoi**`/`**Invariant**`) présentes dans le corps |
+| `D5` | bloquant | `status` ⟺ section de `INDEX.md` (`archived` sous `## Actives`, ou `active` sous `## Archivées`, est bloquant ; `revoked` non contraint) |
+| `D6` | bloquant | graphe de révocation sain : `replaced-by`/`replaces` résolus, réciprocité, aucun cycle |
+| `D7` (`R-DEAD-LINK`) | bloquant/à-confirmer | `links:` inter-canaux résolus (`entrylib.check_links`) |
+
+| Paramètre | Effet | Défaut |
+|---|---|---|
+| *(aucun)* | rapport texte | — |
+| `--json` | sortie JSON | désactivé |
+
+**Codes de sortie :** `0` propre · `1` uniquement des à-confirmer (`R-UNVERIFIED`,
+`R-VERIFIED-NOT-RATIFIED`, `R-DEAD-LINK` non résolu en slug) · `2` au moins un bloquant.
 
 ```bash
 python3 checks/decisions-check.py
+python3 checks/decisions-check.py --json
 ```
 
 ### `doc-refs-check.py`
@@ -128,26 +159,35 @@ python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # sans 
 
 ### `memory-check.py`
 **Intention :** intégrité du canal **Mémoire** — format « un fait par fichier + frontmatter »
-(`memory/<slug>.md`), `MEMORY.md` = index. Deux familles de règles : (1) **frontmatter** de
-chaque fichier — un `source: externe:...` DOIT porter un `confiance:` (sinon bloquant,
-`MEMORY.md §Provenance`), un `confiance: à vérifier` est signalé comme candidate à l'audit
-sémantique ; (2) **concordance fichier↔index** — tout `memory/<slug>.md` doit être référencé
-par une ligne de `MEMORY.md` (sinon orphelin, bloquant) et réciproquement (sinon lien mort,
-bloquant), même motif que `decisions-check.py`. Suit `GABARIT.md` à la lettre.
+(`memory/<slug>.md`), `MEMORY.md` = index. Instance de `GABARIT-ENTREE.md` : toute la logique
+(frontmatter, concordance fichier↔index, liens croisés) vit dans `checks/entrylib.py` — ce
+script se contente d'appeler `entrylib` avec le canal `"memory"` et d'agréger, il ne redéfinit
+aucune règle localement.
+
+Règles remontées telles quelles depuis `entrylib.validate_entry(..., "memory")` :
+`R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`, `R-EXT-NO-CONF`, `R-BAD-DATE`,
+`R-UNVERIFIED` (à-confirmer), `R-VERIFIED-NOT-RATIFIED` (à-confirmer) ; plus concordance
+fichier↔index via `entrylib.check_index_concordance` (`R-ORPHAN-FILE`, `R-DEAD-INDEX`) et liens
+croisés via `entrylib.check_links` (`R-DEAD-LINK`, bloquant sur id/chemin, à-confirmer sur slug
+d'un canal pas encore peuplé). Suit `GABARIT.md` à la lettre.
 
 Pas de paramètre de ciblage (comme `decisions-check.py`, compare toujours `MEMORY.md` et
 `memory/` en entier — une concordance fichier↔index ne se scope pas à un sous-ensemble).
+**Écriture (mode `--stamp`) :** bornée au champ `updated` (même triple garde-fou que
+`backlog-check.py` — scope stagé, champ mécanique seul, jamais bloquant).
 
 | Paramètre | Effet | Défaut |
 |---|---|---|
 | `--json` | sortie JSON | désactivé |
+| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `memory/*.md` cités | agit sur les fichiers passés en argument |
+| `--stamp --staged` | même effet, mais scope = `memory/*.md` **stagés** en git, et **re-stage** après écriture | à câbler en pré-commit |
 
-**Codes de sortie :** `0` propre · `1` uniquement des « à-confirmer » (`R-UNVERIFIED`) · `2` au
-moins un bloquant (`R-NO-FRONTMATTER`, `R-EXT-NO-CONF`, `R-ORPHAN-FILE`, `R-DEAD-INDEX`).
+**Codes de sortie :** `0` propre · `1` uniquement des « à-confirmer » · `2` au moins un bloquant.
 
 ```bash
 python3 checks/memory-check.py
 python3 checks/memory-check.py --json
+python3 checks/memory-check.py --stamp --staged   # pré-commit uniquement
 ```
 
 ### `decisions-audit.py`
@@ -161,6 +201,7 @@ pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs (priorité
 |---|---|---|
 | `--tier1` | enchaîne `decisions-check`, `backlog-check`, `doc-refs-check`, `index-check`, imprime un verdict agrégé | — |
 | `--plan` | découpe `decisions/INDEX.md` en lots équilibrés (offset/limit), un lot par reviewer | — |
+| `--stale-first` | (`--plan` seul) priorise l'ORDRE des lots par `updated` de frontmatter le plus ancien — offset/limit de chaque lot reste une plage contiguë de lignes | désactivé |
 | `--merge <fichiers…>` | agrège des sorties d'agents Tier 2, **contrôle de couverture** (chaque décision auditée exactement 1×) | — |
 | `--report [dir]` | écrit un **rapport déterministe** (sans LLM) — pensé pour un cron OS headless | dossier : `$UC_MEMORY_REPORT_DIR` ou `.memory-reports/` |
 | `--batch-size <n>` | taille des lots pour `--plan` | `33` |
@@ -172,7 +213,7 @@ pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs (priorité
 
 ```bash
 python3 checks/decisions-audit.py                              # tier1 + plan, usage courant
-python3 checks/decisions-audit.py --plan --batch-size 20
+python3 checks/decisions-audit.py --plan --stale-first --batch-size 20
 python3 checks/decisions-audit.py --merge sortie_lot1.txt sortie_lot2.txt
 python3 checks/decisions-audit.py --report                      # cron OS, headless
 ```

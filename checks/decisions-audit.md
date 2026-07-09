@@ -40,6 +40,20 @@ classer — n'émettre **que** les entrées à problème :
 | `CONFLIT` | contredit une autre décision **sans** lien de révocation | l'autre id |
 | `DOUTE` | suspect, non concluant | la raison |
 
+**`ARCHIVER-4` se pré-filtre désormais mécaniquement.** Depuis le frontmatter (`decisions/README.md
+§4-5`), une entrée `status: revoked` avec un `replaced-by:` qui résout vers un id **encore
+indexé** est déjà **prouvée** — `checks/decisions-check.py` (règle `D6`) vérifie la cible,
+la réciprocité `replaces`, l'absence de cycle. Le reviewer étage 2 **ne rejuge pas** cette
+part-là : il ne sort `ARCHIVER-4` que pour le résidu que la mécanique ne peut pas trancher —
+l'invariant vit-il **entièrement** dans le successeur, ou seulement en partie (auquel cas
+c'est `DOUTE`, pas `ARCHIVER-4`). Un `replaced-by` mort ou sans réciproque n'atteint même pas
+l'étage 2 : `decisions-check.py` le bloque avant.
+
+Le reviewer s'appuie sur le **frontmatter** pour situer chaque décision avant de juger — `status`
+dit où elle en est (`active`/`revoked`/`archived`), `updated` dit sa fraîcheur, `confidence`/
+`ratified` disent si elle a déjà été ratifiée. Ça ne change pas le fond du barème (toujours
+recouper avec le code), ça évite juste de rejuger ce que le frontmatter établit déjà.
+
 **Discernement** (sinon : faux positifs) : une décision de **process** n'a jamais de « sujet
 disparu » ; une **suppression actée** (`grep` vide *conforme* à la décision) n'est pas un problème ;
 une archi **à bâtir** (spec) que le code n'a pas encore n'est pas un drift. Erre vers le signalement

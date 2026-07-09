@@ -11,7 +11,7 @@
 1. **Se repère, puis vérifie** — avant de coder : lire l'index de navigation (`index/INDEX.md`), `MEMORY.md` (préférences partagées qui pourraient contraindre la tâche) et, si la tâche touche une feature connue, sa fiche (`FEATURE_MAP.md`). **Ne jamais** parcourir tout le code. Et **ne pas faire confiance aveuglément** : une mémoire peut être périmée (« une fiche qui ment est pire qu'absente ») — recouper avec le code réel avant de s'appuyer dessus.
 2. **Développe** — en appliquant **les standards du projet** (sa doc, ses fichiers d'instructions, sa skill de review), jamais des règles inventées. En l'absence de règle documentée : **demander, pas présumer**.
 3. **Valide** — quand c'est OK (la validation passe par les outils / la revue **du projet**).
-4. **Met à jour le durable** — la doc qui décrit *ce qui existe*, **et** les mémoires impactées (fiche feature, décision si choix structurel). **Au même moment que le code**, jamais « plus tard ». Une écriture en mémoire partagée porte sa **provenance + confiance** (`MEMORY.md`) — pas de contenu externe non vérifié promu en « fait ».
+4. **Met à jour le durable** — la doc qui décrit *ce qui existe*, **et** les mémoires impactées (fiche feature, décision si choix structurel). **Au même moment que le code**, jamais « plus tard » — y compris **à la fin de chaque tâche** d'un chantier qui produit du savoir durable, pas seulement à sa clôture (`backlog/README.md`). Une écriture en mémoire partagée porte sa **provenance + confiance** (`MEMORY.md`) — pas de contenu externe non vérifié promu en « fait ».
 5. **S'auto-améliore** — capitaliser l'apprentissage de *méthode* (voir §Capitalisation).
 6. **Rend la main** — résumer ce qui a changé ; l'utilisateur pilote la suite.
 
@@ -21,7 +21,7 @@
 
 Le **travail ouvert** (le *todo*) vit dans `backlog/` — distinct des trois mémoires (qui, elles, sont du *durable*). C'est là qu'on **découpe un chantier en tâches** et qu'on suit l'avancement.
 
-- `backlog/INDEX.md` : la liste du non-bâti, **lue en premier**. Statut par entrée (`à faire` / `en cours`) ; un chantier **fini est retiré**.
+- `backlog/INDEX.md` : la liste du non-bâti, **lue en premier**. Statut par entrée (`todo` / `in-progress`) ; un chantier **fini est retiré**.
 - **La chaîne** : `spec` → `backlog` (décidé, pas bâti) → *en cours, découpé en tâches* → à la livraison, le contenu **migre vers le durable** et l'item quitte le backlog.
 - **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **état mis à jour** (`TABLEAU_DE_BORD.md`) → **capitalisation**.
 
@@ -95,7 +95,7 @@ flowchart TB
 | **Portée** | toi seul, cette machine | toute l'équipe | toute l'équipe | toute l'équipe | toute l'équipe |
 | **Versionnée** | non | oui | oui | oui | oui |
 | **Qui écrit** | l'IA, automatiquement | humain, ou IA qui propose + humain qui ratifie | mis à jour **au même moment** que le code, jamais après | à la clôture d'un chantier qui a tranché un choix structurel | jamais à la main — via l'outil de manifeste |
-| **Validation** | aucune | provenance + confiance avant promotion (`MEMORY.md`) ; intégrité mécanique par `checks/memory-check.py` (source externe sans confiance = bloquant) ; staleness par `memory-audit.md` (étage 2) | vérifiée par le contrôle d'intégrité (fiche complète, ancre valide) ; fraîcheur sémantique par `memory-audit.md` (étage 2) | `INDEX.md` scanné **avant** toute nouvelle direction structurelle ; contradiction → révocation tracée, jamais un écrasement silencieux | contrôle de dérive au démarrage + à la clôture, silence si rien n'a bougé |
+| **Validation** | aucune | provenance + confiance avant promotion (`MEMORY.md`) ; intégrité mécanique par `checks/memory-check.py` (source externe sans confiance = bloquant) ; staleness par `memory-audit.md` (étage 2) | vérifiée par le contrôle d'intégrité (fiche complète, concordance fichier↔index) ; fraîcheur sémantique par `memory-audit.md` (étage 2) | `INDEX.md` scanné **avant** toute nouvelle direction structurelle ; contradiction → révocation tracée, jamais un écrasement silencieux | contrôle de dérive au démarrage + à la clôture, silence si rien n'a bougé |
 | **Si elle a tort** | ne trompe que toi | trompe toute l'équipe | envoie sur le mauvais fichier | fait re-débattre un choix déjà tranché | fait chercher au mauvais endroit |
 
 Le **Fait** (doc d'archi durable — ce que le système *est*) n'est **pas** un canal du framework : c'est **le projet** qui l'apporte et le maintient (`WORKFLOW.md §Où ranger quoi` : « la doc d'archi durable du projet »). Le framework s'y **branche** (« mettre à jour le durable » à l'étape 4 de la boucle) sans en définir le format ni le lieu. Le **backlog**, lui, est bien **fourni par le framework** (contrairement au Fait) — mais ce n'est pas pour autant un canal mémoire : il reste **transitoire** (le travail pas-encore-fait), jamais **durable** (un fait établi) ; voir §Le travail en cours.

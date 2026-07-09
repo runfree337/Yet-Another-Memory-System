@@ -8,7 +8,10 @@ modèle de pruning quand l'INDEX gonfle. L'audit a DEUX natures, traitées sépa
   Étage 1 — CE SCRIPT (mécanique, zéro jugement, zéro faux positif) :
     --tier1   lance les contrôles d'intégrité du framework (decisions, backlog) et résume.
     --plan    découpe `decisions/INDEX.md` en lots ÉQUILIBRÉS → offset/limit/ids par lot.
-              (Supprime le découpage manuel : une revue par lot.)
+              (Supprime le découpage manuel : une revue par lot.) `--stale-first` priorise
+              les lots dont le `updated` de frontmatter est le plus ancien (l'offset/limit de
+              chaque lot reste une plage contiguë de lignes — seul l'ORDRE de présentation
+              des lots change).
     --merge   agrège les sorties de revue (format strict `id | VERDICT | … | confiance:…`)
               → rapport classé + CONTRÔLE DE COUVERTURE (chaque id audité exactement 1×).
     (défaut)  --tier1 puis --plan + mode d'emploi.
@@ -29,7 +32,7 @@ n'est élagué en silence (cf. `MEMORY.md §Provenance`, `decisions/README.md §
 
 Usage :
   python3 checks/decisions-audit.py                       # tier1 + plan
-  python3 checks/decisions-audit.py --plan [--batch-size 33] [--json]
+  python3 checks/decisions-audit.py --plan [--batch-size 33] [--stale-first] [--json]
   python3 checks/decisions-audit.py --merge revue1.txt …  # agrège + couverture
   python3 checks/decisions-audit.py --index <chemin/INDEX.md>   # autre journal
 """
@@ -47,7 +50,12 @@ CHECKS = os.path.dirname(os.path.abspath(__file__))
 INDEX_DEFAULT = os.path.join(ROOT, "decisions", "INDEX.md")
 
 ID_RE = re.compile(r"^(D-\d{4}-\d{2}-\d{2}-\d{2})\b")
+# Ligne d'INDEX.md, format uniforme du gabarit d'entrée (`GABARIT-ENTREE.md`) :
+# "- [D-AAAA-MM-JJ-NN](D-AAAA-MM-JJ-NN.md) — <titre> · <invariant>". Distinct de `ID_RE`
+# ci-dessus, qui reste le format des lignes de REVUE (`decisions-audit.md`), inchangé.
+INDEX_LINE_RE = re.compile(r"^-\s*\[(D-\d{4}-\d{2}-\d{2}-\d{2})\]")
 ANY_ID_RE = re.compile(r"D-\d{4}-\d{2}-\d{2}-\d{2}")
+UPDATED_RE = re.compile(r"(?m)^updated:\s*(\d{4}-\d{2}-\d{2})")
 VERDICTS = {"ARCHIVER-1", "ARCHIVER-4", "REDONDANTE", "DRIFT-CODE", "CONFLIT", "DOUTE"}
 
 TIER1 = [
@@ -63,8 +71,20 @@ def parse_entries(index_path: str):
         return [], 0
     with open(index_path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
-    entries = [(i, ID_RE.match(l).group(1)) for i, l in enumerate(lines, 1) if ID_RE.match(l)]
+    entries = [(i, INDEX_LINE_RE.match(l).group(1)) for i, l in enumerate(lines, 1)
+               if INDEX_LINE_RE.match(l)]
     return entries, len(lines)
+
+
+def _decision_updated(idv: str, decisions_dir: str):
+    """Champ `updated` du frontmatter de `decisions/<idv>.md`, ou `None` (fichier/champ
+    absent). Regex volontairement légère (pas d'import `entrylib`) — ce script reste portable
+    sans dépendance, cf. `decisions-audit.md §Emballage par outil`."""
+    fpath = os.path.join(decisions_dir, idv + ".md")
+    if not os.path.isfile(fpath):
+        return None
+    m = UPDATED_RE.search(open(fpath, encoding="utf-8").read())
+    return m.group(1) if m else None
 
 
 def make_batches(entries, total_lines, batch_size):
@@ -80,22 +100,33 @@ def make_batches(entries, total_lines, batch_size):
     return batches
 
 
-def cmd_plan(index_path, batch_size, as_json) -> int:
+def cmd_plan(index_path, batch_size, as_json, stale_first=False) -> int:
     entries, total = parse_entries(index_path)
     if not entries:
         print(f"PLAN : aucune décision dans {os.path.relpath(index_path, ROOT)} "
               "(journal vide — rien à auditer).")
         return 0
     batches = make_batches(entries, total, batch_size)
+    if stale_first:
+        # Priorise les lots contenant les décisions dont `updated` est le plus ancien —
+        # ne touche PAS offset/limit (toujours une plage CONTIGUË de lignes, lisible telle
+        # quelle) : seul l'ORDRE de présentation des lots change.
+        decisions_dir = os.path.dirname(index_path)
+        for b in batches:
+            dates = [d for d in (_decision_updated(i, decisions_dir) for i in b["ids"]) if d]
+            b["oldest_updated"] = min(dates) if dates else None
+        batches.sort(key=lambda b: (b["oldest_updated"] is None, b["oldest_updated"] or ""))
     if as_json:
         print(json.dumps({"entries": len(entries), "batches": batches},
                          ensure_ascii=False, indent=2))
         return 0
-    print(f"PLAN D'AUDIT — {len(entries)} décisions, {len(batches)} lot(s) de ~{batch_size}.")
+    print(f"PLAN D'AUDIT — {len(entries)} décisions, {len(batches)} lot(s) de ~{batch_size}"
+          f"{' (triés du plus périmé au plus frais)' if stale_first else ''}.")
     print("Confier un lot par reviewer, avec l'offset/limit indiqué :\n")
     for b in batches:
+        stale = f"  — plus ancien : {b['oldest_updated'] or 'inconnu'}" if stale_first else ""
         print(f"  Lot {b['batch']} — lire offset={b['offset']} limit={b['limit']} "
-              f"({b['count']} décisions : {b['ids'][0]} … {b['ids'][-1]})")
+              f"({b['count']} décisions : {b['ids'][0]} … {b['ids'][-1]}){stale}")
     print("\nPuis : python3 checks/decisions-audit.py --merge <sorties_revue…>")
     return 0
 
@@ -230,16 +261,18 @@ def main() -> int:
     ap.add_argument("--batch-size", type=int, default=33)
     ap.add_argument("--index", default=INDEX_DEFAULT)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--stale-first", action="store_true",
+                    help="--plan : priorise les lots contenant les `updated` les plus anciens")
     a = ap.parse_args()
     if a.report is not None:
         return cmd_report(a.report or None)
     if a.merge:
         return cmd_merge(a.merge, a.index)
     if a.plan and not a.tier1:
-        return cmd_plan(a.index, a.batch_size, a.json)
+        return cmd_plan(a.index, a.batch_size, a.json, a.stale_first)
     if a.tier1 and not a.plan:
         return cmd_tier1()
-    rc = cmd_tier1(); print(); cmd_plan(a.index, a.batch_size, False)
+    rc = cmd_tier1(); print(); cmd_plan(a.index, a.batch_size, False, a.stale_first)
     return rc
 
 
