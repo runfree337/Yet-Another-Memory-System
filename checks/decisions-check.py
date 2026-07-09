@@ -4,7 +4,7 @@
 The Decision channel is an instance of `ENTRY-TEMPLATE.md` (cf. `decisions/README.md`): a
 common frontmatter (`entrylib.CHANNELS["decision"]`) above three prose sections
 (Decision/Why/Invariant), one `INDEX.md` line per file, revocation/archival = a `status`
-transition + `replaces`/`replaced-by` links. This script verifies the SEVEN mechanical
+transition + `replaces`/`replaced-by` links. This script verifies the EIGHT mechanical
 invariants — fixes NOTHING, **flags**.
 
 Rules (stable ids — API, do not rename):
@@ -22,6 +22,12 @@ Rules (stable ids — API, do not rename):
       reciprocity (`A.replaced-by = B` => `B.replaces` contains `A`), no cycle.
   D7  Cross-channel references (`links:`) resolved, via `entrylib.check_links` (rule
       surfaced as-is: R-DEAD-LINK).
+  D8  A decision `status: archived|revoked` is still referenced by a living entry — a
+      `links:` entry in `memory/*.md`/`features/*.md`/`backlog/<id>/STATE.md`, or a
+      `D-id` mention in a `features/*.md` BODY. To-confirm only (a living historical
+      citation can be legitimate): update the reference or reconsider the archival.
+      Other decisions (`replaces`/`replaced-by`) and `decisions/INDEX.md` don't count —
+      that's the legitimate revocation record / the registry.
 
 Exit code (`checks/TEMPLATE.md`): 2 if >=1 blocking, 1 if only to-confirm, 0 otherwise.
 
@@ -203,6 +209,65 @@ def rule_d6(by_id: dict) -> list:
 
 
 # --------------------------------------------------------------------------- #
+# D8 — a retired decision (archived/revoked) still referenced by a living entry. #
+# --------------------------------------------------------------------------- #
+
+REFERENCE_CHANNELS = (
+    ("memory", False),    # (subdir under ROOT, scan body for D-id mentions too)
+    ("features", True),
+)
+
+
+def _reference_files():
+    """Yields `(path, scan_body)` for every `memory/*.md`, `features/*.md`, and
+    `backlog/<id>/STATE.md` file — the living entries a retired decision could still be
+    referenced by. `decisions/` itself (and its `INDEX.md`) is never yielded: the
+    revocation graph and the registry are not "references" for D8."""
+    for subdir, scan_body in REFERENCE_CHANNELS:
+        d = os.path.join(ROOT, subdir)
+        if not os.path.isdir(d):
+            continue
+        for fname in sorted(os.listdir(d)):
+            if fname.endswith(".md"):
+                yield os.path.join(d, fname), scan_body
+
+    backlog_dir = os.path.join(ROOT, "backlog")
+    if os.path.isdir(backlog_dir):
+        for entry in sorted(os.listdir(backlog_dir)):
+            state = os.path.join(backlog_dir, entry, "STATE.md")
+            if os.path.isfile(state):
+                yield state, False
+
+
+def rule_d8(by_id: dict) -> list:
+    """`by_id`: `{id: (path, meta)}`. A decision `archived`/`revoked` can still be a
+    legitimate historical citation (to-confirm, never blocking) — but a silent dangling
+    reference is a memory-maintenance hole worth surfacing. Collects every retired id
+    once, then reads each candidate referencing file exactly once (single pass over
+    `_reference_files()`) — no re-open per id."""
+    retired = {idv for idv, (_, meta) in by_id.items() if meta.get("status") in ("archived", "revoked")}
+    if not retired:
+        return []
+
+    findings = []
+    for fpath, scan_body in _reference_files():
+        text = open(fpath, encoding="utf-8").read()
+        meta, body, _ = entrylib.parse_frontmatter(text)
+
+        referenced = set(_as_list(meta.get("links"))) & retired
+        if scan_body:
+            referenced |= set(ID_RE.findall(body)) & retired
+
+        for idv in sorted(referenced):
+            dec_path, dec_meta = by_id[idv]
+            findings.append(Finding(TO_CONFIRM, "D8", dec_path, 1,
+                                     f"status: {dec_meta.get('status')} but still referenced by "
+                                     f"« {rel(fpath)} » — update the reference or reconsider "
+                                     "the archival."))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
 # Orchestration.                                                              #
 # --------------------------------------------------------------------------- #
 
@@ -235,6 +300,8 @@ def audit() -> list:
 
     # D6 — revocation graph, cross-file scope.
     findings += rule_d6(by_id)
+    # D8 — retired decision still referenced by a living entry, cross-channel scope.
+    findings += rule_d8(by_id)
 
     return findings
 
