@@ -250,7 +250,7 @@ for the multi-channel orchestrator. Four mutually exclusive modes (priority orde
 | `--plan` | splits `decisions/INDEX.md` into balanced batches (offset/limit), one batch per reviewer | — |
 | `--stale-first` | (`--plan` only) prioritizes batch ORDER by oldest frontmatter `updated` — each batch's offset/limit stays a contiguous range of lines | disabled |
 | `--merge <files…>` | aggregates Tier 2 agent outputs, **coverage check** (each decision audited exactly 1×) | — |
-| `--report [dir]` | writes a **deterministic report** (no LLM) — meant for a headless OS cron | folder: `$YAMS_MEMORY_REPORT_DIR` or `.memory-reports/` |
+| `--report [dir]` | writes a **deterministic report** (no LLM) — tier 1 + INDEX volume + a probe of the **ratification inbox** (`memory-audit.py --pending`); recommends a semantic audit on blocking drift, INDEX volume, or an inbox too large (`PENDING_ALERT_COUNT=5`) or too stale (`PENDING_ALERT_DAYS=30`). Meant for a headless OS cron | folder: `$YAMS_MEMORY_REPORT_DIR` or `.memory-reports/` |
 | `--batch-size <n>` | batch size for `--plan` | `33` |
 | `--index <path>` | path to the decisions journal | `decisions/INDEX.md` |
 | `--json` | JSON output (`--plan` only) | disabled |
@@ -276,8 +276,8 @@ in one single pass (small by construction).
 | Parameter | Effect | Default |
 |---|---|---|
 | `--tier1` | chains the 3 channels, prints one verdict per channel | — |
-| `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Files with no frontmatter/`confidence` are skipped, never errored on. | — |
-| `--json` | JSON output (with `--pending`: flat list of `channel/path/updated/source/kind`) | disabled |
+| `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Entries pending longer than `PENDING_STALE_DAYS` (30d) get a `⚠ stale Nd` marker and are counted in the summary. Files with no frontmatter/`confidence` are skipped, never errored on. | — |
+| `--json` | JSON output (with `--pending`: flat list of `channel/path/updated/source/kind/age_days/stale`) | disabled |
 | *(none)* | equivalent to `--tier1` | — |
 
 **Exit codes:** `--tier1` → the worst exit code among the 3 underlying channels (`0`/`1`/`2`) ·

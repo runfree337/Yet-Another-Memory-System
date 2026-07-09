@@ -115,6 +115,9 @@ imposed wiring — each block can be adopted separately.
 ```
 
 **Reading notes:**
+- The `SessionStart` sweep also surfaces the **ratification inbox** (`checks/memory-audit.py
+  --pending`) as a single `📥 N entrie(s) awaiting ratification` line when non-empty, silent
+  otherwise — same zero-tokens-when-clean, exit-code-only discipline as the drift block.
 - `Stop` lists 3 checks as an example (`index-check`, `backlog-check`, `decisions-check`) — one
   more hook per check you want recalled in detail before end of session; the `SessionStart` sweep
   already covers all 6 in aggregate. Add `memory-check`/`feature-map-check`/`doc-refs-check` the

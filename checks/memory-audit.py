@@ -18,6 +18,9 @@ summarizes, without duplicating their logic — same two-tier pattern as the res
               field (RATIFICATION NOT TRACKED). Today this exists only as scattered
               per-file `R-UNVERIFIED`/`R-VERIFIED-NOT-RATIFIED` findings inside each
               channel check — `--pending` is the single "what awaits me?" view.
+              Each row also carries its age in days since `updated` (when parseable)
+              and is flagged stale past `PENDING_STALE_DAYS` — so the inbox never
+              becomes a silent graveyard of entries pending for months.
     (default) --tier1 then tier 2 instructions.
 
   The Feature/Memory per-channel summary is enriched, when it's simple, with fine
@@ -49,6 +52,7 @@ Usage:
 """
 from __future__ import annotations
 
+import datetime
 import glob
 import json
 import os
@@ -58,6 +62,11 @@ import sys
 CHECKS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(CHECKS)  # framework root
 PY = sys.executable or "python3"
+
+# Soft age threshold for --pending — an entry pending longer than this many days gets
+# flagged stale in the inbox (never blocking: age alone is a nudge, not a rule). Keep
+# consistent with decisions-audit.py's PENDING_ALERT_DAYS.
+PENDING_STALE_DAYS = 30
 
 sys.path.insert(0, CHECKS)
 import entrylib  # noqa: E402
@@ -181,14 +190,32 @@ def _pending_sort_key(row: dict):
     return (updated is None, updated or "")
 
 
+def _age_days(updated, today=None) -> int | None:
+    """Days elapsed since `updated` (a `YYYY-MM-DD` string). `None` if `updated` is
+    missing or unparseable — never raises."""
+    if not updated:
+        return None
+    try:
+        then = datetime.date.fromisoformat(str(updated))
+    except ValueError:
+        return None
+    today = today or datetime.date.today()
+    return (today - then).days
+
+
 def collect_pending():
     """Returns `(unverified, not_tracked)` — two lists of `{channel, path, updated,
-    source, kind}` dicts, each sorted oldest `updated` first (missing date last)."""
+    source, kind, age_days, stale}` dicts, each sorted oldest `updated` first (missing
+    date last). `age_days` is `None` when `updated` is missing/unparseable — `stale` is
+    then always `False`."""
     unverified, not_tracked = [], []
     for channel, path, meta in _pending_entries():
         confidence = meta.get("confidence")
-        row = {"channel": channel, "path": path, "updated": meta.get("updated"),
-               "source": meta.get("source")}
+        updated = meta.get("updated")
+        age = _age_days(updated)
+        row = {"channel": channel, "path": path, "updated": updated,
+               "source": meta.get("source"), "age_days": age,
+               "stale": age is not None and age > PENDING_STALE_DAYS}
         if confidence == "unverified":
             unverified.append({**row, "kind": "unverified"})
         elif confidence == "verified" and not meta.get("ratified"):
@@ -204,8 +231,11 @@ def _print_pending_section(title: str, rows: list) -> None:
         print("  (none)")
     else:
         for r in rows:
-            print(f"  {r['channel']:8} {r['path']:40} "
-                  f"updated={r['updated'] or '?':10} source={r['source'] or '?'}")
+            line = (f"  {r['channel']:8} {r['path']:40} "
+                    f"updated={r['updated'] or '?':10} source={r['source'] or '?'}")
+            if r["stale"]:
+                line += f"  ⚠ stale {r['age_days']}d"
+            print(line)
     print()
 
 
@@ -221,11 +251,15 @@ def run_pending(as_json: bool) -> int:
                             not_tracked)
 
     total = len(unverified) + len(not_tracked)
+    stale_count = sum(1 for r in unverified + not_tracked if r["stale"])
     if total == 0:
         print("Ratification inbox empty — nothing awaiting a human decision.")
     else:
-        print(f"{total} entrie(s) awaiting ratification — {len(unverified)} unverified, "
-              f"{len(not_tracked)} verified-but-untracked.")
+        summary = (f"{total} entrie(s) awaiting ratification — {len(unverified)} unverified, "
+                   f"{len(not_tracked)} verified-but-untracked")
+        if stale_count:
+            summary += f", {stale_count} stale (> {PENDING_STALE_DAYS}d)"
+        print(summary + ".")
     return 0 if total == 0 else 1
 
 

@@ -31,10 +31,17 @@ The project brings its own CODE checks and its review. Here: the method, agnosti
 Read-only. Fixes/deletes/archives NOTHING. Ratification stays human — nothing is pruned
 silently (cf. `MEMORY.md §Provenance`, `decisions/README.md §pruning`).
 
+--report  writes a deterministic report (OS cron, no LLM): tier 1 + INDEX volume +
+          a probe of the RATIFICATION INBOX (entries awaiting a human decision across
+          all channels -- `memory-audit.py --pending`). Recommends a semantic audit on
+          blocking drift, INDEX volume, inbox size, or inbox staleness -- see
+          `PENDING_ALERT_COUNT` / `PENDING_ALERT_DAYS`.
+
 Usage:
   python3 checks/decisions-audit.py                       # tier1 + plan
   python3 checks/decisions-audit.py --plan [--batch-size 33] [--stale-first] [--json]
   python3 checks/decisions-audit.py --merge review1.txt …  # aggregates + coverage
+  python3 checks/decisions-audit.py --report [DIR]         # deterministic report (cron)
   python3 checks/decisions-audit.py --index <path/INDEX.md>   # another log
 """
 from __future__ import annotations
@@ -211,6 +218,11 @@ def cmd_merge(files, index_path) -> int:
 
 VOLUME_ALERTE = 285   # the INDEX is approaching the audit threshold (~300) -> recommend tier 2
 
+# Ratification inbox (`memory-audit.py --pending`) — recommendation thresholds: an inbox
+# this large, or this stale, alone justifies a semantic audit even with a clean tier 1.
+PENDING_ALERT_COUNT = 5    # >= this many entries awaiting ratification -> recommend tier 2
+PENDING_ALERT_DAYS = 30    # oldest pending entry's age (days) >= this -> recommend tier 2
+
 
 def _report_dir(arg):
     """Report folder: argument > $YAMS_MEMORY_REPORT_DIR > default .memory-reports/ (to gitignore)."""
@@ -218,12 +230,51 @@ def _report_dir(arg):
     return d if os.path.isabs(d) else os.path.join(ROOT, d)
 
 
-def cmd_report(report_dir) -> int:
-    """Writes a deterministic report (tier 1). Designed for an OS cron job (headless, NO
-    LLM): the host surfaces it at session start, the user decides whether to act on it
-    (tier 2)."""
+def _pending_inbox():
+    """Probes the ratification inbox (`memory-audit.py --pending --json`) via subprocess
+    — deliberately, no `entrylib` import here either (cf. `_decision_updated`'s docstring:
+    this script stays portable with no dependency). Tolerant like the rest of this file:
+    ANY failure (script missing, non-zero exit for a reason other than "entries found",
+    timeout, unparseable/non-list JSON) -> `None` (no inbox data) — the report is still
+    written, just without a `## Ratification` verdict."""
+    path = os.path.join(CHECKS, "memory-audit.py")
+    if not os.path.isfile(path):
+        return None
+    try:
+        r = subprocess.run([sys.executable, path, "--pending", "--json"], cwd=ROOT,
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=30)
+        rows = json.loads(r.stdout)
+        return rows if isinstance(rows, list) else None
+    except Exception:
+        return None
+
+
+def _pending_oldest_age_days(rows, today):
+    """Age (days) of the OLDEST parseable `updated` among pending rows, or `None` if
+    none is parseable. Rows with no/unparseable date are counted in `n_pending` (by the
+    caller) but excluded here."""
     import datetime
-    today = datetime.date.today().isoformat()
+    ages = []
+    for row in rows:
+        updated = row.get("updated")
+        if not updated:
+            continue
+        try:
+            d = datetime.date.fromisoformat(updated)
+        except (ValueError, TypeError):
+            continue
+        ages.append((today - d).days)
+    return max(ages) if ages else None
+
+
+def cmd_report(report_dir) -> int:
+    """Writes a deterministic report (tier 1 + INDEX volume + ratification inbox).
+    Designed for an OS cron job (headless, NO LLM): the host surfaces it at session
+    start, the user decides whether to act on it (tier 2)."""
+    import datetime
+    today_date = datetime.date.today()
+    today = today_date.isoformat()
     results, worst = [], 0
     for label, script in TIER1:
         path = os.path.join(CHECKS, script)
@@ -234,7 +285,23 @@ def cmd_report(report_dir) -> int:
         worst = max(worst, r.returncode)
         results.append((label, r.returncode, (r.stdout.strip().splitlines() or [""])[-1]))
     n_dec = len(parse_entries(INDEX_DEFAULT)[0])
-    recommend = (worst >= 2) or (n_dec >= VOLUME_ALERTE)
+
+    pending_rows = _pending_inbox()
+    n_pending = len(pending_rows) if pending_rows is not None else 0
+    oldest_age_days = (_pending_oldest_age_days(pending_rows, today_date)
+                       if pending_rows else None)
+
+    reasons = []
+    if worst >= 2:
+        reasons.append("blocking drift")
+    if n_dec >= VOLUME_ALERTE:
+        reasons.append(f"INDEX volume ({n_dec} >= {VOLUME_ALERTE})")
+    if n_pending >= PENDING_ALERT_COUNT:
+        reasons.append(f"ratification backlog ({n_pending} >= {PENDING_ALERT_COUNT})")
+    if oldest_age_days is not None and oldest_age_days >= PENDING_ALERT_DAYS:
+        reasons.append(f"stale ratification (oldest {oldest_age_days}d >= {PENDING_ALERT_DAYS}d)")
+    recommend = bool(reasons)
+
     rdir = _report_dir(report_dir); os.makedirs(rdir, exist_ok=True)
     rpath = os.path.join(rdir, "memory-report.md")
     out = [f"# Memory report — {today}", "",
@@ -246,8 +313,20 @@ def cmd_report(report_dir) -> int:
                else ("[to confirm]" if code == 1 else "[missing]"))
         out.append(f"- {mark} {label} — {tail}")
     out += ["", "## Decisions", "", f"- {n_dec} in the INDEX (alert >= {VOLUME_ALERTE}).", "",
-            "## Verdict", "",
-            ("**Semantic audit recommended** — run tier 2 (decision<->code agents) then ratify."
+            "## Ratification", ""]
+    if pending_rows is None:
+        out.append("- (ratification inbox unavailable — `memory-audit.py --pending` "
+                    "could not be probed)")
+    elif n_pending == 0:
+        out.append("- (inbox empty)")
+    else:
+        age_txt = f"{oldest_age_days} day(s)" if oldest_age_days is not None else "unknown"
+        out.append(f"- {n_pending} entrie(s) awaiting ratification (oldest: {age_txt}; "
+                    f"alert >= {PENDING_ALERT_COUNT} entries or >= {PENDING_ALERT_DAYS}d).")
+        out.append("- Run: `python3 checks/memory-audit.py --pending`")
+    out += ["", "## Verdict", "",
+            (f"**Semantic audit recommended** ({', '.join(reasons)}) — run tier 2 "
+             "(decision<->code agents) then ratify."
              if recommend else "**Nothing urgent** — an audit is still possible on request."), ""]
     with open(rpath, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(out))
