@@ -1,14 +1,14 @@
-# Décisions — INDEX
+# Decisions — INDEX
 
-> Une ligne par décision **structurelle**, scannable en premier. Format :
-> `- [D-AAAA-MM-JJ-NN](D-AAAA-MM-JJ-NN.md) — <titre court> · <invariant en 1 phrase>`.
-> Détail dans `D-*.md` (frontmatter `status` ⟺ la section ci-dessous, cf. `README.md`).
-> Protocole : `README.md`.
+> One line per **structural** decision, scannable at a glance. Format:
+> `- [D-YYYY-MM-DD-NN](D-YYYY-MM-DD-NN.md) — <short title> · <invariant in 1 sentence>`.
+> Detail in `D-*.md` (frontmatter `status` ⟺ the section below, cf. `README.md`).
+> Protocol: `README.md`.
 
-## Actives
+## Active
 
-<!-- (vide) — première décision suggérée : l'adoption de ce process de travail, à dater du jour. -->
+<!-- (empty) — first suggested decision: adopting this workflow process, dated today. -->
 
-## Archivées
+## Archived
 
-<!-- décisions caduques déplacées ici (status: archived, ou revoked sans contrainte vivante) -->
+<!-- stale decisions moved here (status: archived, or revoked with no living constraint) -->

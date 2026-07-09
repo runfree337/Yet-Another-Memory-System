@@ -1,51 +1,100 @@
-# Backlog — protocole + clôture (DoD)
+# Backlog — protocol + closure (DoD)
 
-`backlog/` = **maison unique du travail ouvert** (le *todo* : conception, tâches en cours, restes). Distinct du **durable** (la doc du projet + les trois mémoires) et du *pourquoi* (`decisions/`). **Transitoire**, pas une mémoire — mais chaque `STATE.md` suit le **même format d'entrée** que les canaux mémoire : c'est une instance du gabarit commun `ENTRY-TEMPLATE.md` (canal **Backlog**, table §Instanciation par canal).
+`backlog/` = the **single home for open work** (the *todo*: design, in-progress tasks, what's
+left). Distinct from the **durable** (the project's doc + the three memory channels) and the
+*why* (`decisions/`). **Transient**, not a memory — but every `STATE.md` follows the **same entry
+format** as the memory channels: it's an instance of the common `ENTRY-TEMPLATE.md` template
+(**Backlog** channel, §Instantiation per channel table).
 
-## La chaîne
+## The chain
 
-`spec` (conception d'un chantier) → **`backlog`** (décidé, pas encore bâti) → *en cours : découpé en tâches* → à la livraison, le contenu **migre vers le durable** et le chantier **quitte** le backlog.
+`spec` (framing a work item) → **`backlog`** (decided, not yet built) → *in progress: broken into
+tasks* → on delivery, the content **migrates to the durable** and the work item **leaves** the
+backlog.
 
 ## Structure
 
-**Deux paliers** :
-- Petit item → une ligne **inline** dans `INDEX.md` (statut porté par un badge sur la ligne, `[todo]` / `[in-progress]`).
-- Chantier **doc-backed** → un dossier `backlog/<id>/` dont l'`STATE.md` ouvre par un **frontmatter** aux clés **anglaises** (`id / title / status / milestone / after / docs / updated`, **source de vérité de l'état**), suivi d'une rubrique `## Tâches` **obligatoire** (voir ci-dessous) ; ses docs compagnons (spec, manifeste, docs de travail des tâches) vivent dans le même dossier.
-- Sémantique des clés (inchangée, seul le vocabulaire change) : `after` = dépendance (ex-`apres`) ; `docs` = docs compagnons du dossier ; `updated` = date de dernière frappe (ex-`maj`), **stampée mécaniquement** au pré-commit ; `milestone` = jalon (ex-`jalon`), entier ou `null` (Non planifié).
-- `status: todo | in-progress` (dans le frontmatter pour un doc-backed, le badge pour un inline). Fini → **retiré** (pas de statut « fini » qui s'accumule — un chantier ne passe jamais `status: done`, il quitte le backlog). La ligne d'`INDEX.md` d'un doc-backed ne porte que titre + cible + gist (le statut vit dans le frontmatter).
-- **Ouvrir** un chantier doc-backed = `mkdir <id>/` + `STATE.md` depuis `STATE.template.md` (frontmatter + `## Tâches` + `## Reste`) + sa ligne d'`INDEX.md` (sans badge).
-- `updated` : **auto-tamponné au pré-commit** — un hook (`backlog-check.py --stamp --staged`, câblé au **pré-commit** : hook git `pre-commit` ou l'équivalent de ton outil) pose `updated = date du commit` sur les STATE.md indexés, **mécaniquement** (pas de bump manuel, pas de pourrissement — via `entrylib.stamp_updated`).
+**Two tiers**:
+- Small item → an **inline** line in `INDEX.md` (status carried by a badge on the line,
+  `[todo]` / `[in-progress]`).
+- **Doc-backed** work item → a `backlog/<id>/` folder whose `STATE.md` opens with a **frontmatter**
+  using **English** keys (`id / title / status / milestone / after / docs / updated`, the
+  **source of truth for state**), followed by a **mandatory** `## Tasks` section (see below); its
+  companion docs (spec, manifest, task working docs) live in the same folder.
+- Key semantics (unchanged, only the vocabulary changes): `after` = dependency (formerly
+  `apres`); `docs` = the folder's companion docs; `updated` = last-touched date (formerly `maj`),
+  **mechanically stamped** at pre-commit; `milestone` = milestone (formerly `jalon`), an integer or
+  `null` (Unplanned).
+- `status: todo | in-progress` (in the frontmatter for a doc-backed item, the badge for an inline
+  one). Done → **removed** (no accumulating "done" status — a work item never turns
+  `status: done`, it leaves the backlog). The `INDEX.md` line for a doc-backed item carries only
+  title + target + gist (status lives in the frontmatter).
+- **Opening** a doc-backed work item = `mkdir <id>/` + a `STATE.md` copied from
+  `STATE.template.md` (frontmatter + `## Tasks` + `## Remaining`) + its line in `INDEX.md`
+  (no badge).
+- `updated`: **auto-stamped at pre-commit** — a hook (`backlog-check.py --stamp --staged`, wired to
+  **pre-commit**: a git `pre-commit` hook or your tool's equivalent) sets `updated = commit date`
+  on indexed STATE.md files, **mechanically** (no manual bump, no staleness — via
+  `entrylib.stamp_updated`).
 
-## Rubrique `## Tâches` — le format canonique de ligne
+## The `## Tasks` section — the canonical line format
 
-Chaque `STATE.md` porte une rubrique `## Tâches` **obligatoire** : le suivi par tâche vit **là**, jamais dupliqué dans le frontmatter ni dans l'`INDEX.md`. Une ligne, une tâche, deux formes :
+Every `STATE.md` carries a **mandatory** `## Tasks` section: per-task tracking lives **there**,
+never duplicated in the frontmatter or in `INDEX.md`. One line, one task, two forms:
 
 ```
-- [<état>] <libellé ≤ 30 mots>
-- [<état>] <libellé court> → <doc-de-travail.md>
+- [<state>] <label ≤ 30 words>
+- [<state>] <short label> → <working-doc.md>
 ```
 
-- **États** (sous-état de la tâche, distinct du `status` du chantier) : `todo | in-progress | blocked | done`.
-- **Une tâche simple tient dans le libellé** (≤ 30 mots). Au-delà, elle **doit** référencer un **document de travail** — un fichier **dans le dossier du chantier**, cité après `→` — et le libellé redevient court (le détail vit dans le doc, pas dans la ligne).
-- **Cohérence chantier ⟺ tâches** (signal, pas un verdict ferme — l'étage 2 tranche) :
-  - chantier `in-progress` ⟹ au moins une tâche entamée (état ≠ `todo`) ;
-  - toutes les tâches `done` ⟹ chantier prêt à clore (dérouler la DoD ci-dessous).
-- Une rubrique `## Reste` (facultative) porte, en prose libre, ce qui n'est **pas encore** découpé en tâches — elle se vide au profit de `## Tâches` au fur et à mesure du découpage. Aucune autre rubrique n'est canonique : `## Tâches` et `## Reste` sont les deux seules attendues dans un `STATE.md` (au-delà du frontmatter).
+- **States** (task sub-state, distinct from the work item's `status`): `todo | in-progress |
+  blocked | done`.
+- **A simple task fits in its label** (≤ 30 words). Beyond that, it **must** reference a
+  **working doc** — a file **inside the work item's folder**, cited after `→` — and the label
+  goes back to being short (the detail lives in the doc, not in the line).
+- **Work item ⟺ tasks consistency** (a signal, not a hard verdict — tier 2 decides):
+  - work item `in-progress` ⟹ at least one task started (state ≠ `todo`);
+  - all tasks `done` ⟹ work item ready to close (run the DoD below).
+- An optional `## Remaining` section carries, in free prose, what's **not yet** broken into
+  tasks — it empties out into `## Tasks` as the breakdown progresses. No other section is
+  canonical: `## Tasks` and `## Remaining` are the only two expected in a `STATE.md` (beyond the
+  frontmatter).
 
-## L'STATE.md ne porte jamais de contenu durable
+## STATE.md never carries durable content
 
-La capitalisation du durable (doc d'architecture, fiche `FEATURE_MAP`, décision…) se fait **en fin de chaque tâche qui en produit**, pas en fin de chantier — c'est là qu'elle est la plus fraîche. Conséquence directe : **l'`STATE.md` ne porte jamais de contenu durable**, seulement l'**état** (frontmatter + tâches) et des **références** — vers les docs de travail du chantier, et vers le durable déjà écrit ailleurs. Une tâche finie qui a produit de la doc → cette doc part **immédiatement** dans son foyer durable (jamais laissée « en attente » dans l'STATE.md), la tâche passe `[done]` avec, si utile, une référence vers ce foyer. Un `STATE.md` qui gonfle (contenu > état + références) est le signal que cette règle a été contournée — voir `checks/backlog-check.py §E-STATE-SIZE / §E-STATE-SECTION` (soft, à-confirmer).
+Capitalizing the durable (architecture doc, `FEATURE_MAP` entry, decision…) happens **at the end
+of each task that produces it**, not at the end of the work item — that's when it's freshest.
+Direct consequence: **`STATE.md` never carries durable content**, only **state** (frontmatter +
+tasks) and **references** — to the work item's working docs, and to durable content already
+written elsewhere. A finished task that produced doc → that doc goes **immediately** to its
+durable home (never left "pending" in STATE.md), the task turns `[done]` with, if useful, a
+reference to that home. A `STATE.md` that bloats (content > state + references) is the signal
+that this rule was bypassed — see `checks/backlog-check.py §E-STATE-SIZE / §E-STATE-SECTION`
+(soft, to-confirm).
 
-## Jalons — regroupement ordonné
+## Milestones — ordered grouping
 
-L'`INDEX.md` **regroupe** les chantiers par **jalon** : un sous-titre `### Jalon N — <nom>` (N entier = l'ordre — ce titre de groupe reste en **français**, c'est le visage humain du plan), les chantiers non rattachés sous `### Non planifié`. Le jalon **ordonne**, il ne partitionne pas (toujours un seul `INDEX.md` — le « backlog d'un jalon » est la *vue* = son groupe). Le frontmatter `milestone:` (entier, ou `null` = Non planifié) en porte la **copie machine**, réconciliée par le check. Reclasser un chantier = déplacer sa ligne d'un groupe à l'autre **et** mettre à jour `milestone:` dans son frontmatter.
+`INDEX.md` **groups** work items by **milestone**: a subheading `### Milestone N — <name>` (N
+integer = the order — the `<name>` stays in the team's own working language, the human face of
+the plan), unassigned work items under `### Unplanned`. The milestone **orders**, it
+doesn't partition (always a single `INDEX.md` — the "milestone's backlog" is the *view* = its
+group). The `milestone:` frontmatter key carries the **machine copy**, reconciled by the check.
+Reclassifying a work item = move its line from one group to another **and** update `milestone:`
+in its frontmatter.
 
-## Definition of Done — clôturer un chantier (dans l'ordre)
+## Definition of Done — closing a work item (in order)
 
-1. **Contrôle du durable** — puisque la capitalisation s'est déjà faite tâche par tâche (voir ci-dessus), cette étape n'est plus un gros œuvre mais une **vérification** : reste-t-il du contenu durable non migré (dans l'`STATE.md`, un doc de travail oublié…) ? Si oui, le migrer maintenant vers son foyer durable + les mémoires touchées (`FEATURE_MAP`…) — le durable *porte le contenu*, pas une promesse.
-2. **Décision** enregistrée si la clôture acte un choix structurel.
-3. **Backlog vidé** — le chantier + sa ligne d'`INDEX.md` sont **retirés** (ou statut mis à jour si partiel).
-4. **État mis à jour** — `DASHBOARD.md` : avancement du jalon concerné, points chauds (résolus retirés / nouveaux ajoutés), ligne de date.
-5. **Capitalisation** — poser la question « apprentissage de méthode réutilisable ? » et la router si oui.
+1. **Durable check** — since capitalization already happened task by task (see above), this step
+   is no longer heavy lifting but a **verification**: is there any durable content left
+   unmigrated (in `STATE.md`, a forgotten working doc…)? If so, migrate it now to its durable home
+   + the memory channels it touches (`FEATURE_MAP`…) — the durable *carries the content*, not a
+   promise.
+2. **Decision** recorded if the closure settles a structural choice.
+3. **Backlog cleared** — the work item + its `INDEX.md` line are **removed** (or status updated if
+   partial).
+4. **State updated** — `DASHBOARD.md`: progress of the relevant milestone, hot spots (resolved
+   ones removed / new ones added), date line.
+5. **Knowledge capture** — ask "reusable method learned here?" and route it if so.
 
-> Tant que ces étapes ne sont pas faites, le chantier **n'est pas clos**. L'étape de validation se branche sur le rituel du projet (sa skill de review, etc.) — le process n'en impose aucun.
+> Until these steps are done, the work item **is not closed**. The validation step plugs into the
+> project's own ritual (its review skill, etc.) — the process doesn't impose one.

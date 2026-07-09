@@ -1,15 +1,23 @@
-# Backlog — le travail en cours (le *todo*)
+# Backlog — open work (the *todo*)
 
-> Le **travail ouvert**, lu en premier. Un chantier **doc-backed** (dossier `<id>/`) porte son statut dans le **frontmatter** de son `STATE.md` (clés anglaises id/title/status/milestone/after/docs/updated — instance du gabarit commun d'entrée mémoire, canal Backlog) ; sa ligne ici = **titre + cible + gist, sans badge** ; un **item inline** (pas de doc) garde son badge `[todo]`/`[in-progress]` (vocabulaire machine — gabarit concret d'un `STATE.md` : `STATE.template.md`). Un chantier **fini est retiré** (son histoire vit dans `git log` et le journal de décisions). Les chantiers sont **regroupés par jalon** (ordre = entier croissant, titres de groupe en français — le visage humain du plan). Protocole + clôture : `README.md`. Vue des statuts : `python3 checks/backlog-check.py --board`.
+> The **open work**, read first. A **doc-backed** work item (`<id>/` folder) carries its status in
+> the **frontmatter** of its `STATE.md` (English keys id/title/status/milestone/after/docs/updated
+> — instance of the common memory-entry template, Backlog channel); its line here = **title +
+> target + gist, no badge**; an **inline item** (no doc) keeps its `[todo]`/`[in-progress]` badge
+> (machine vocabulary — concrete template of a `STATE.md`: `STATE.template.md`). A **finished**
+> work item is **removed** (its story lives on in `git log` and the decision log). Work items are
+> **grouped by milestone** (order = ascending integer, milestone names in the team's own working
+> language — the human face of the plan). Protocol + closure: `README.md`. Status view:
+> `python3 checks/backlog-check.py --board`.
 
-## Chantiers ouverts — par jalon
+## Open work items — by milestone
 
-### Jalon 1 — <nom du jalon>
+### Milestone 1 — <milestone name>
 
-<!-- doc-backed : pas de badge, le statut vit dans le frontmatter de <id>/STATE.md -->
-- **<Titre du chantier>** → `<id>/` — <gist en une phrase (ce qui reste)>.
+<!-- doc-backed: no badge, status lives in <id>/STATE.md's frontmatter -->
+- **<Work item title>** → `<id>/` — <one-line gist (what's left)>.
 
-### Non planifié
+### Unplanned
 
-<!-- items inline (pas de doc dédié) : gardent leur badge -->
-- **[todo] <petit item sans doc dédié>** — <gist en une phrase>.
+<!-- inline items (no dedicated doc): keep their badge -->
+- **[todo] <small item with no dedicated doc>** — <one-line gist>.

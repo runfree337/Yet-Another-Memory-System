@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# SessionStart — sweep structurel MUET (checks/README.md §À câbler).
+# SessionStart — SILENT structural sweep (checks/README.md §To wire).
 #
-# Agrège plusieurs checks/*.py en démarrage de session : RIEN imprimé si tout est propre (0 token
-# injecté dans le contexte), une ligne terse par dérive sinon. Keyer sur le code retour, jamais
-# parser un rapport localisé/accentué — cf. la « Règle du silence » du README cité ci-dessus.
+# Aggregates several checks/*.py at session start: NOTHING printed if everything is clean (0
+# tokens injected into context), one terse line per drift otherwise. Keys on the exit code,
+# never parses a localized/accented report — cf. the "Silence rule" of the README cited above.
 #
-# Détecte aussi un rapport d'audit sémantique en attente (produit hors session par le cron OS,
-# cf. INSTALL.md étape 5) : ne le traite jamais lui-même, se contente de le SURFACER — l'agent
-# demande, l'utilisateur décide.
+# Also detects a pending semantic audit report (produced outside the session by the OS
+# cron job, cf. INSTALL.md step 5): never processes it itself, just SURFACES it — the
+# agent asks, the user decides.
 set -u
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
@@ -20,26 +20,26 @@ PY=$(command -v python3 || command -v python)
 lines=""
 
 "$PY" checks/decisions-check.py   >/dev/null 2>&1
-[ "$?" -eq 2 ] && lines="${lines}• décisions: dérive (python3 checks/decisions-check.py)\n"
+[ "$?" -eq 2 ] && lines="${lines}• decisions: drift (python3 checks/decisions-check.py)\n"
 
 "$PY" checks/backlog-check.py     >/dev/null 2>&1
-[ "$?" -eq 2 ] && lines="${lines}• backlog: erreur (python3 checks/backlog-check.py)\n"
+[ "$?" -eq 2 ] && lines="${lines}• backlog: error (python3 checks/backlog-check.py)\n"
 
 "$PY" checks/feature-map-check.py >/dev/null 2>&1
-[ "$?" -eq 2 ] && lines="${lines}• feature-map: erreur (python3 checks/feature-map-check.py)\n"
+[ "$?" -eq 2 ] && lines="${lines}• feature-map: error (python3 checks/feature-map-check.py)\n"
 
 "$PY" checks/memory-check.py      >/dev/null 2>&1
-[ "$?" -eq 2 ] && lines="${lines}• mémoire: erreur (python3 checks/memory-check.py)\n"
+[ "$?" -eq 2 ] && lines="${lines}• memory: error (python3 checks/memory-check.py)\n"
 
 "$PY" checks/index-check.py       >/dev/null 2>&1
-[ "$?" -eq 2 ] && lines="${lines}• index: dérive (python3 checks/index-check.py)\n"
+[ "$?" -eq 2 ] && lines="${lines}• index: drift (python3 checks/index-check.py)\n"
 
-"$PY" checks/doc-refs-check.py 2>/dev/null | grep -q BLOQUANT
-[ "$?" -eq 0 ] && lines="${lines}• doc: réf morte (python3 checks/doc-refs-check.py)\n"
+"$PY" checks/doc-refs-check.py 2>/dev/null | grep -q BLOCKING
+[ "$?" -eq 0 ] && lines="${lines}• doc: dead ref (python3 checks/doc-refs-check.py)\n"
 
-[ -n "$lines" ] && printf "⚠️ dérive structurelle au démarrage :\n%b" "$lines"
+[ -n "$lines" ] && printf "⚠️ structural drift at startup:\n%b" "$lines"
 
 REPORT="${YAMS_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
-[ -f "$REPORT" ] && printf "📋 rapport mémoire en attente: %s — DEMANDER à l'utilisateur de le traiter, puis le supprimer.\n" "$REPORT"
+[ -f "$REPORT" ] && printf "📋 memory report pending: %s — ASK the user to handle it, then delete it.\n" "$REPORT"
 
-exit 0   # jamais bloquant ; MUET si ni dérive ni rapport → 0 token injecté
+exit 0   # never blocking; SILENT if no drift and no report → 0 tokens injected

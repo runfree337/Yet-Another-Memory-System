@@ -1,17 +1,17 @@
-# Gabarit d'un `STATE.md` — à copier tel quel dans `backlog/<id>/STATE.md`
+# `STATE.md` template — copy as-is into `backlog/<id>/STATE.md`
 
-> Instance concrète de `ENTRY-TEMPLATE.md` pour le canal **Backlog** (voir sa table
-> §Instanciation par canal). Le frontmatter est la **source de vérité de l'état** ; le corps ne
-> porte **jamais de contenu durable** — seulement l'état (tâches) et des références (voir
-> `README.md §L'STATE.md ne porte jamais de contenu durable`).
+> Concrete instance of `ENTRY-TEMPLATE.md` for the **Backlog** channel (see its
+> §Instantiation per channel table). The frontmatter is the **source of truth for state**; the
+> body never carries durable content — only state (tasks) and references (see
+> `README.md §STATE.md never carries durable content`).
 
 ## Frontmatter
 
 <!-- template -->
 ```
 ---
-id: <id-du-chantier>
-title: <Titre lisible du chantier>
+id: <work-item-id>
+title: <Readable work item title>
 status: todo
 milestone: null
 after: []
@@ -21,32 +21,32 @@ updated: 2026-07-09
 ```
 <!-- /template -->
 
-`id` = nom du dossier (kebab-case). `status` = `todo | in-progress` (jamais `done` — un chantier
-fini est **retiré**, pas marqué). `milestone` = entier (jalon) ou `null` (Non planifié). `after` =
-liste d'`id` de chantiers dont celui-ci dépend. `docs` = liste des `.md` compagnons du dossier
-(hors `STATE.md` lui-même). `updated` = stampé mécaniquement par `backlog-check.py --stamp`, jamais
-à la main.
+`id` = folder name (kebab-case). `status` = `todo | in-progress` (never `done` — a finished work
+item is **removed**, not marked). `milestone` = integer (milestone) or `null` (Unplanned).
+`after` = list of work-item `id`s this one depends on. `docs` = list of the folder's companion
+`.md` files (excluding `STATE.md` itself). `updated` = mechanically stamped by
+`backlog-check.py --stamp`, never by hand.
 
-## Tâches
+## Tasks
 
 <!-- template -->
-- [done] Cadrer l'intention du chantier et écrire la spec initiale.
-- [in-progress] Découper le moteur de résolution en briques testables → plan-resolution.md
-- [todo] Écrire les tests d'intégration une fois le découpage stabilisé.
+- [done] Frame the work item's intent and write the initial spec.
+- [in-progress] Break the resolution engine down into testable bricks → plan-resolution.md
+- [todo] Write integration tests once the breakdown is stable.
 <!-- /template -->
 
-Une ligne = une tâche. `<!-- template -->` ci-dessus n'exempte que les **chemins d'exemple** de ce
-gabarit — pas un format à recopier dans les commentaires du vrai `STATE.md`. Deux formes :
-- `- [<état>] <libellé ≤ 30 mots>` — la tâche tient dans son libellé.
-- `- [<état>] <libellé court> → <doc-de-travail.md>` — le détail vit dans le doc de travail
-  (dans le dossier du chantier), le libellé reste court.
+One line = one task. The `<!-- template -->` marker above only exempts the **example paths** in
+this template — it's not a format to copy into a real `STATE.md`'s comments. Two forms:
+- `- [<state>] <label ≤ 30 words>` — the task fits in its label.
+- `- [<state>] <short label> → <working-doc.md>` — the detail lives in the working doc (inside
+  the work item's folder), the label stays short.
 
-États : `todo | in-progress | blocked | done`.
+States: `todo | in-progress | blocked | done`.
 
-## Reste
+## Remaining
 
 <!-- template -->
-Tant qu'un chantier n'est pas encore découpé en tâches, décrire ici en prose libre ce qui reste à
-faire. Cette rubrique se **vide** au profit de `## Tâches` au fur et à mesure du découpage — elle
-n'est pas un journal permanent, juste le sas avant découpage.
+As long as a work item isn't yet broken into tasks, describe here in free prose what's left to
+do. This section **empties out** into `## Tasks` as the breakdown progresses — it's not a
+permanent log, just the holding area before breakdown.
 <!-- /template -->

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# PreToolUse — câblage des trois gardes universelles de ../../../hooks/ (hooks/README.md
-# §Câblage par outil), un seul point d'entrée dispatché par tool_name :
-#   poisoning-scan   sur Write|Edit
-#   secret-scan       sur Bash|Write|Edit
-#   destructive-guard sur Bash (décision "ask", jamais un blocage dur)
+# PreToolUse — wiring for the three universal guards of ../../../hooks/ (hooks/README.md
+# §Wiring by tool), a single entry point dispatched by tool_name:
+#   poisoning-scan    on Write|Edit
+#   secret-scan       on Bash|Write|Edit
+#   destructive-guard on Bash ("ask" decision, never a hard block)
 #
-# Chaque garde est appelée avec --stdin-json (elle lit tool_name/tool_input elle-même). Les
-# gardes BLOQUANTES (poisoning-scan, secret-scan) court-circuitent sur exit 2 ; destructive-guard
-# ne bloque jamais elle-même — elle émet sa propre décision JSON "ask" sur stdout, qu'on laisse
-# remonter telle quelle (jamais réécrite ici).
+# Each guard is called with --stdin-json (it reads tool_name/tool_input itself). The
+# BLOCKING guards (poisoning-scan, secret-scan) short-circuit on exit 2; destructive-guard
+# never blocks itself — it emits its own "ask" JSON decision on stdout, which is passed
+# through untouched here.
 set -u
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
@@ -38,7 +38,7 @@ case "$TOOL" in
     [ "$?" -eq 2 ] && exit 2
 
     printf '%s' "$INPUT" | "$PY" hooks/destructive-guard.py --stdin-json
-    exit "$?"   # toujours 0 — la décision "ask" est portée par le JSON déjà imprimé
+    exit "$?"   # always 0 — the "ask" decision is carried by the already-printed JSON
     ;;
 esac
 

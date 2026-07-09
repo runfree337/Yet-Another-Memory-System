@@ -1,40 +1,41 @@
 #!/usr/bin/env python3
-"""Orchestrateur déterministe d'AUDIT MÉMOIRE MULTI-CANAL — agnostique (étage 1).
+"""Deterministic MULTI-CHANNEL MEMORY AUDIT orchestrator — agnostic (tier 1).
 
-La mémoire se tient en trois canaux (`../WORKFLOW.md §Les trois mémoires` : Feature,
-Décision, Mémoire) — chacun a son propre contrôle d'intégrité (feature-map-check,
-decisions-audit, memory-check). Ce script les ENCHAÎNE en un seul passage et résume,
-sans dupliquer leur logique — même motif deux niveaux que le reste de `checks/` :
+Memory lives in three channels (`../WORKFLOW.md §The three memories`: Feature,
+Decision, Memory) — each has its own integrity check (feature-map-check,
+decisions-audit, memory-check). This script CHAINS them into a single pass and
+summarizes, without duplicating their logic — same two-tier pattern as the rest of
+`checks/`:
 
-  Étage 1 — CE SCRIPT (mécanique, zéro jugement, zéro faux positif) :
-    --tier1   lance feature-map-check + decisions-audit --tier1 (qui couvre déjà lui-même
-              décisions/doc/index/backlog) + memory-check, résume par canal. Ne remplace
-              AUCUN des trois — les délègue.
-    (défaut)  --tier1 puis mode d'emploi étage 2.
+  Tier 1 — THIS SCRIPT (mechanical, zero judgment, zero false positive):
+    --tier1   runs feature-map-check + decisions-audit --tier1 (which already covers
+              decisions/doc/index/backlog itself) + memory-check, summarizes per
+              channel. Replaces NONE of the three — delegates to them.
+    (default) --tier1 then tier 2 instructions.
 
-  Le résumé par canal Feature/Mémoire s'enrichit, quand c'est simple, de compteurs fins
-  utiles à l'étage 2 (`memory-audit.md §Le flux`) — relancés depuis le `--json` du check
-  sous-jacent : `R-UNVERIFIED` / `R-VERIFIED-NOT-RATIFIED` (canal Mémoire), `FM-FRESH` /
-  `FM-GRAN` (canal Feature). Tolérant par construction : `--json` indisponible, sortie
-  illisible ou champ absent -> pas de compteurs, le résumé retombe sur le comptage actuel
-  (code retour + dernière ligne texte) sans jamais planter.
+  The Feature/Memory per-channel summary is enriched, when it's simple, with fine
+  counters useful for tier 2 (`memory-audit.md §Le flux`) — re-run from the underlying
+  check's `--json`: `R-UNVERIFIED` / `R-VERIFIED-NOT-RATIFIED` (Memory channel),
+  `FM-FRESH` / `FM-GRAN` (Feature channel). Tolerant by construction: `--json`
+  unavailable, unreadable output, or missing field -> no counters, the summary falls
+  back to the current count (exit code + last text line) without ever crashing.
 
-  Étage 2 — REVUE SÉMANTIQUE (jugement), PAR CANAL :
-    - Décision — recette + barème `decisions-audit.md` (le seul canal qui accumule assez
-      pour justifier un découpage en lots — `decisions-audit.py --plan/--merge`).
-    - Feature — chaque fiche est relue en ENTIER (FEATURE_MAP.md reste volontairement
-      assez petit pour ça, cf. WORKFLOW.md) : la fiche décrit-elle encore la réalité du
-      code cité ?
-    - Mémoire — chaque entrée `à vérifier` de MEMORY.md (repérée par memory-check.py) est
-      recoupée avec le code/une source fiable, ou ratifiée telle quelle.
-    Barème détaillé des trois : voir `memory-audit.md`.
+  Tier 2 — SEMANTIC REVIEW (judgment), PER CHANNEL:
+    - Decision — recipe + scale `decisions-audit.md` (the only channel that accumulates
+      enough to justify splitting into batches — `decisions-audit.py --plan/--merge`).
+    - Feature — every entry is reread IN FULL (FEATURE_MAP.md stays deliberately small
+      enough for that, cf. WORKFLOW.md): does the entry still describe the reality of
+      the cited code?
+    - Memory — every `to-confirm` entry of MEMORY.md (flagged by memory-check.py) is
+      cross-checked against the code/a reliable source, or ratified as is.
+    Detailed scale for all three: see `memory-audit.md`.
 
-Le projet apporte ses propres contrôles de CODE et sa revue. Ici : la méthode, agnostique.
+The project brings its own CODE checks and its review. Here: the method, agnostic.
 
-Lecture seule. Ne corrige/supprime/archive RIEN. La ratification reste humaine.
+Read-only. Fixes/deletes/archives NOTHING. Ratification stays human.
 
-Usage :
-  python3 checks/memory-audit.py            # --tier1 + mode d'emploi
+Usage:
+  python3 checks/memory-audit.py            # --tier1 + instructions
   python3 checks/memory-audit.py --tier1 [--json]
 """
 from __future__ import annotations
@@ -53,9 +54,9 @@ TIER1 = [
     ("memory",    [PY, os.path.join(CHECKS, "memory-check.py")]),
 ]
 
-# Compteurs fins optionnels par canal — un canal absent de cette table (ex. "decisions",
-# déjà agrégé par decisions-audit.py) n'est simplement pas enrichi. Clés = ids de règle
-# `entrylib`/canal, directement grep-ables (mêmes ids que `memory-audit.md`).
+# Optional fine counters per channel — a channel absent from this table (e.g.
+# "decisions", already aggregated by decisions-audit.py) is simply not enriched. Keys =
+# `entrylib`/channel rule ids, directly grep-able (same ids as `memory-audit.md`).
 EXTRA_COUNTS = {
     "memory":  ("R-UNVERIFIED", "R-VERIFIED-NOT-RATIFIED"),
     "feature": ("FM-FRESH", "FM-GRAN"),
@@ -63,10 +64,10 @@ EXTRA_COUNTS = {
 
 
 def _json_findings(cmd: list[str]):
-    """Relance `cmd` + `--json`, retourne la liste de `Finding` (dicts) — `None` si le
-    check ne supporte pas `--json`, si la sortie n'est pas un JSON de liste, ou sur toute
-    autre erreur (timeout, script absent…). Ne lève jamais — c'est un enrichissement,
-    jamais un chemin bloquant."""
+    """Reruns `cmd` + `--json`, returns the `Finding` (dict) list — `None` if the check
+    doesn't support `--json`, if the output isn't a JSON list, or on any other error
+    (timeout, script missing…). Never raises — this is an enrichment, never a blocking
+    path."""
     try:
         proc = subprocess.run(cmd + ["--json"], capture_output=True, text=True, timeout=30)
         data = json.loads(proc.stdout)
@@ -76,9 +77,10 @@ def _json_findings(cmd: list[str]):
 
 
 def _channel_counts(label: str, cmd: list[str]) -> dict:
-    """Compteurs `{rule: n}` pour les règles utiles à l'étage 2 de ce canal (voir
-    `EXTRA_COUNTS`). `{}` si le canal n'a pas de compteurs définis, ou si `_json_findings`
-    échoue — retombe alors silencieusement sur le comptage actuel (code + dernière ligne)."""
+    """`{rule: n}` counters for the rules useful to this channel's tier 2 (see
+    `EXTRA_COUNTS`). `{}` if the channel has no counters defined, or if
+    `_json_findings` fails — then silently falls back to the current count (exit code +
+    last line)."""
     rules = EXTRA_COUNTS.get(label)
     if not rules:
         return {}
@@ -99,37 +101,37 @@ def run_tier1(as_json: bool) -> int:
         code = proc.returncode
         worst = max(worst, code)
         tail = (proc.stdout.strip().splitlines() or [""])[-1]
-        entry = {"canal": label, "code": code, "resume": tail}
+        entry = {"channel": label, "code": code, "summary": tail}
         counts = _channel_counts(label, cmd)
         if counts:
-            entry["compteurs"] = counts
+            entry["counts"] = counts
         results.append(entry)
 
     if as_json:
-        print(json.dumps({"canaux": results, "code": worst}, ensure_ascii=False, indent=2))
+        print(json.dumps({"channels": results, "code": worst}, ensure_ascii=False, indent=2))
         return worst
 
     for r in results:
-        mark = "[OK]" if r["code"] == 0 else ("[BLOQUANT]" if r["code"] >= 2 else "[à confirmer]")
-        line = f"{mark} {r['canal']:10} {r['resume']}"
-        if r.get("compteurs"):
-            line += "  (" + ", ".join(f"{rule}={n}" for rule, n in r["compteurs"].items()) + ")"
+        mark = "[OK]" if r["code"] == 0 else ("[BLOCKING]" if r["code"] >= 2 else "[to confirm]")
+        line = f"{mark} {r['channel']:10} {r['summary']}"
+        if r.get("counts"):
+            line += "  (" + ", ".join(f"{rule}={n}" for rule, n in r["counts"].items()) + ")"
         print(line)
 
     print()
     if worst == 0:
-        print("Étage 1 propre sur les 3 canaux. Audit sémantique possible à la demande.")
+        print("Tier 1 clean on all 3 channels. Semantic audit possible on request.")
     elif worst == 1:
-        print("Candidats à confirmer — pas bloquant, mais un passage étage 2 est recommandé.")
+        print("To-confirm candidates — not blocking, but a tier 2 pass is recommended.")
     else:
-        print("Dérive bloquante détectée — corriger avant d'envisager l'étage 2 (memory-audit.md).")
+        print("Blocking drift detected — fix before considering tier 2 (memory-audit.md).")
     return worst
 
 
 def usage() -> int:
     print("usage: memory-audit.py [--tier1] [--json]", file=sys.stderr)
-    print("  --tier1  lance les 4 contrôles d'intégrité (feature, décisions, mémoire, backlog)", file=sys.stderr)
-    print("  (défaut) équivalent à --tier1", file=sys.stderr)
+    print("  --tier1  runs the 4 integrity checks (feature, decisions, memory, backlog)", file=sys.stderr)
+    print("  (default) equivalent to --tier1", file=sys.stderr)
     return 0
 
 

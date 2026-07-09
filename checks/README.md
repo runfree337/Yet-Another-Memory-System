@@ -1,23 +1,23 @@
-# `checks/` — contrôles déterministes du process
+# `checks/` — deterministic process controls
 
-> Premier étage du motif **deux niveaux** : un **script mécanique zéro faux positif** (il *constate*, ne juge pas) **→** une **revue sémantique** (le jugement, assuré par la **revue du projet**). Par défaut aucun ne corrige : ils **signalent** — seule exception assumée, le mode `--stamp` (`backlog-check.py`, `feature-map-check.py`, `memory-check.py` — mécanique, borné au champ `updated` et au scope stagé), voir « Câblage pré-commit » plus bas.
+> First tier of the **two-level** pattern: a **mechanical, zero-false-positive script** (it *finds*, doesn't judge) **→** a **semantic review** (the judgment, handled by the **project's review**). By default none of them fix anything: they **report** — the one accepted exception is `--stamp` mode (`backlog-check.py`, `feature-map-check.py`, `memory-check.py` — mechanical, bounded to the `updated` field and the staged scope), see "Pre-commit wiring" below.
 >
-> **Écrire un nouveau contrôle** (agnostique ici, ou tech-spécifique côté projet hôte) → suivre
-> [`TEMPLATE.md`](TEMPLATE.md) : la forme commune (`Finding`, deux verdicts, `collect()` git-aware,
-> règles pures, code retour `0/1/2`) que tous les linters de ce type convergent vers, indépendamment.
+> **Writing a new check** (agnostic here, or tech-specific on the host project side) → follow
+> [`TEMPLATE.md`](TEMPLATE.md): the common shape (`Finding`, two verdicts, git-aware `collect()`,
+> pure rules, `0/1/2` exit code) that every linter of this kind converges toward, independently.
 
-## Fournis (agnostiques)
+## Provided (agnostic)
 
-- **`backlog-check.py`** — intégrité du `backlog/` (canal Backlog du gabarit d'entrée, `ENTRY-TEMPLATE.md`) : chaque chantier doc-backed = un dossier `<id>/` dont l'`STATE.md` porte un frontmatter complet (`id/title/status/milestone/after/docs/updated`, validé via `entrylib`) **et une rubrique `## Tâches`** (états `todo/in-progress/blocked/done`, libellé ≤ 30 mots ou renvoi `→ doc de travail`) ; `milestone`⟺groupe INDEX, `after`→id réel, `docs`⟺compagnons ; garde anti-accumulation *soft* (STATE.md > 80 lignes ou rubrique hors canon → « du durable vit dans l'état »). Vues `--board` et `--state <id>` avec compteurs de tâches, `--json` possible. **`--stamp --staged`** : pose `updated = aujourd'hui` sur les STATE.md stagés + re-stage — **à câbler au PRÉ-COMMIT**.
-- **`feature-map-check.py`** — intégrité du canal **Feature** (un fichier par fiche `features/<slug>.md` + `FEATURE_MAP.md` en index) : concordance fichier↔index, frontmatter du canal (`entrylib`), clés-cœur du corps (une ligne `**Rôle`, ≥ 1 chemin de code, ≥ 1 réf durable), existence des ids `D-*` cités, aucune réf transitoire (`backlog/`), fraîcheur (`updated` vs dernier commit des chemins cités) et granularité en signal **soft**. Dead-path délégué à `doc-refs-check.py`. `--stamp --staged` sur `updated`.
-- **`decisions-check.py`** — intégrité du canal **Décision** : concordance fichiers `D-*.md` ↔ lignes d'`INDEX.md` (D1/D2), frontmatter du canal via `entrylib` (D3), rubriques canoniques du corps (D4), `status` ⟺ section Actives/Archivées (D5), graphe de révocation `replaces`/`replaced-by` sain — réciprocité, pas de cycle (D6), liens croisés résolus (D7).
-- **`memory-check.py`** — intégrité du canal **Mémoire** : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index. Toute la logique vit dans `entrylib` (frontmatter du canal, concordance fichier↔index, liens croisés) ; `source: external:` sans `confidence` → bloquant ; `confidence: unverified` ou `verified` non `ratified` → candidate à l'étage 2. `--stamp --staged` sur `updated`. Suit `TEMPLATE.md` à la lettre.
-- **`decisions-audit.py`** — orchestrateur d'**audit du journal de décisions** (déclencheur « Volume » quand l'INDEX gonfle — le seul canal qui accumule assez pour le justifier). `--tier1` enchaîne `decisions-check`/`backlog-check`/`doc-refs-check`/`index-check` ; `--plan` découpe `decisions/INDEX.md` en lots équilibrés (offset/limit) pour confier une tranche par reviewer ; `--merge` agrège les sorties de revue **avec contrôle de couverture** (chaque décision auditée exactement 1×). Étage 1 (mécanique) ; l'étage 2 (jugement : drift mémoire↔code, redondance, conflit) suit le **barème** de revue `decisions-audit.md`.
-- **`memory-audit.py`** — orchestrateur **multi-canal** (Feature + Décision + Mémoire) : `--tier1` enchaîne `feature-map-check` + `decisions-audit --tier1` + `memory-check`, résume par canal. Pas de `--plan`/`--merge` propres — délégués à `decisions-audit.py` pour son seul canal qui en a besoin. Étage 2 (jugement, les 3 canaux) : barème `memory-audit.md`.
-- **`doc-refs-check.py`** — **références mortes** dans la doc : un chemin de fichier cité dans un `.md` qui n'existe pas / plus. Tier ferme zéro-FP (heuristique git : a existé puis disparu → bloquant ; jamais créé → à-confirmer). La dérive *sémantique* reste à la revue.
-- **`index-check.py`** — **intégrité de l'index par-fichier** (`manifest.tsv` ↔ fichiers réels). Le **projet** définit racines + extensions dans `index/index-config.json` (à l'installation) ; sans config, inactif. Cf. `../index/INDEX.md`. <!-- template -->
+- **`backlog-check.py`** — integrity of `backlog/` (Backlog channel of the entry template, `ENTRY-TEMPLATE.md`): every doc-backed work item = a `<id>/` folder whose `STATE.md` carries a complete frontmatter (`id/title/status/milestone/after/docs/updated`, validated via `entrylib`) **and a `## Tasks` section** (states `todo/in-progress/blocked/done`, label ≤ 30 words or a `→ working-doc` pointer); `milestone`⟺INDEX group, `after`→real id, `docs`⟺companion docs; soft anti-accumulation guard (STATE.md > 80 lines or a section outside the canon → "durable content living in the state file"). `--board` and `--state <id>` views with task counts, `--json` available. **`--stamp --staged`**: sets `updated = today` on staged STATE.md files + re-stages — **to be wired at PRE-COMMIT**.
+- **`feature-map-check.py`** — integrity of the **Feature** channel (one file per entry `features/<slug>.md` + `FEATURE_MAP.md` as index): file↔index concordance, channel frontmatter (`entrylib`), core body keys (one `**Role` line, ≥ 1 code path, ≥ 1 durable reference), existence of cited `D-*` ids, no transient reference (`backlog/`), freshness (`updated` vs. the last commit of cited paths) and granularity as a **soft** signal. Dead-path delegated to `doc-refs-check.py`. `--stamp --staged` on `updated`.
+- **`decisions-check.py`** — integrity of the **Decision** channel: `D-*.md` files ↔ `INDEX.md` lines concordance (D1/D2), channel frontmatter via `entrylib` (D3), canonical body sections (D4), `status` ⟺ Active/Archived section (D5), sound `replaces`/`replaced-by` revocation graph — reciprocity, no cycle (D6), resolved cross-links (D7).
+- **`memory-check.py`** — integrity of the **Memory** channel: one fact per file + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index. All the logic lives in `entrylib` (channel frontmatter, file↔index concordance, cross-links); `source: external:` without `confidence` → blocking; `confidence: unverified` or `verified` without `ratified` → tier 2 candidate. `--stamp --staged` on `updated`. Follows `TEMPLATE.md` to the letter.
+- **`decisions-audit.py`** — orchestrator for **decisions-journal audits** ("Volume" trigger when the INDEX swells — the only channel that accumulates enough to justify it). `--tier1` chains `decisions-check`/`backlog-check`/`doc-refs-check`/`index-check`; `--plan` splits `decisions/INDEX.md` into balanced batches (offset/limit) to hand a slice to each reviewer; `--merge` aggregates review outputs **with a coverage check** (each decision audited exactly once). Tier 1 (mechanical); tier 2 (judgment: memory↔code drift, redundancy, conflict) follows the review **rubric** in `decisions-audit.md`.
+- **`memory-audit.py`** — **multi-channel** orchestrator (Feature + Decision + Memory): `--tier1` chains `feature-map-check` + `decisions-audit --tier1` + `memory-check`, summarizes per channel. No `--plan`/`--merge` of its own — delegated to `decisions-audit.py` for its only channel that needs one. Tier 2 (judgment, all 3 channels): rubric in `memory-audit.md`.
+- **`doc-refs-check.py`** — **dead references** in the docs: a file path cited in a `.md` that doesn't/no longer exists. Firm zero-FP tier (git heuristic: existed then vanished → blocking; never created → to-confirm). *Semantic* drift stays with review.
+- **`index-check.py`** — **per-file index integrity** (`manifest.tsv` ↔ actual repo files). The **project** defines roots + extensions in `index/index-config.json` (at install time); without config, inactive. See `../index/INDEX.md`. <!-- template -->
 
-Code retour ≠ 0 si dérive → exploitables en gate. Lancer à la main :
+Exit code ≠ 0 on drift → usable as a gate. Run by hand:
 
 ```bash
 python3 checks/backlog-check.py
@@ -25,97 +25,97 @@ python3 checks/feature-map-check.py
 python3 checks/decisions-check.py
 python3 checks/memory-check.py
 python3 checks/doc-refs-check.py
-python3 checks/index-check.py             # nécessite index/index-config.json
-python3 checks/decisions-audit.py         # tier1 décisions + plan d'audit du journal
-python3 checks/memory-audit.py            # tier1 multi-canal (feature + décisions + mémoire)
+python3 checks/index-check.py             # requires index/index-config.json
+python3 checks/decisions-audit.py         # decisions tier1 + journal audit plan
+python3 checks/memory-audit.py            # multi-channel tier1 (feature + decisions + memory)
 ```
 
-## À câbler — tourner automatiquement
+## To wire — running automatically
 
-**Deux natures, deux régimes.** Le structurel (ces scripts) est bon marché et se branche pour tourner souvent ; le sémantique (l'audit `memory-audit`, étage 2) coûte un agent et **ne se hooke pas**.
+**Two natures, two regimes.** The structural (these scripts) is cheap and gets wired to run often; the semantic (the `memory-audit` audit, tier 2) costs an agent and **doesn't get hooked**.
 
-**Structurel — déterministe, hookable :**
-- **Claude Code** : `SessionStart` (dérive post-merge / inter-session — démarrer propre) et/ou `Stop` (fin de tour).
-- **CI** : un job qui échoue si un check sort ≠ 0.
-- **Sinon** : à la main avant de clôturer un chantier.
+**Structural — deterministic, hookable:**
+- **Claude Code**: `SessionStart` (post-merge / inter-session drift — start clean) and/or `Stop` (end of turn).
+- **CI**: a job that fails if a check exits ≠ 0.
+- **Otherwise**: by hand before closing a work item.
 
-> **Règle du silence — sinon ça coûte cher.** La sortie d'un hook `SessionStart` est **injectée dans le contexte** = des tokens, payés toute la session. Un hook de check doit donc être **MUET sur succès** (rien imprimé → 0 token) et n'émettre qu'**une ligne terse par dérive**. Keyer sur le **code retour** ou un **marqueur ASCII** (pas de parsing d'en-têtes localisés/accentués — fragile selon la locale), jamais déverser le rapport complet.
+> **The silence rule — otherwise it gets expensive.** A `SessionStart` hook's output is **injected into the context** = tokens, paid for the whole session. A check hook must therefore be **silent on success** (nothing printed → 0 tokens) and emit only **one terse line per drift**. Key off the **exit code** or an **ASCII marker** (not parsing localized/accented headers — fragile across locales), never dump the full report.
 >
 > ```sh
-> # sweep structurel muet + rapport en attente (SessionStart) — squelette agnostique
+> # silent structural sweep + pending report (SessionStart) — agnostic skeleton
 > PY=$(command -v python3 || command -v python); [ -z "$PY" ] && exit 0
 > lines=""
-> "$PY" checks/decisions-check.py >/dev/null 2>&1 || lines="${lines}• décisions: dérive\n"
-> "$PY" checks/backlog-check.py   >/dev/null 2>&1; [ $? -eq 2 ] && lines="${lines}• backlog: erreur\n"
-> "$PY" checks/doc-refs-check.py 2>/dev/null | grep -q BLOQUANT && lines="${lines}• doc: réf morte\n"
-> [ -n "$lines" ] && printf "⚠️ dérive structurelle au démarrage :\n%b" "$lines"
-> # rapport d'audit en attente (produit hors session par le cron OS, cf. §Sémantique) → l'agent DEMANDE
+> "$PY" checks/decisions-check.py >/dev/null 2>&1 || lines="${lines}• decisions: drift\n"
+> "$PY" checks/backlog-check.py   >/dev/null 2>&1; [ $? -eq 2 ] && lines="${lines}• backlog: error\n"
+> "$PY" checks/doc-refs-check.py 2>/dev/null | grep -q BLOCKING && lines="${lines}• doc: dead ref\n"
+> [ -n "$lines" ] && printf "⚠️ structural drift at startup:\n%b" "$lines"
+> # pending audit report (produced outside the session by the OS cron, see §Semantic) → the agent ASKS
 > REPORT="${YAMS_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
-> [ -f "$REPORT" ] && printf "📋 rapport mémoire en attente: %s — DEMANDER à l'utilisateur de le traiter, puis le supprimer.\n" "$REPORT"
-> exit 0          # MUET si ni dérive ni rapport → 0 token injecté
+> [ -f "$REPORT" ] && printf "📋 pending memory report: %s — ASK the user whether to process it, then delete it.\n" "$REPORT"
+> exit 0          # SILENT if neither drift nor report → 0 tokens injected
 > ```
 >
-> Ce sweep est le **consommateur** de la boucle ; le **producteur** est `decisions-audit.py --report` lancé par le cron OS (§Sémantique) — le canal Décision est le seul dont le volume justifie ce rapport programmé. Producteur déterministe (sans LLM, hors session) + consommateur muet (surface, l'humain décide) = audit pendant l'absence **sans** dépense LLM autonome.
+> This sweep is the **consumer** of the loop; the **producer** is `decisions-audit.py --report` run by the OS cron (§Semantic) — the Decision channel is the only one whose volume justifies this scheduled report. Deterministic producer (no LLM, outside the session) + silent consumer (surfaces, the human decides) = audit while away **without** autonomous LLM spend.
 
-> **Câblage `Stop` — le rappel détaillé, PAR check (gated exit code).** Second patron
-> read-only, distinct du sweep `SessionStart` : au lieu d'agréger plusieurs checks en une
-> ligne globale, **un hook par check**, déclenché en fin de tour, qui se tait sur code
-> retour propre et sinon relaie le rapport **du check lui-même** + la commande de
-> correctif à lancer. Plus verbeux que le sweep `SessionStart`, donc réservé à la fin de
-> session (pas à chaque tour ni à chaque outil) — c'est le dernier geste avant de clore,
-> quand le coût de laisser dériver est le plus élevé.
+> **`Stop` wiring — the detailed reminder, PER check (gated exit code).** Second read-only
+> pattern, distinct from the `SessionStart` sweep: instead of aggregating several checks into one
+> global line, **one hook per check**, fired at end of turn, that stays silent on a clean exit
+> code and otherwise relays the check's **own report** + the fix command to
+> run. More verbose than the `SessionStart` sweep, so reserved for end of
+> session (not every turn or every tool) — it's the last gesture before closing,
+> when the cost of letting things drift is highest.
 >
 > ```sh
-> # Stop, un hook par check — squelette agnostique (ex. pour index-check.py)
+> # Stop, one hook per check — agnostic skeleton (e.g. for index-check.py)
 > PY=$(command -v python3 || command -v python); [ -z "$PY" ] && exit 0
 > report=$("$PY" checks/index-check.py 2>&1); code=$?
-> [ "$code" -eq 0 ] && exit 0   # muet sur état propre
-> printf '[index-check] dérive — %s\nCorrige avant de clore, ou relance `python3 checks/index-check.py`.\n' "$report"
-> exit 0   # jamais bloquant — informe seulement
+> [ "$code" -eq 0 ] && exit 0   # silent on a clean state
+> printf '[index-check] drift — %s\nFix before closing, or rerun `python3 checks/index-check.py`.\n' "$report"
+> exit 0   # never blocking — informs only
 > ```
 >
-> Implémentation embarquée : `adapters/claude-code/hooks/stop-check.sh` — même patron, paramétré
-> par le nom du check en argument (ex. `stop-check.sh index-check`, `stop-check.sh backlog-check`).
-> Généralisable à tout check de ce dossier : un hook `Stop` de plus par check qu'on veut voir
-> rappelé en détail avant la fin de session, au-delà de la ligne globale du sweep `SessionStart`.
+> Embedded implementation: `adapters/claude-code/hooks/stop-check.sh` — same pattern,
+> parameterized by the check name as an argument (e.g. `stop-check.sh index-check`, `stop-check.sh backlog-check`).
+> Generalizable to any check in this folder: one more `Stop` hook per check you want
+> recalled in detail before end of session, on top of the `SessionStart` sweep's global line.
 
-> **Câblage pré-commit — le cas MUTANT (`--stamp`).** Un seul check de ce dossier ne se
-> contente pas de signaler : `backlog-check.py --stamp --staged` **écrit** (date de
-> fraîcheur `maj`) puis **re-stage**, AVANT que `git commit` ne s'exécute — la date du
-> frontmatter devient mécaniquement la date du commit, sans bump manuel qui pourrit.
-> Trois garde-fous qui en font une mutation sûre (pas une correction sémantique
-> déguisée) : (1) scope **strictement stagé** (`--staged`) — ne tire jamais un fichier
-> hors du commit en cours ; (2) le champ touché est **mécanique** (une date), jamais un
-> jugement ; (3) **jamais bloquant** — si l'écriture échoue, le commit part quand même,
-> non tamponné, à corriger au tour suivant.
+> **Pre-commit wiring — the MUTANT case (`--stamp`).** Only one check in this folder
+> doesn't just report: `backlog-check.py --stamp --staged` **writes** (freshness
+> date `updated`) then **re-stages**, BEFORE `git commit` runs — the frontmatter
+> date mechanically becomes the commit date, without a manual bump that rots.
+> Three safeguards that make this a safe mutation (not a disguised semantic
+> fix): (1) **strictly staged** scope (`--staged`) — never pulls a file
+> outside the current commit; (2) the touched field is **mechanical** (a date), never a
+> judgment; (3) **never blocking** — if the write fails, the commit still goes through,
+> unstamped, to be fixed next turn.
 >
 > ```sh
-> # PreToolUse(Bash), matcher "git commit*", AVANT l'exécution de la commande
+> # PreToolUse(Bash), matcher "git commit*", BEFORE the command runs
 > PY=$(command -v python3 || command -v python); [ -z "$PY" ] && exit 0
 > "$PY" checks/backlog-check.py --stamp --staged >/dev/null 2>&1
-> exit 0   # ne bloque jamais — la correction est silencieuse, git commit voit le stamp
+> exit 0   # never blocks — the fix is silent, git commit sees the stamp
 > ```
 >
-> Implémentation embarquée : `adapters/claude-code/hooks/pre-commit-stamp.sh`.
-> Généralisable à tout check qui gagnerait un mode `--stamp` sur un champ mécanique
-> similaire (ex. une date de fraîcheur équivalente ailleurs) — même triple garde-fou.
+> Embedded implementation: `adapters/claude-code/hooks/pre-commit-stamp.sh`.
+> Generalizable to any check that would gain a `--stamp` mode on a similar
+> mechanical field (e.g. an equivalent freshness date elsewhere) — same triple safeguard.
 
-**Sémantique — agent, mémoire↔code :** l'audit `memory-audit` (étage 2, les 3 canaux) **n'est pas un hook** — il exige un jugement *retrieve-then-verify* et ne peut pas tourner muet à chaque session. Son régime : **déclencheur Volume** (côté Décision, le seul canal qui gonfle assez pour ça), **ou planifié**, **ou à la demande**. Pour le planifié *pendant l'absence*, la boucle rapport (cf. `INSTALL.md` étape 5) : un **cron OS** lance `decisions-audit.py --report` → écrit un rapport **déterministe** (étage 1, **sans LLM**, 0 token) dans `$YAMS_MEMORY_REPORT_DIR` (défaut `.memory-reports/`, **à gitignorer**) ; le sweep `SessionStart` ci-dessus le **détecte et le surface** ; l'agent **demande**, l'utilisateur **décide** de réveiller l'étage 2 (LLM, à la demande — `memory-audit.py --tier1` d'abord si les canaux Feature/Mémoire sont aussi en doute). Dans tous les cas il **signale** ; l'élagage reste **ratifié par un humain** — un cron ne corrige jamais seul.
+**Semantic — agent, memory↔code:** the `memory-audit` audit (tier 2, all 3 channels) **is not a hook** — it requires *retrieve-then-verify* judgment and can't run silently every session. Its regime: **Volume trigger** (on the Decision side, the only channel that swells enough for it), **or scheduled**, **or on demand**. For scheduled *while away*, the report loop (see `INSTALL.md` step 5): an **OS cron** runs `decisions-audit.py --report` → writes a **deterministic** report (tier 1, **no LLM**, 0 tokens) to `$YAMS_MEMORY_REPORT_DIR` (default `.memory-reports/`, **to be gitignored**); the `SessionStart` sweep above **detects and surfaces** it; the agent **asks**, the user **decides** whether to wake up tier 2 (LLM, on demand — `memory-audit.py --tier1` first if the Feature/Memory channels are also in doubt). In every case it **reports**; pruning stays **ratified by a human** — a cron never fixes anything on its own.
 
-## Le projet apporte les SIENS
+## The project brings its OWN
 
-Les contrôles de **code** (lint, tests, analyzers, standards de style) sont **tech-spécifiques** → c'est le **projet** qui les amène et les câble, ainsi que la **revue sémantique** (sa skill de review). Ici, on ne fournit que les contrôles de **méthode**.
+**Code** checks (lint, tests, analyzers, style standards) are **tech-specific** → the **project** brings and wires them, along with the **semantic review** (its own review skill). Here, we only provide **method** checks.
 
-## Universels — sécurité + navigation (fournis)
+## Universal — security + navigation (provided)
 
-**Sécurité — FOURNIE** dans `../hooks/` (gardes portables) : `poisoning-scan` (Unicode
-invisible/bidi), `secret-scan` (clés/jetons), `destructive-guard` (commandes larges). À câbler au
-bon déclencheur — table par outil dans `../hooks/README.md`.
+**Security — PROVIDED** in `../hooks/` (portable guards): `poisoning-scan` (invisible/bidi
+Unicode), `secret-scan` (keys/tokens), `destructive-guard` (broad commands). To be wired at the
+right trigger — per-tool table in `../hooks/README.md`.
 
 <!-- template -->
-**Navigation / fraîcheur doc — FOURNIE** ici : `doc-refs-check.py` (références mortes) et
-`index-check.py` (intégrité de l'index par-fichier — le projet définit racines+extensions dans
+**Navigation / doc freshness — PROVIDED** here: `doc-refs-check.py` (dead references) and
+`index-check.py` (per-file index integrity — the project defines roots+extensions in
 `index/index-config.json`).
 <!-- /template -->
-Un projet adoptant garde la liberté d'avoir ses propres `manifest.py` / `doc-audit.py`, plus
-riches et câblés sur son arborescence réelle — voir `SCRIPTS.md §Attention à l'homonymie`.
+An adopting project keeps the freedom to have its own `manifest.py` / `doc-audit.py`, richer and
+wired to its actual tree — see `SCRIPTS.md §Watch for homonyms`.

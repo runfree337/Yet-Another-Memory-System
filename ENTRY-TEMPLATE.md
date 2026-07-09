@@ -1,30 +1,30 @@
-# Gabarit d'une entrée mémoire — comment en écrire une nouvelle
+# Memory entry template — how to write a new one
 
-> **Pour qui.** Ce fichier ne fournit **pas** une mémoire — c'est le **méta-schéma** que suit
-> chaque entrée des canaux mémoire de ce framework (`WORKFLOW.md §Les trois mémoires`), au même
-> titre que `checks/TEMPLATE.md` normalise la forme d'un **check**. Écrire une nouvelle entrée
-> sans repartir de ce gabarit, c'est redécouvrir à la main un choix déjà tranché de façon
-> identique dans chaque canal.
+> **Who this is for.** This file does not provide a memory entry itself — it's the **meta-schema**
+> that every entry in this framework's memory channels follows (`WORKFLOW.md §The three
+> memories`), the same way `checks/TEMPLATE.md` normalizes the shape of a **check**. Writing a
+> new entry without starting from this template means re-discovering by hand a choice already
+> settled identically in every other channel.
 >
-> **Bibliothèque associée :** `checks/entrylib.py` — parseur de frontmatter + validation du
-> schéma commun, importée par les checks de canal (`memory-check.py`, `decisions-check.py`,
-> `feature-map-check.py`, `backlog-check.py`). Un seul endroit définit ce qu'est une entrée
-> mémoire valide ; ce fichier documente ce que cet endroit applique.
+> **Companion library:** `checks/entrylib.py` — frontmatter parser + common-schema validation,
+> imported by every per-channel check (`memory-check.py`, `decisions-check.py`,
+> `feature-map-check.py`, `backlog-check.py`). One single place defines what a valid memory
+> entry is; this file documents what that place enforces.
 
-## Le principe
+## The principle
 
-Toute entrée mémoire = **un fichier + une ligne d'index**, écrits au même moment :
+Every memory entry = **one file + one index line**, written at the same time:
 
-- Le **fichier** ouvre par un **frontmatter commun** (ci-dessous), suivi d'un **corps en prose
-  libre**, propre au canal — le gabarit ne contraint pas le corps, seulement le frontmatter.
-- La **ligne d'index** est uniforme entre canaux :
+- The **file** opens with a **common frontmatter** (below), followed by a **free-prose body**
+  specific to the channel — the template doesn't constrain the body, only the frontmatter.
+- The **index line** is uniform across channels:
   ```
-  - [<id>](<chemin>) — <résumé ≤ 1 ligne>
+  - [<id>](<path>) — <summary ≤ 1 line>
   ```
-  Un id, un lien vers le fichier, un résumé qui tient sur une ligne — jamais le détail dupliqué
-  dans l'index (le détail vit dans le fichier, l'index ne fait que pointer).
+  An id, a link to the file, a summary that fits on one line — never the detail duplicated
+  in the index (the detail lives in the file, the index only points to it).
 
-## Le frontmatter commun
+## The common frontmatter
 
 ```
 ---
@@ -38,52 +38,54 @@ ratified: raphael, 2026-07-09
 ---
 ```
 
-| Clé | Sens |
+| Key | Meaning |
 |---|---|
-| `id` | Identifiant stable, greppable — sert de clé de concordance fichier↔index (`checks/entrylib.py::check_index_concordance`). Ne change jamais après création. |
-| `status` | Valeurs **propres au canal** (voir table d'instanciation ci-dessous) — absent des canaux Mémoire et Feature, présent (obligatoire) pour Décision et Backlog. |
-| `source` | `inferred \| human \| external:<réf>` — d'où vient l'entrée. Toute source `external:` porte obligatoirement `confidence` (sinon `R-EXT-NO-CONF`, bloquant). |
-| `confidence` | `verified \| unverified` — si un humain l'a ratifiée ou non. Gouverne la promotion (voir cycle de vie ci-dessous). |
-| `created` | AAAA-MM-JJ, date de création — écrite une fois, jamais retouchée. |
-| `updated` | AAAA-MM-JJ, **stampée mécaniquement** (`checks/entrylib.py::stamp_updated`, ou l'équivalent `--stamp` d'un check de canal) — jamais bumpée à la main. |
-| `links` | `[<ids ou chemins>]` — références croisées inter-canaux (ex. une fiche Feature qui pointe une décision `D-AAAA-MM-JJ-NN`). |
-| `ratified` | `<qui>, <AAAA-MM-JJ>` — **requis** pour passer `confidence: verified` (traçabilité de la ratification humaine). Absent sur une entrée `verified` = à-confirmer, pas bloquant (`R-VERIFIED-NOT-RATIFIED`). |
+| `id` | Stable, greppable identifier — serves as the file↔index concordance key (`checks/entrylib.py::check_index_concordance`). Never changes after creation. |
+| `status` | Values are **channel-specific** (see the instantiation table below) — absent from the Memory and Feature channels, present (mandatory) for Decision and Backlog. |
+| `source` | `inferred \| human \| external:<ref>` — where the entry comes from. Any `external:` source mandatorily carries a `confidence` (otherwise `R-EXT-NO-CONF`, blocking). |
+| `confidence` | `verified \| unverified` — whether a human has ratified it or not. Governs promotion (see lifecycle below). |
+| `created` | YYYY-MM-DD, creation date — written once, never touched again. |
+| `updated` | YYYY-MM-DD, **stamped mechanically** (`checks/entrylib.py::stamp_updated`, or a per-channel check's equivalent `--stamp`) — never bumped by hand. |
+| `links` | `[<ids or paths>]` — cross-channel references (e.g. a Feature entry pointing to a decision `D-YYYY-MM-DD-NN`). |
+| `ratified` | `<who>, <YYYY-MM-DD>` — **required** to move to `confidence: verified` (traceability of human ratification). Missing on a `verified` entry = to-confirm, not blocking (`R-VERIFIED-NOT-RATIFIED`). |
 
-Ces clés et leurs valeurs sont volontairement en **anglais** (voir §Note en bas de page) ; le
-**corps** de l'entrée, lui, reste dans la langue de l'équipe.
+These keys and their values are deliberately in **English** (see §Note at the bottom); the
+entry's **body**, on the other hand, stays in the team's own language.
 
-## Instanciation par canal
+## Instantiation per channel
 
-Chaque canal **détaille ses propres règles** dans son README (`MEMORY.md`, `decisions/README.md`,
-`FEATURE_MAP.md`, `backlog/README.md`) — la table ci-dessous ne fait que situer l'instance :
+Each channel **details its own rules** in its README (`MEMORY.md`, `decisions/README.md`,
+`FEATURE_MAP.md`, `backlog/README.md`) — the table below only locates the instance:
 
 <!-- template -->
 
-| Canal | Fichier d'entrée | Index | Clés propres | Notes |
+| Channel | Entry file | Index | Channel-specific keys | Notes |
 |---|---|---|---|---|
-| **Mémoire** | `memory/<slug>.md` | `MEMORY.md` | *(aucune — le frontmatter commun suffit)* | Pas de `status` obligatoire. |
-| **Décision** | `decisions/D-AAAA-MM-JJ-NN.md` | `decisions/INDEX.md` | `status: active \| revoked \| archived`, `replaces: [ids]`, `replaced-by: <id>` | `status` obligatoire ; la révocation/l'archivage est une **transition de `status` + liens**, vérifiable — plus une pure discipline de prose. |
-| **Feature** | `features/<slug>.md` | `FEATURE_MAP.md` | *(aucune — le frontmatter commun suffit)* | Pas de `status` obligatoire ; le corps garde ses rubriques propres (Rôle/Code/Doc/Tests/Motif d'ajout). |
-| **Backlog** | `backlog/<id>/STATE.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [chemins]` | **Transitoire** (le *todo*), pas une mémoire — mais suit le **même format d'entrée**. Les tâches de la rubrique `## Tasks` du corps portent leur propre sous-état `todo \| in-progress \| blocked \| done`, distinct du `status` du chantier lui-même. |
+| **Memory** | `memory/<slug>.md` | `MEMORY.md` | *(none — the common frontmatter is enough)* | No mandatory `status`. |
+| **Decision** | `decisions/D-YYYY-MM-DD-NN.md` | `decisions/INDEX.md` | `status: active \| revoked \| archived`, `replaces: [ids]`, `replaced-by: <id>` | `status` mandatory; revocation/archival is a **`status` + links transition**, verifiable — more than a pure prose discipline. |
+| **Feature** | `features/<slug>.md` | `FEATURE_MAP.md` | *(none — the common frontmatter is enough)* | No mandatory `status`; the body keeps its own sections (Role/Code/Doc/Tests/How to add one). |
+| **Backlog** | `backlog/<id>/STATE.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [paths]` | **Transient** (the *todo*), not a memory entry — but follows the **same entry format**. Tasks under the body's `## Tasks` section carry their own sub-state `todo \| in-progress \| blocked \| done`, distinct from the work item's own `status`. |
 
 <!-- /template -->
 
-## Cycle de vie de la confiance
+## Confidence lifecycle
 
-- **`unverified → verified`** exige `ratified: <qui>, <AAAA-MM-JJ>` dans le frontmatter — l'IA
-  **propose** la promotion (le diff de frontmatter), l'humain **ratifie** (pose `ratified`).
-  Jamais d'auto-promotion : une entrée qui passe `verified` sans `ratified` associé est signalée
-  (`R-VERIFIED-NOT-RATIFIED`, à-confirmer), pas bloquée — mais reste une créance non soldée.
-- **La sortie** (`verified` → retrait ou révocation) passe par la **revue sémantique** (étage 2,
-  cf. `checks/memory-audit.md` / `checks/decisions-audit.md`) **+ décision utilisateur**, et est
-  **journalisée** (référence au successeur + raison + historique git) — jamais silencieuse.
-- Le fond de la règle (provenance, empoisonnement, résolution de conflit entre deux mémoires)
-  est posé une fois pour toutes dans `MEMORY.md §Provenance & confiance` — ce fichier n'en donne
-  que la mécanique de frontmatter.
+- **`unverified → verified`** requires `ratified: <who>, <YYYY-MM-DD>` in the frontmatter — the
+  AI **proposes** the promotion (the frontmatter diff), the human **ratifies** it (sets
+  `ratified`). Never auto-promotion: an entry that moves to `verified` without a matching
+  `ratified` is flagged (`R-VERIFIED-NOT-RATIFIED`, to-confirm), not blocked — but stays an
+  outstanding debt.
+- **Exit** (`verified` → removal or revocation) goes through **semantic review** (tier 2,
+  cf. `checks/memory-audit.md` / `checks/decisions-audit.md`) **+ a user decision**, and is
+  **logged** (reference to the successor + reason + git history) — never silent.
+- The substance of the rule (source, poisoning, conflict resolution between two memory entries)
+  is settled once and for all in `MEMORY.md §Provenance & confidence` — this file only gives
+  the frontmatter mechanics.
 
-## Note — vocabulaire anglais par conception
+## Note — English vocabulary by design
 
-Les **clés et valeurs de frontmatter** sont une API machine (parsées par `checks/entrylib.py`,
-grep-ées par les checks et les agents) : elles sont en **anglais dès maintenant**, sans attendre
-la traduction générale du framework (`PLAN.md` étape 3, qui portera sur la **prose**). La **prose
-du corps** d'une entrée, elle, reste dans la langue de l'équipe — ce gabarit ne la contraint pas.
+The **frontmatter keys and values** are a machine API (parsed by `checks/entrylib.py`,
+grepped by the checks and the agents): they are in **English from the start**, without waiting
+for the framework's general translation (`PLAN.md` step 3, which covers the **prose**). The
+**body prose** of an entry, on the other hand, stays in the team's own language — this template
+doesn't constrain it.

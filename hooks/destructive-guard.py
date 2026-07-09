@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""Garde des commandes destructrices (universelle, portable).
+"""Destructive command guard (universal, portable).
 
-Sort de l'auto-autorisation les commandes shell à effet de bord large et difficilement
-réversible — `find … -delete` et `find … -exec rm …`. Volontairement **étroit** (zéro
-faux positif sur un `rm` normal) : on demande confirmation, on ne bloque pas par défaut.
+Takes broad, hard-to-reverse shell commands out of auto-approval — `find … -delete` and
+`find … -exec rm …`. Deliberately **narrow** (zero false positive on a normal `rm`): asks
+for confirmation, doesn't block by default.
 
-Portable (stdlib seule). Un **installeur** la câble : Claude Code (`PreToolUse` sur `Bash`
-→ décision « ask »), Git (`pre-commit` d'un script), CI.
+Portable (stdlib only). An **installer** wires it in: Claude Code (`PreToolUse` on `Bash`
+-> "ask" decision), Git (`pre-commit` script), CI.
 
-Modes :
-  destructive-guard.py --command "find . -delete"   teste une commande
-  destructive-guard.py --stdin-json                 adaptateur Claude Code (décision « ask »)
+Modes:
+  destructive-guard.py --command "find . -delete"   tests a command
+  destructive-guard.py --stdin-json                 Claude Code adapter (decision "ask")
 
-Sans --stdin-json : exit 2 si la commande est destructrice (BLOQUER en non-interactif),
-0 sinon. Avec --stdin-json : émet une décision « ask » sur stdout et exit 0.
+Without --stdin-json: exit 2 if the command is destructive (BLOCK non-interactively),
+0 otherwise. With --stdin-json: emits an "ask" decision on stdout and exits 0.
 """
 import argparse
 import json
 import re
 import sys
 
-# `-delete` précédé d'un espace/début (pas `--delete` façon `git branch --delete`),
-# ou `-exec … rm`.
+# `-delete` preceded by a space/start (not `--delete` like `git branch --delete`), or
+# `-exec … rm`.
 DESTRUCTIVE = (re.compile(r"(?<![-\w])-delete\b"), re.compile(r"-exec\s+rm\b"))
-REASON = "Commande potentiellement destructive (find -delete / -exec rm) — confirmation requise."
+REASON = "Potentially destructive command (find -delete / -exec rm) — confirmation required."
 
 
 def is_destructive(cmd):
@@ -31,9 +31,9 @@ def is_destructive(cmd):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Garde des commandes destructrices (portable).")
+    ap = argparse.ArgumentParser(description="Destructive command guard (portable).")
     ap.add_argument("--command", default="")
-    ap.add_argument("--stdin-json", action="store_true", help="adaptateur Claude Code")
+    ap.add_argument("--stdin-json", action="store_true", help="Claude Code adapter")
     a = ap.parse_args()
 
     if a.stdin_json:
@@ -52,7 +52,7 @@ def main():
         return 0
 
     if is_destructive(a.command):
-        print(f"BLOQUÉ (non-interactif) : {REASON}", file=sys.stderr)
+        print(f"BLOCKED (non-interactive): {REASON}", file=sys.stderr)
         return 2
     return 0
 

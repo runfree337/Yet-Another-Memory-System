@@ -1,89 +1,90 @@
-# Audit du journal de décisions — recette + barème (deux niveaux)
+# Decisions journal audit — recipe + rubric (two levels)
 
-> Le **script** `decisions-audit.py` (étage 1, mécanique) ne *juge* pas. Ce document porte la
-> **recette d'orchestration** et le **barème de revue** (étage 2, sémantique) — la part qu'aucun
-> script ne peut trancher. Tout est **agnostique** : chaque outil l'emballe à sa façon (voir
-> « Emballage par outil »).
+> The `decisions-audit.py` **script** (tier 1, mechanical) does not *judge*. This document
+> carries the **orchestration recipe** and the **review rubric** (tier 2, semantic) — the
+> part no script can settle. Everything is **agnostic**: each tool packages it its own way (see
+> "Packaging per tool").
 >
-> *Équivalent, en format Claude Code, du couple skill `decisions-audit` + subagent
-> `decisions-auditor`.* Portée = le journal de décisions uniquement. Pour l'audit multi-canal
-> (feature + décision + préférences), voir `memory-audit.md`, qui délègue son volet décisions
-> à cette recette.
+> *Equivalent, in Claude Code format, to the `decisions-audit` skill + `decisions-auditor`
+> subagent pair.* Scope = the decisions journal only. For the multi-channel audit
+> (feature + decision + preferences), see `memory-audit.md`, which delegates its decisions
+> part to this recipe.
 
-## Quand
+## When
 
-Déclencheur **« Volume »** du modèle de pruning (`../decisions/README.md`) : l'INDEX des décisions
-gonfle (proxy : il approche ~2× l'effectif actif), ou après une fusion de branches, ou sur demande.
-**Jamais par âge / TTL seul** (« pas utilisé » ≠ « inutile »).
+**"Volume"** trigger of the pruning model (`../decisions/README.md`): the decisions INDEX
+swells (proxy: it approaches ~2× the active count), or after a branch merge, or on demand.
+**Never by age / TTL alone** ("not used" ≠ "useless").
 
-## Le flux
+## The flow
 
-1. **Intégrité + plan** (mécanique) : `python3 checks/decisions-audit.py` → enchaîne les contrôles
-   d'intégrité (`--tier1`) puis **découpe l'INDEX en lots équilibrés** (`--plan` : offset/limit/ids
-   par lot). Supprime le découpage manuel.
-2. **Revue par lot** (sémantique) : **un reviewer par lot** applique le barème ci-dessous — recoupe
-   chaque décision avec le **code réel** (retrieve-then-verify), sort le format strict.
-3. **Agrégation** : `python3 checks/decisions-audit.py --merge <sorties…>` → rapport classé +
-   **contrôle de couverture** (chaque décision auditée **exactement une fois** — rien sauté en silence).
+1. **Integrity + plan** (mechanical): `python3 checks/decisions-audit.py` → chains the integrity
+   checks (`--tier1`) then **splits the INDEX into balanced batches** (`--plan`: offset/limit/ids
+   per batch). Removes the need for manual splitting.
+2. **Batch review** (semantic): **one reviewer per batch** applies the rubric below — recoups
+   each decision against the **real code** (retrieve-then-verify), outputs the strict format.
+3. **Aggregation**: `python3 checks/decisions-audit.py --merge <outputs…>` → classified report +
+   **coverage check** (each decision audited **exactly once** — nothing silently skipped).
 
-## Le barème (étage 2)
+## The rubric (tier 2)
 
-Pour chaque décision : recouper avec le dépôt (**jamais conclure sans preuve grep/lecture**), puis
-classer — n'émettre **que** les entrées à problème :
+For every decision: recoup against the repo (**never conclude without grep/read proof**), then
+classify — emit **only** the problem entries:
 
-| Verdict | Condition | Preuve |
+| Verdict | Condition | Proof |
 |---|---|---|
-| `ARCHIVER-1` | sujet code **disparu** du dépôt | `grep vide: <terme>` |
-| `ARCHIVER-4` | entrée révoquée/remplacée dont l'invariant vit **entièrement** dans le successeur | l'id successeur |
-| `REDONDANTE` | invariant **déjà porté** par une autorité vivante (test, doc d'archi, fiche feature) | la référence |
-| `DRIFT-CODE` | la décision dit X, le **code fait Y** — **l'utilisateur tranche**, aucun correctif proposé | la divergence |
-| `CONFLIT` | contredit une autre décision **sans** lien de révocation | l'autre id |
-| `DOUTE` | suspect, non concluant | la raison |
+| `ARCHIVE-1` | the code subject has **vanished** from the repo | `empty grep: <term>` |
+| `ARCHIVE-4` | revoked/replaced entry whose invariant lives **entirely** in the successor | the successor id |
+| `REDUNDANT` | invariant **already carried** by a living authority (test, architecture doc, feature entry) | the reference |
+| `CODE-DRIFT` | the decision says X, the **code does Y** — **the user decides**, no fix proposed | the divergence |
+| `CONFLICT` | contradicts another decision **without** a revocation link | the other id |
+| `DOUBT` | suspect, inconclusive | the reason |
 
-**`ARCHIVER-4` se pré-filtre désormais mécaniquement.** Depuis le frontmatter (`decisions/README.md
-§4-5`), une entrée `status: revoked` avec un `replaced-by:` qui résout vers un id **encore
-indexé** est déjà **prouvée** — `checks/decisions-check.py` (règle `D6`) vérifie la cible,
-la réciprocité `replaces`, l'absence de cycle. Le reviewer étage 2 **ne rejuge pas** cette
-part-là : il ne sort `ARCHIVER-4` que pour le résidu que la mécanique ne peut pas trancher —
-l'invariant vit-il **entièrement** dans le successeur, ou seulement en partie (auquel cas
-c'est `DOUTE`, pas `ARCHIVER-4`). Un `replaced-by` mort ou sans réciproque n'atteint même pas
-l'étage 2 : `decisions-check.py` le bloque avant.
+**`ARCHIVE-4` is now mechanically pre-filtered.** From the frontmatter (`decisions/README.md
+§4-5`), a `status: revoked` entry with a `replaced-by:` that resolves to an id **still
+indexed** is already **proven** — `checks/decisions-check.py` (rule `D6`) verifies the target,
+the `replaces` reciprocity, the absence of a cycle. The tier 2 reviewer **doesn't rejudge**
+this part: it only outputs `ARCHIVE-4` for the residue the mechanical check can't settle —
+does the invariant live **entirely** in the successor, or only partly (in which case
+it's `DOUBT`, not `ARCHIVE-4`). A dead or non-reciprocal `replaced-by` doesn't even reach
+tier 2: `decisions-check.py` blocks it before that.
 
-Le reviewer s'appuie sur le **frontmatter** pour situer chaque décision avant de juger — `status`
-dit où elle en est (`active`/`revoked`/`archived`), `updated` dit sa fraîcheur, `confidence`/
-`ratified` disent si elle a déjà été ratifiée. Ça ne change pas le fond du barème (toujours
-recouper avec le code), ça évite juste de rejuger ce que le frontmatter établit déjà.
+The reviewer relies on the **frontmatter** to place each decision before judging — `status`
+says where it stands (`active`/`revoked`/`archived`), `updated` says its freshness,
+`confidence`/`ratified` say whether it's already been ratified. This doesn't change the
+substance of the rubric (always recoup against the code), it just avoids rejudging what the
+frontmatter already establishes.
 
-**Discernement** (sinon : faux positifs) : une décision de **process** n'a jamais de « sujet
-disparu » ; une **suppression actée** (`grep` vide *conforme* à la décision) n'est pas un problème ;
-une archi **à bâtir** (spec) que le code n'a pas encore n'est pas un drift. Erre vers le signalement
-(`DOUTE` plutôt que silence), mais ne crie pas au loup.
+**Discernment** (otherwise: false positives): a **process** decision never has a "vanished
+subject"; an **enacted removal** (`grep` empty *in line with* the decision) is not a problem;
+architecture **yet to be built** (a spec) that the code doesn't have yet is not a drift. Err
+toward reporting (`DOUBT` rather than silence), but don't cry wolf.
 
-**Format de sortie** (l'agrégateur le lit) — une ligne par problème, rien avant :
+**Output format** (the aggregator reads it) — one line per problem, nothing before:
 
 ```
-D-AAAA-MM-JJ-NN | VERDICT | gist ≤8 mots | preuve | confiance:haute|moyenne|basse
+D-YYYY-MM-DD-NN | VERDICT | gist ≤8 words | proof | confidence:high|medium|low
 ```
 
-puis, en dernière ligne (sert au contrôle de couverture) : `GARDÉES: <n> — <ids sans problème>`.
+then, as the last line (used by the coverage check): `KEPT: <n> — <ids with no problem>`.
 
-## Garde-fou
+## Safeguard
 
-Le mécanisme **signale**. Aucun élagage (suppression, archivage, tombstone) ni alignement
-**code↔doc** n'est appliqué sans **ratification humaine** ; un `DRIFT-CODE` / `CONFLIT` se tranche
-par l'utilisateur ; tout élagage retenu reste **journalisé** (successeur + raison + historique).
+The mechanism **reports**. No pruning (deletion, archiving, tombstone) nor
+**code↔doc** alignment is applied without **human ratification**; a `CODE-DRIFT` / `CONFLICT` is
+settled by the user; any retained pruning stays **logged** (successor + reason + history).
 
-## Emballage par outil
+## Packaging per tool
 
-La recette est agnostique ; chaque outil la **package** à sa main (même logique que la table de
-`knowledge-capture.md`) :
+The recipe is agnostic; each tool **packages** it its own way (same logic as the
+`knowledge-capture.md` table):
 
-| | Le flux (recette) | Le barème (étage 2) |
+| | The flow (recipe) | The rubric (tier 2) |
 |---|---|---|
-| **Claude Code** | un **skill** (`decisions-audit`) | un **subagent** (`decisions-auditor`), un par lot |
-| **Copilot / autre** | une instruction / commande | un **prompt de revue** (system prompt) par lot |
-| **Tout outil** | le **script** `decisions-audit.py` est portable tel quel (Python, sans dépendance) | ce barème, inchangé |
+| **Claude Code** | a **skill** (`decisions-audit`) | a **subagent** (`decisions-auditor`), one per batch |
+| **Copilot / other** | an instruction / command | a **review prompt** (system prompt) per batch |
+| **Any tool** | the `decisions-audit.py` **script** is portable as-is (Python, no dependency) | this rubric, unchanged |
 
-Cette recette est la **définition canonique** ; des **installeurs par outil** (Claude Code, Copilot —
-à venir) la matérialiseront en artefacts concrets (skill, subagent, hook) sans la réécrire.
-Gabarit embarqué Claude Code : `adapters/claude-code/skills/decisions-audit.md`.
+This recipe is the **canonical definition**; **per-tool installers** (Claude Code, Copilot —
+to come) will materialize it into concrete artifacts (skill, subagent, hook) without rewriting it.
+Embedded Claude Code template: `adapters/claude-code/skills/decisions-audit.md`.

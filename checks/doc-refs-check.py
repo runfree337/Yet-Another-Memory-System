@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Références mortes dans la doc (universel, portable) — moitié MÉCANIQUE de la fraîcheur doc.
+"""Dead references in the docs (universal, portable) — MECHANICAL half of doc freshness.
 
-Attrape une référence de CHEMIN qui pointe vers du vide : un fichier cité dans un `.md` qui
-n'existe pas / plus. La dérive SÉMANTIQUE (la prose décrit-elle le vrai comportement ?) n'est
-pas mécanisable → revue du projet (étage 2).
+Catches a PATH reference that points to nothing: a file cited in a `.md` that does not
+exist / no longer exists. SEMANTIC drift (does the prose describe the real behavior?) is
+not mechanizable -> project review (tier 2).
 
-Zéro faux positif sur le tier ferme : on ne signale qu'un token clairement « chemin de fichier »
-(au moins un `/` + une extension), hors bloc de code clôturé, hors gabarit (`<…>`, `YYYY`,
-`AAAA`…), hors ligne portant un marqueur de négation/planifié (« supprimé », « à créer »,
-« à porter », « renommé », « → »…). Sévérité via git : un chemin/basename qui a un historique
-= a existé puis disparu → BLOQUANT ; sinon À-CONFIRMER (peut-être planifié, ou coquille).
+Zero false positive on the firm tier: only flags a token that is clearly a "file path"
+(at least one `/` + an extension), outside a closed code block, outside a template
+(`<…>`, `YYYY`, `AAAA`…), outside a line carrying a negation/planned marker ("deleted",
+"to create", "renamed"…). Severity via git: a path/basename with history = existed then
+disappeared -> BLOCKING; otherwise TO-CONFIRM (might be planned, or a typo).
 
-Modes : doc-refs-check.py [chemins.md…] | --staged | (défaut : les .md du framework)
-Exit 2 si ≥1 BLOQUANT, 1 si seulement À-CONFIRMER, 0 sinon. Lecture seule.
+Modes: doc-refs-check.py [paths.md…] | --staged | (default: the framework's .md files)
+Exit 2 if >=1 BLOCKING, 1 if only TO-CONFIRM, 0 otherwise. Read-only.
 """
 import argparse
 import os
@@ -20,24 +20,30 @@ import re
 import subprocess
 import sys
 
-FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # racine du framework
+FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # framework root
 PATH_RE = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
 TEMPLATE = re.compile(r"[<>{}*…]|YYYY|AAAA|XXXX|MM-|/\.\.\.")
+# Prose words that neutralize a path mention — both languages covered (docs may be
+# authored in either while the corpus is being translated; keep both sets, never drop
+# the French forms even once the English ones land).
 NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a porter",
        "renomm", "à venir", "a venir", "exemple", "example", "template", "gabarit",
-       "placeholder", "→", "->", "n'est pas", "plus tard", "déplacé", "deplace", "futur")
+       "placeholder", "→", "->", "n'est pas", "plus tard", "déplacé", "deplace", "futur",
+       "deleted", "removed", "to create", "to port", "renamed", "upcoming", "later",
+       "moved", "future", "does not exist", "doesn't exist", "not yet", "not created",
+       "planned")
 
-# Exemption GABARIT — marqueur HTML explicite, jamais une allowlist cachée dans le script.
-# (a) ligne  : "<!-- template -->" sur une ligne exempte les chemins de CETTE ligne.
-# (b) bloc   : une paire "<!-- template -->" / "<!-- /template -->" exempte toutes les lignes
-#              (marqueurs inclus) entre les deux. Un marqueur ouvrant jamais refermé retombe
-#              sur le cas (a) — n'exempte que sa propre ligne.
+# TEMPLATE exemption — explicit HTML marker, never a hidden allowlist in the script.
+# (a) line  : "<!-- template -->" on a line exempts the paths on THAT line.
+# (b) block : a "<!-- template -->" / "<!-- /template -->" pair exempts every line
+#             (markers included) between the two. An opening marker never closed falls
+#             back to case (a) — exempts only its own line.
 TEMPLATE_OPEN = "<!-- template -->"
 TEMPLATE_CLOSE = "<!-- /template -->"
 
 
 def template_lines(lines):
-    """Numéros de ligne (1-indexés) exemptés par le marqueur <!-- template -->."""
+    """Line numbers (1-indexed) exempted by the <!-- template --> marker."""
     exempt = set()
     open_at = None
     for i, line in enumerate(lines, 1):
@@ -47,10 +53,10 @@ def template_lines(lines):
             continue
         if TEMPLATE_OPEN in line:
             if open_at is not None:
-                exempt.add(open_at)  # marqueur précédent jamais refermé -> cas (a) seul
+                exempt.add(open_at)  # previous marker never closed -> case (a) only
             open_at = i
     if open_at is not None:
-        exempt.add(open_at)  # jamais refermé -> cas (a) seul
+        exempt.add(open_at)  # never closed -> case (a) only
     return exempt
 
 
@@ -72,9 +78,10 @@ def exists_somewhere(token, file_dir):
 
 
 def had_history(token):
-    # CHEMIN EXACT seulement : un fichier homonyme (même basename) disparu ailleurs ne rend
-    # PAS cette référence morte. Le glob `*/basename` produisait des faux BLOQUANT — on l'a
-    # retiré pour garder le tier ferme à zéro faux positif. Mort = ce chemin précis a existé.
+    # EXACT path only: a homonymous file (same basename) that disappeared elsewhere does
+    # NOT make this reference dead. The `*/basename` glob produced false BLOCKING — it was
+    # removed to keep the firm tier at zero false positives. Dead = this exact path
+    # existed.
     try:
         out = subprocess.run(["git", "log", "--all", "--oneline", "-1", "--", token],
                              capture_output=True, text=True, timeout=10, cwd=REPO).stdout
@@ -105,7 +112,7 @@ def scan_file(path):
         for tok in PATH_RE.findall(line.replace("`", " ")):
             if TEMPLATE.search(tok) or "://" in tok or exists_somewhere(tok, file_dir):
                 continue
-            sev = "BLOQUANT" if had_history(tok) else "À-CONFIRMER"
+            sev = "BLOCKING" if had_history(tok) else "TO-CONFIRM"
             findings.append((sev, path, i, tok))
     return findings
 
@@ -127,7 +134,7 @@ def gather(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Références mortes dans la doc (portable).")
+    ap = argparse.ArgumentParser(description="Dead references in the docs (portable).")
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--staged", action="store_true")
     a = ap.parse_args()
@@ -136,13 +143,13 @@ def main():
     for f in gather(a):
         findings += scan_file(f)
 
-    blocking = [x for x in findings if x[0] == "BLOQUANT"]
+    blocking = [x for x in findings if x[0] == "BLOCKING"]
     for sev, path, line, tok in findings:
-        print(f"{sev:11} {path}:{line}  chemin introuvable : {tok}")
+        print(f"{sev:11} {path}:{line}  path not found: {tok}")
     if not findings:
-        print("doc-refs : OK — aucune référence morte.")
+        print("doc-refs: OK — no dead references.")
         return 0
-    print(f"\ndoc-refs : {len(blocking)} bloquant(s), {len(findings) - len(blocking)} à-confirmer.")
+    print(f"\ndoc-refs: {len(blocking)} blocking, {len(findings) - len(blocking)} to-confirm.")
     return 2 if blocking else 1
 
 

@@ -1,27 +1,31 @@
-# Mémoire « préférences & apprentissages »
+# "Preferences & learnings" memory
 
-Deux niveaux, à ne **jamais** mélanger :
+Two levels, **never** to be mixed:
 
-- **Partagée** (règle d'équipe, **versionnée**) — une préférence ou une règle qui vaut pour tout le monde. Vit dans le dépôt (ici, ou la convention du projet) et n'évolue que de façon **explicite**.
-- **Personnelle** (machine-locale, **non versionnée**) — tes raccourcis et apprentissages perso. Restent **hors du dépôt** (ex. la mémoire automatique de ton outil). Ne jamais les imposer à l'équipe.
+- **Shared** (team rule, **versioned**) — a preference or rule that holds for everyone. Lives in
+  the repo (here, or the project's own convention) and only evolves **explicitly**.
+- **Personal** (machine-local, **unversioned**) — your own shortcuts and learnings. Stay **out of
+  the repo** (e.g. your tool's automatic memory). Never impose them on the team.
 
-**Promotion / rétrogradation** : un apprentissage perso qui se révèle d'intérêt général peut être *promu* en mémoire partagée — explicitement. À l'inverse, une « règle partagée » qui n'est qu'un goût individuel est *rétrogradée* hors du dépôt.
+**Promotion / demotion**: a personal learning that turns out to be of general interest can be
+*promoted* to shared memory — explicitly. Conversely, a "shared rule" that's really just an
+individual taste gets *demoted* out of the repo.
 
-## Préférences partagées — un fait par fichier + frontmatter
+## Shared preferences — one fact per file + frontmatter
 
-Même format que la mémoire personnelle de ton outil (ex. l'auto-memory de Claude Code : « un
-fait par fichier + frontmatter ; `MEMORY.md` = index ») — appliqué ici à la mémoire **partagée**.
-Le frontmatter (et éventuellement le contenu) doit être **chargeable mécaniquement**, pas
-extrait d'une ligne de prose au regex.
+Same format as your tool's personal memory (e.g. Claude Code's auto-memory: "one fact per file +
+frontmatter; `MEMORY.md` = index") — applied here to **shared** memory. The frontmatter (and
+possibly the content) must be **mechanically loadable**, not extracted from a prose line by
+regex.
 
-Ce canal est une **instance** du méta-schéma `ENTRY-TEMPLATE.md` — le frontmatter commun, la
-ligne d'index, la concordance fichier↔index et le cycle de vie de la confiance y sont définis
-**une fois pour toutes** ; ce paragraphe ne fait que situer l'instance Mémoire, il ne les
-reproduit pas. Le canal Mémoire n'a **aucune clé propre** : le frontmatter commun suffit (pas de
-`status`, à la différence des canaux Décision/Backlog).
+This channel is an **instance** of the `ENTRY-TEMPLATE.md` meta-schema — the common frontmatter,
+the index line, the file↔index concordance, and the confidence lifecycle are defined **once and
+for all** there; this paragraph only situates the Memory instance, it doesn't reproduce them. The
+Memory channel has **no keys of its own**: the common frontmatter is enough (no `status`, unlike
+the Decision/Backlog channels).
 
-- **`memory/<slug>.md`** — un fichier par préférence, frontmatter en tête (schéma complet →
-  `ENTRY-TEMPLATE.md §Le frontmatter commun`) :
+- **`memory/<slug>.md`** — one file per preference, frontmatter up top (full schema →
+  `ENTRY-TEMPLATE.md §The common frontmatter`):
   ```
   ---
   id: mem-null-check-unity
@@ -32,49 +36,51 @@ reproduit pas. Le canal Mémoire n'a **aucune clé propre** : le frontmatter com
   links: [D-2026-07-09-01]
   ratified: raphael, 2026-07-09
   ---
-  <la règle elle-même, en prose libre>
+  <the rule itself, in free prose>
   ```
-- **Cet index (`MEMORY.md`)** — une ligne par fichier, jamais le détail, format uniforme du
-  gabarit (`ENTRY-TEMPLATE.md §Le principe`) :
+- **This index (`MEMORY.md`)** — one line per file, never the detail, in the template's uniform
+  format (`ENTRY-TEMPLATE.md §The principle`):
   ```
-  - [<id>](memory/<slug>.md) — <résumé ≤ 1 ligne>
+  - [<id>](memory/<slug>.md) — <summary ≤ 1 line>
   ```
 
-*(`memory/` vide au départ — le projet la peuple. `checks/memory-check.py` vérifie chaque fichier
-contre `checks/entrylib.py::validate_entry(..., "memory")`, la concordance fichier↔index et les
-liens croisés `links:` — voir sa docstring pour la table des règles.)*
+*(`memory/` starts empty — the project populates it. `checks/memory-check.py` checks each file
+against `checks/entrylib.py::validate_entry(..., "memory")`, the file↔index concordance, and the
+`links:` cross-references — see its docstring for the rule table.)*
 
-## Provenance & confiance (contre l'empoisonnement)
+## Provenance & confidence (against poisoning)
 
-Toute écriture en mémoire **partagée** (et toute note durable) porte **d'où elle vient** et **si
-elle est validée** — clés `source`/`confidence` du frontmatter commun (`ENTRY-TEMPLATE.md`) :
-- **`source`** — `inferred` (déduite par l'IA) · `human` (proposée par un humain) ·
-  `external:<réf>` (reprise d'un **contenu externe** — doc tierce, issue, page web ; `<réf>` =
-  url/id de la source).
-- **`confidence`** — `verified` (un humain l'a ratifié) vs `unverified`.
+Every write to **shared** memory (and every durable note) carries **where it came from** and
+**whether it's validated** — `source`/`confidence` keys from the common frontmatter
+(`ENTRY-TEMPLATE.md`):
+- **`source`** — `inferred` (deduced by the AI) · `human` (proposed by a human) ·
+  `external:<ref>` (taken from **external content** — third-party doc, issue, web page; `<ref>` =
+  the source's url/id).
+- **`confidence`** — `verified` (a human ratified it) vs `unverified`.
 
-Une mémoire `unverified` ou de source `external:` ne s'utilise **pas comme un fait** : on la
-**recoupe** d'abord (code réel, source fiable, ou un humain). C'est le garde-fou contre le
-*poisoning* — un contenu externe glissé dans une note ne devient pas « vérité d'équipe » par
-simple persistance. **Rien n'est promu en partagé sans passer par le cycle de vie tracé ci-dessous.**
+An `unverified` memory, or one with `external:` source, is **not used as a fact**: it gets
+**cross-checked** first (real code, a reliable source, or a human). This is the guardrail against
+*poisoning* — external content slipped into a note doesn't become "team truth" by mere
+persistence. **Nothing gets promoted to shared without going through the tracked lifecycle
+below.**
 
-### Cycle de vie de la confiance
+### Confidence lifecycle
 
-- **`unverified → verified`** exige `ratified: <qui>, <AAAA-MM-JJ>` dans le frontmatter — l'IA
-  **propose** la promotion (le diff de frontmatter), l'humain **ratifie** (pose `ratified`).
-  Jamais d'auto-promotion : une entrée `confidence: verified` sans `ratified` associé est
-  signalée (`R-VERIFIED-NOT-RATIFIED`, à-confirmer — pas bloquant, mais reste une créance non
-  soldée). Mécanique complète → `ENTRY-TEMPLATE.md §Cycle de vie de la confiance`.
-- **La sortie** de `verified` (retrait ou révision) passe par la **revue sémantique** (étage 2,
-  `checks/memory-audit.md`) **+ décision utilisateur**, et est **journalisée** (raison + historique
-  git) — jamais silencieuse.
+- **`unverified → verified`** requires `ratified: <who>, <YYYY-MM-DD>` in the frontmatter — the
+  AI **proposes** the promotion (the frontmatter diff), the human **ratifies** (sets `ratified`).
+  Never self-promotion: an entry at `confidence: verified` with no matching `ratified` is flagged
+  (`R-VERIFIED-NOT-RATIFIED`, to-confirm — not blocking, but still an outstanding debt). Full
+  mechanics → `ENTRY-TEMPLATE.md §Confidence lifecycle`.
+- **Leaving** `verified` (withdrawal or revision) goes through **semantic review** (tier 2,
+  `checks/memory-audit.md`) **+ a user decision**, and is **logged** (reason + git history) —
+  never silent.
 
-**Résolution de conflit** : entre deux mémoires qui se contredisent, la **plus confiante
-l'emporte** — une `verified` n'est pas écrasée par une `unverified` (ni par une source
-`external:` non recoupée) ; à confiance égale, la plus récente ratifiée.
+**Conflict resolution**: between two memories that contradict each other, the **more confident
+one wins** — a `verified` one is never overridden by an `unverified` one (nor by an uncross-checked
+`external:` source); at equal confidence, the most recently ratified one wins.
 
-**Mémoire ↔ code** : si une mémoire (décision, doc) diverge du **code** (la vérité observable)
-sans qu'on sache lequel a dérivé — mémoire périmée *ou* code parti de l'intention — **l'utilisateur
-tranche** ; l'IA **signale**, elle ne corrige jamais l'un pour l'autre en silence.
+**Memory ↔ code**: if a memory (decision, doc) diverges from the **code** (the observable truth)
+without knowing which one drifted — a stale memory *or* code that moved away from intent — **the
+user decides**; the AI **flags it**, it never silently "corrects" one for the other.
 
-> Règle d'or : ce qui est versionné **lie tout le monde**. Ne versionner que le partagé, assumé.
+> Golden rule: what's versioned **binds everyone**. Only version what's shared and deliberate.

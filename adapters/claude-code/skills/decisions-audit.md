@@ -1,43 +1,41 @@
-# Gabarit Claude Code — skill `decisions-audit` + subagent `decisions-auditor`
+# Claude Code template — skill `decisions-audit` + subagent `decisions-auditor`
 
-> Emballage Claude Code de la recette canonique **`../../../checks/decisions-audit.md`**. Ce
-> gabarit ne redéfinit RIEN du barème — il dit seulement : quel script lancer, quel barème
-> charger, quel format de sortie rendre. Toute évolution du flux ou du barème se fait dans
-> `checks/decisions-audit.md`, jamais ici (sinon duplication qui diverge silencieusement).
+> Claude Code packaging of the canonical recipe **`../../../checks/decisions-audit.md`**. This
+> template redefines NONE of the scale — it only says: which script to run, which scale to load,
+> which output format to render. Any evolution of the flow or the scale happens in
+> `checks/decisions-audit.md`, never here (otherwise a duplication that silently drifts).
 
 ## Skill `decisions-audit`
 
-**Déclencheur** — reprendre `checks/decisions-audit.md §Quand` : volume (l'INDEX des décisions
-gonfle), après une fusion de branches, ou à la demande (« audit des décisions », « est-ce que nos
-décisions tiennent encore ? »).
+**Trigger** — reuse `checks/decisions-audit.md §When`: volume (the decisions INDEX is growing),
+after a branch merge, or on demand ("audit the decisions", "do our decisions still hold?").
 
-**Étapes** (le flux complet reste `checks/decisions-audit.md §Le flux` — ceci n'en est que
-l'exécution outillée) :
+**Steps** (the full flow stays `checks/decisions-audit.md §The flow` — this is only its tooled
+execution):
 
-1. Lancer `python3 checks/decisions-audit.py` (tier1 + plan). Paramètres → `SCRIPTS.md`.
-2. Charger le barème étage 2 : `checks/decisions-audit.md §Le barème` (verdicts, format de
-   sortie, garde-fou).
-3. Pour chaque lot renvoyé par `--plan` (offset/limit), lancer un subagent `decisions-auditor`
-   (ci-dessous) sur ce lot.
-4. Agréger : `python3 checks/decisions-audit.py --merge <sorties-des-lots…>` — contrôle de
-   couverture (chaque décision auditée exactement 1×).
-5. Restituer le rapport agrégé à l'utilisateur. Ne rien élaguer/archiver sans ratification
-   humaine (`checks/decisions-audit.md §Garde-fou`).
+1. Run `python3 checks/decisions-audit.py` (tier1 + plan). Parameters -> `SCRIPTS.md`.
+2. Load the tier 2 scale: `checks/decisions-audit.md §The scale` (verdicts, output format,
+   safeguard).
+3. For each batch returned by `--plan` (offset/limit), run a `decisions-auditor` subagent
+   (below) on that batch.
+4. Aggregate: `python3 checks/decisions-audit.py --merge <batch outputs…>` — coverage check
+   (every decision audited exactly once).
+5. Return the aggregated report to the user. Prune/archive nothing without human ratification
+   (`checks/decisions-audit.md §Safeguard`).
 
 ## Subagent `decisions-auditor`
 
-**Rôle** — un reviewer par lot. Recoupe chaque décision du lot avec le **code réel**
-(retrieve-then-verify, jamais conclure sans preuve grep/lecture) et rend le format strict défini
-par `checks/decisions-audit.md §Le barème` :
+**Role** — one reviewer per batch. Cross-checks each decision of the batch against the **actual
+code** (retrieve-then-verify, never conclude without grep/read evidence) and renders the strict
+format defined by `checks/decisions-audit.md §The scale`:
 
 ```
-D-AAAA-MM-JJ-NN | VERDICT | gist ≤8 mots | preuve | confiance:haute|moyenne|basse
+D-YYYY-MM-DD-NN | VERDICT | gist ≤8 words | evidence | confidence:high|medium|low
 ```
 
-puis, en dernière ligne : `GARDÉES: <n> — <ids sans problème>`.
+then, on the last line: `KEPT: <n> — <ids with no issue>`.
 
-**Outils** — lecture seule (recherche + lecture de fichiers, `grep`/`glob`). Ne corrige, ne
-supprime, n'archive rien.
+**Tools** — read-only (file search + read, `grep`/`glob`). Fixes, deletes, archives nothing.
 
-**Contrat de sortie** — strictement le format ci-dessus, rien avant, rien après : c'est ce que
-`decisions-audit.py --merge` parse tel quel pour le contrôle de couverture.
+**Output contract** — strictly the format above, nothing before, nothing after: that's what
+`decisions-audit.py --merge` parses verbatim for the coverage check.

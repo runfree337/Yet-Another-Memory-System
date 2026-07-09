@@ -1,148 +1,164 @@
-# Méthode de travail avec une IA — framework de process
+# Working method with an AI — process framework
 
-> **Quoi.** Un **process de travail** pour qu'une IA développe sur un projet, **dérivé** de la méthode de The Undeath Curse. Il dit *comment travailler et mémoriser* — **pas** quelle techno, quelle architecture, ni quels outils de code. **Ça, c'est le projet qui l'apporte** (sa doc, ses outils, sa skill de review).
-> **Agnostique** à l'outil (Claude Code, Copilot, autre — placement dans `README.md`) **et** à la techno/archi.
-> **Graine** : déposer tel quel, puis **amender** selon le projet.
+> **What.** A **work process** for an AI to develop on a project, **derived** from The Undeath Curse's method. It says *how to work and remember* — **not** which tech, which architecture, nor which code tools. **That's the project's job** (its doc, its tools, its review skill).
+> **Agnostic** to the tool (Claude Code, Copilot, other — placement in `README.md`) **and** to the tech/architecture.
+> **Seed**: drop it in as-is, then **amend** it to fit the project.
 
-## La boucle de travail
+## Glossary
 
-À chaque tâche, l'IA :
+Reference terms for this framework — the same word means the same thing across every doc here.
 
-1. **Se repère, puis vérifie** — avant de coder : lire l'index de navigation (`index/INDEX.md`), `MEMORY.md` (préférences partagées qui pourraient contraindre la tâche) et, si la tâche touche une feature connue, sa fiche (`FEATURE_MAP.md`). **Ne jamais** parcourir tout le code. Et **ne pas faire confiance aveuglément** : une mémoire peut être périmée (« une fiche qui ment est pire qu'absente ») — recouper avec le code réel avant de s'appuyer dessus.
-2. **Développe** — en appliquant **les standards du projet** (sa doc, ses fichiers d'instructions, sa skill de review), jamais des règles inventées. En l'absence de règle documentée : **demander, pas présumer**.
-3. **Valide** — quand c'est OK (la validation passe par les outils / la revue **du projet**).
-4. **Met à jour le durable** — la doc qui décrit *ce qui existe*, **et** les mémoires impactées (fiche feature, décision si choix structurel). **Au même moment que le code**, jamais « plus tard » — y compris **à la fin de chaque tâche** d'un chantier qui produit du savoir durable, pas seulement à sa clôture (`backlog/README.md`). Une écriture en mémoire partagée porte sa **provenance + confiance** (`MEMORY.md`) — pas de contenu externe non vérifié promu en « fait ».
-5. **S'auto-améliore** — capitaliser l'apprentissage de *méthode* (voir §Capitalisation).
-6. **Rend la main** — résumer ce qui a changé ; l'utilisateur pilote la suite.
+- **work item** — a unit of not-yet-built work tracked in `backlog/`.
+- **milestone** — a named group that orders work items in `backlog/INDEX.md`.
+- **durable** — content that describes what exists (architecture, memory channels) and persists past a single work item's closure.
+- **transient** — content scoped to work in progress (the backlog); it migrates to durable or disappears at closure.
+- **knowledge capture** — the self-improvement step: routing a reusable method-level learning to the right home.
+- **entry** — one memory record (file + index line) following the common schema in `ENTRY-TEMPLATE.md`.
+- **channel** — one of the three durable memory tracks (Memory, Feature, Decision), or the navigation channel.
+- **tier 1 / tier 2** — the two-layer audit model: tier 1 = deterministic mechanical check (a script that observes), tier 2 = semantic review (judgment, by the project's review).
+- **ratify** — a human confirming a proposed change (e.g. promoting an entry to `verified`), recorded as `ratified: <who>, <date>`.
+- **drift** — a memory entry (or doc) that has fallen out of sync with the real code.
+- **pruning** — retiring a memory entry once its subject is gone, superseded, or redundant with a living authority.
 
-> Pas de PR ni de gate Git imposés. La boucle s'arrête à « durable à jour + auto-amélioration », puis l'humain reprend. Le projet branche ça sur **son** rituel de clôture (sa skill de review, son merge, ou rien).
+## The work loop
 
-## Le travail en cours — le backlog
+For every task, the AI:
 
-Le **travail ouvert** (le *todo*) vit dans `backlog/` — distinct des trois mémoires (qui, elles, sont du *durable*). C'est là qu'on **découpe un chantier en tâches** et qu'on suit l'avancement.
+1. **Orients, then verifies** — before coding: read the navigation index (`index/INDEX.md`), `MEMORY.md` (shared preferences that might constrain the task) and, if the task touches a known feature, its entry (`FEATURE_MAP.md`). **Never** sweep the whole codebase. And **never trust blindly**: a memory entry can be stale (*"an entry that lies is worse than none"*) — cross-check against the real code before relying on it.
+2. **Develops** — applying **the project's standards** (its doc, its instruction files, its review skill), never invented rules. When no documented rule exists: **ask, don't assume**.
+3. **Validates** — once it's good (validation runs through the **project's** own tools / review).
+4. **Updates the durable record** — the doc describing *what exists*, **and** the memory entries it affects (feature entry, decision if a structural choice was made). **At the same time** as the code, never "later" — including **at the end of every task** within a work item that produces durable knowledge, not only at its closure (`backlog/README.md`). A shared-memory write carries its **source + confidence** (`MEMORY.md`) — no unverified external content gets promoted to "fact".
+5. **Self-improves** — capture the *method*-level learning (see §Knowledge capture).
+6. **Hands back** — summarize what changed; the user drives what's next.
 
-- `backlog/INDEX.md` : la liste du non-bâti, **lue en premier**. Statut par entrée (`todo` / `in-progress`) ; un chantier **fini est retiré**.
-- **La chaîne** : `spec` → `backlog` (décidé, pas bâti) → *en cours, découpé en tâches* → à la livraison, le contenu **migre vers le durable** et l'item quitte le backlog.
-- **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **état mis à jour** (`DASHBOARD.md`) → **capitalisation**.
+> No PR or Git gate imposed. The loop stops at "durable record up to date + self-improvement", then the human takes over. The project wires this into **its own** closure ritual (its review skill, its merge, or nothing).
 
-## Le pilotage — plan / état / todo
+## Work in progress — the backlog
 
-Trois rôles, jamais confondus :
+**Open work** (the *todo*) lives in `backlog/` — distinct from the three memory channels (which hold *durable* content). This is where a work item gets **broken down into tasks** and progress gets tracked.
 
-- **Le plan** (l'ordre, le séquenceur) — les groupes **jalon** de `backlog/INDEX.md` (`### Jalon N — <nom>`). Pas de document séparé : le jalon *est* le plan, il ordonne les chantiers.
-- **L'état** (où on en est, pour reprendre) — `DASHBOARD.md` : avancement par jalon + points chauds, en 1 page, mis à jour **à la clôture** d'un chantier (`backlog/README.md §DoD`).
-- **Le todo** (le travail pas-encore-fait) — `backlog/INDEX.md` (§Le travail en cours, ci-dessus).
+- `backlog/INDEX.md`: the list of not-yet-built work, **read first**. Status per entry (`todo` / `in-progress`); a **finished** work item is **removed**.
+- **The chain**: `spec` → `backlog` (decided, not built) → *in progress, broken into tasks* → on delivery, the content **migrates to the durable record** and the item leaves the backlog.
+- **Closing** follows an ordered procedure (the Definition of Done, `backlog/README.md`): durable record written → decision if structural → removed from backlog → **status updated** (`DASHBOARD.md`) → **knowledge capture**.
 
-La vue détaillée et **live** des statuts (`checks/backlog-check.py --board`) reste **générée** ; jamais dupliquée à la main dans `DASHBOARD.md`.
+## Steering — plan / status / todo
 
-## Les trois mémoires (ce que l'IA persiste hors de son contexte)
+Three roles, never conflated:
 
-Le process tient parce que l'IA **mémorise** durablement, en trois canaux :
+- **The plan** (the order, the sequencer) — the **milestone** groups in `backlog/INDEX.md` (`### Milestone N — <name>`). No separate document: the milestone *is* the plan, it orders the work items.
+- **The status** (where things stand, to resume) — `DASHBOARD.md`: progress per milestone + hot spots, in 1 page, updated **at closure** of a work item (`backlog/README.md §DoD`).
+- **The todo** (work not yet done) — `backlog/INDEX.md` (§Work in progress, above).
 
-- **Feature** → `FEATURE_MAP.md` : par feature, *où* est le code + *comment en ajouter une autre* (le motif de réplication). Lu avant de toucher une feature ; mis à jour au même moment que le code.
-- **Décision** → `decisions/` : le *pourquoi* des choix structurels. 1 fichier par décision + un INDEX scannable. On lit l'INDEX d'abord ; le détail ne s'ouvre qu'au besoin.
-- **Mémoire** → `MEMORY.md` : préférences et apprentissages. **Partagé** (règle d'équipe, versionnée) vs **personnel** (machine-local, non versionné) — ne pas mélanger.
+The detailed, **live** status view (`checks/backlog-check.py --board`) stays **generated**; never duplicated by hand into `DASHBOARD.md`.
 
-Plus un canal de pure **navigation** : `index/INDEX.md` — retrouver un fichier sans tout lire.
+## The three memories (what the AI persists outside its context)
 
-### Vue d'ensemble
+The process holds together because the AI **persists** durably, across three channels:
+
+- **Feature** → `FEATURE_MAP.md`: per feature, *where* the code is + *how* to add another one (the replication pattern). Read before touching a feature; updated at the same time as the code.
+- **Decision** → `decisions/`: the *why* behind structural choices. 1 file per decision + a scannable INDEX. Read the INDEX first; open the detail only when needed.
+- **Memory** → `MEMORY.md`: preferences and learnings. **Shared** (team rule, versioned) vs **personal** (machine-local, unversioned) — never mix the two.
+
+Plus a pure **navigation** channel: `index/INDEX.md` — find a file without reading everything.
+
+### Overview
 
 ```mermaid
 flowchart TB
 
-    MEM["Ce que l'IA persiste<br/>hors de son contexte"]
+    MEM["What the AI persists<br/>outside its context"]
 
-    MEM --> PERSO
-    MEM --> CANAUX
+    MEM --> PERSONAL
+    MEM --> CHANNELS
     MEM --> NAV
-    MEM -.->|"transitoire — fourni par le framework,<br/>mais pas une mémoire"| BL
-    MEM -.->|"le framework s'y branche,<br/>ne le possède pas"| HORS
+    MEM -.->|"transient — provided by the framework,<br/>but not a memory"| BL
+    MEM -.->|"the framework plugs into it,<br/>doesn't own it"| EXTERNAL
 
-    PERSO["MÉMOIRE PERSONNELLE — auto-memory<br/>machine-locale, jamais versionnée<br/>écrite automatiquement par l'IA,<br/>sans validation"]
+    PERSONAL["PERSONAL MEMORY — auto-memory<br/>machine-local, never versioned<br/>written automatically by the AI,<br/>no validation"]
 
-    subgraph CANAUX["Trois canaux MÉMOIRE — partagés, versionnés, engagent l'équipe"]
+    subgraph CHANNELS["Three MEMORY channels — shared, versioned, commit the team"]
         direction TB
-        MEMCH["Mémoire → MEMORY.md<br/>règle / préférence,<br/>normative et courte"]
-        FEATCH["Feature → FEATURE_MAP.md<br/>où est le code d'une feature +<br/>comment en répliquer une"]
-        DECCH["Décision → decisions/<br/>le pourquoi d'un choix structurel<br/>1 fichier + 1 ligne d'INDEX, même commit"]
+        MEMCH["Memory → MEMORY.md<br/>rule / preference,<br/>normative and short"]
+        FEATCH["Feature → FEATURE_MAP.md<br/>where a feature's code lives +<br/>how to replicate one"]
+        DECCH["Decision → decisions/<br/>the why of a structural choice<br/>1 file + 1 INDEX line, same commit"]
     end
 
-    NAV["Canal de NAVIGATION — index/INDEX.md<br/>retrouver un fichier sans tout lire<br/>PAS une mémoire au sens propre —<br/>une carte, pas un fait"]
+    NAV["NAVIGATION channel — index/INDEX.md<br/>find a file without reading everything<br/>NOT a memory in the strict sense —<br/>a map, not a fact"]
 
-    BL["backlog/ — TRANSITOIRE<br/>fourni par le FRAMEWORK<br/>le TODO, pas un fait établi —<br/>PAS une mémoire"]
+    BL["backlog/ — TRANSIENT<br/>provided by the FRAMEWORK<br/>the TODO, not an established fact —<br/>NOT a memory"]
 
-    subgraph HORS["Apporté par LE PROJET — pas par le framework"]
+    subgraph EXTERNAL["Brought by THE PROJECT — not by the framework"]
         direction LR
-        FAIT["doc d'archi durable<br/>ce que le système EST<br/>(comportement, structure)"]
+        FACT["durable architecture doc<br/>what the system IS<br/>(behavior, structure)"]
     end
 
-    classDef perso fill:#2a3a4a,stroke:#3498db,color:#fff
-    classDef partage fill:#2a4a2a,stroke:#27ae60,color:#fff
+    classDef personal fill:#2a3a4a,stroke:#3498db,color:#fff
+    classDef shared fill:#2a4a2a,stroke:#27ae60,color:#fff
     classDef nav fill:#3a2a4a,stroke:#9b59b6,color:#fff
-    classDef hors fill:#4a2020,stroke:#888,color:#ccc,stroke-dasharray: 4 3
-    classDef transitoire fill:#4a3a20,stroke:#e67e22,color:#fff
-    class PERSO perso
-    class CANAUX,MEMCH,FEATCH,DECCH partage
+    classDef external fill:#4a2020,stroke:#888,color:#ccc,stroke-dasharray: 4 3
+    classDef transient fill:#4a3a20,stroke:#e67e22,color:#fff
+    class PERSONAL personal
+    class CHANNELS,MEMCH,FEATCH,DECCH shared
     class NAV nav
-    class HORS,FAIT hors
-    class BL transitoire
+    class EXTERNAL,FACT external
+    class BL transient
 ```
 
-### Détail par canal — ce qui le gouverne
+### Per-channel detail — what governs each
 
-| | Personnelle (auto-memory) | Mémoire (`MEMORY.md`) | Feature (`FEATURE_MAP.md`) | Décision (`decisions/`) | Navigation (`index/INDEX.md`) |
+| | Personal (auto-memory) | Memory (`MEMORY.md`) | Feature (`FEATURE_MAP.md`) | Decision (`decisions/`) | Navigation (`index/INDEX.md`) |
 |---|---|---|---|---|---|
-| **Portée** | toi seul, cette machine | toute l'équipe | toute l'équipe | toute l'équipe | toute l'équipe |
-| **Versionnée** | non | oui | oui | oui | oui |
-| **Qui écrit** | l'IA, automatiquement | humain, ou IA qui propose + humain qui ratifie | mis à jour **au même moment** que le code, jamais après | à la clôture d'un chantier qui a tranché un choix structurel | jamais à la main — via l'outil de manifeste |
-| **Validation** | aucune | provenance + confiance avant promotion (`MEMORY.md`) ; intégrité mécanique par `checks/memory-check.py` (source externe sans confiance = bloquant) ; staleness par `memory-audit.md` (étage 2) | vérifiée par le contrôle d'intégrité (fiche complète, concordance fichier↔index) ; fraîcheur sémantique par `memory-audit.md` (étage 2) | `INDEX.md` scanné **avant** toute nouvelle direction structurelle ; contradiction → révocation tracée, jamais un écrasement silencieux | contrôle de dérive au démarrage + à la clôture, silence si rien n'a bougé |
-| **Si elle a tort** | ne trompe que toi | trompe toute l'équipe | envoie sur le mauvais fichier | fait re-débattre un choix déjà tranché | fait chercher au mauvais endroit |
+| **Scope** | you only, this machine | whole team | whole team | whole team | whole team |
+| **Versioned** | no | yes | yes | yes | yes |
+| **Who writes** | the AI, automatically | human, or AI proposes + human ratifies | updated **at the same time** as the code, never after | at closure of a work item that settled a structural choice | never by hand — through the manifest tool |
+| **Validation** | none | source + confidence before promotion (`MEMORY.md`); mechanical integrity via `checks/memory-check.py` (unverified external source = blocking); staleness via `memory-audit.md` (tier 2) | verified by the integrity check (entry complete, file↔index concordance); semantic freshness via `memory-audit.md` (tier 2) | `INDEX.md` scanned **before** any new structural direction; contradiction → tracked revocation, never a silent overwrite | drift check at startup + at closure, silent if nothing moved |
+| **If it's wrong** | misleads only you | misleads the whole team | sends you to the wrong file | forces a re-debate of an already-settled choice | sends you looking in the wrong place |
 
-Le **Fait** (doc d'archi durable — ce que le système *est*) n'est **pas** un canal du framework : c'est **le projet** qui l'apporte et le maintient (`WORKFLOW.md §Où ranger quoi` : « la doc d'archi durable du projet »). Le framework s'y **branche** (« mettre à jour le durable » à l'étape 4 de la boucle) sans en définir le format ni le lieu. Le **backlog**, lui, est bien **fourni par le framework** (contrairement au Fait) — mais ce n'est pas pour autant un canal mémoire : il reste **transitoire** (le travail pas-encore-fait), jamais **durable** (un fait établi) ; voir §Le travail en cours.
+The **Fact** (durable architecture doc — what the system *is*) is **not** a framework channel: it's **the project** that brings and maintains it (`WORKFLOW.md §Where things go`: "the project's durable architecture doc"). The framework **plugs into it** ("update the durable record" at step 4 of the loop) without defining its format or location. The **backlog**, on the other hand, is indeed **provided by the framework** (unlike the Fact) — but it isn't a memory channel for all that: it stays **transient** (work not yet done), never **durable** (an established fact); see §Work in progress.
 
-## Où ranger quoi — le routeur de placement
+## Where things go — the placement router
 
-Une info en main → **où va-t-elle ?** Ce tableau **consolide en une vue** une logique sinon éparpillée (porte d'entrée des décisions, cycle transitoire→durable, routage de capitalisation, périmètre des fiches).
+A piece of information in hand → **where does it go?** This table **consolidates into one view** a logic that would otherwise be scattered (decision entry gate, transient→durable cycle, knowledge-capture routing, entry scope).
 
-| Tu as… | → va dans | Indice (et ce qui n'y va **pas**) |
+| You have… | → goes in | Cue (and what does **not** go there) |
 |---|---|---|
-| du travail **pas encore fait** | `backlog/` | le *todo* ; pas un fait/du durable |
-| *où* est le code d'une feature + *comment* en refaire une | `FEATURE_MAP.md` | le câblage réplicable ; pas le *pourquoi* |
-| le *pourquoi* d'un **choix structurel** (qu'on re-débattrait sinon) | `decisions/` | pivot/abandon/convention transverse ; **pas** un renommage, un bugfix, un câblage précis |
-| une **règle/préférence** d'équipe, normative et courte | `MEMORY.md` | la norme partagée ; pas un fait sur ce qui existe |
-| un **fait sur ce qui existe** (comportement, structure) | la **doc d'archi durable** du projet | ce qui *est* ; pas le *pourquoi* (→ décision) |
-| « où se trouve X » | `index/INDEX.md` | la carte ; pas le contenu |
-| un apprentissage de **méthode** | la **capitalisation** (`knowledge-capture.md`) | skill/hook/règle/test… |
-| **rien de transversal** (détail local) | le **code / la spec** | surtout **pas** une mémoire — sinon ça pollue |
+| work **not done yet** | `backlog/` | the *todo*; not a fact/durable content |
+| *where* a feature's code is + *how* to rebuild one | `FEATURE_MAP.md` | the replicable wiring; not the *why* |
+| the *why* of a **structural choice** (that would otherwise get re-debated) | `decisions/` | pivot/dropped feature/cross-cutting convention; **not** a rename, a bugfix, a one-off wiring detail |
+| a **team rule/preference**, normative and short | `MEMORY.md` | the shared norm; not a fact about what exists |
+| a **fact about what exists** (behavior, structure) | the project's **durable architecture doc** | what *is*; not the *why* (→ decision) |
+| "where is X" | `index/INDEX.md` | the map; not the content |
+| a **method** learning | **knowledge capture** (`knowledge-capture.md`) | skill/hook/rule/test… |
+| **nothing cross-cutting** (local detail) | the **code / the spec** | above all **not** a memory entry — it would pollute |
 
-**Règle d'or** : un détail local sans invariant transversal ne va **jamais** dans une mémoire. Cas durs (« est-ce vraiment décision-worthy ? ») → le test de la porte d'entrée dans `decisions/README.md`.
+**Golden rule**: a local detail with no cross-cutting invariant **never** goes into a memory entry. Hard cases ("is this really decision-worthy?") → the entry-gate test in `decisions/README.md`.
 
-## Cycle de vie de la doc
+## Doc lifecycle
 
-Séparer le **transitoire** (le travail en cours — il vit dans le `backlog`, voir ci-dessus) du **durable** (ce qui existe). À la fin d'un chantier, le contenu **migre** vers le durable et l'item quitte le backlog. Jamais de doublon transitoire/durable sur un même sujet.
+Separate the **transient** (work in progress — it lives in the `backlog`, see above) from the **durable** (what exists). At the end of a work item, the content **migrates** to the durable record and the item leaves the backlog. Never duplicate transient/durable content on the same subject.
 
-## Capitalisation (l'auto-amélioration)
+## Knowledge capture (self-improvement)
 
-À la fin d'un chantier, **poser la question** : *ce travail a-t-il révélé un apprentissage de **méthode** réutilisable ?* « Rien » est une réponse valide, mais la question est **posée**, jamais sautée par défaut. Si oui, le ranger au bon endroit. **Comment décider quoi en faire** — le gate « faut-il outiller ? » + le routage par fonction (agnostique) puis vers le mécanisme de l'outil : `knowledge-capture.md`. C'est ce qui fait que le process **grandit** au lieu de se figer.
+At the end of a work item, **ask the question**: *did this work reveal a reusable **method** learning?* "Nothing" is a valid answer, but the question is **asked**, never skipped by default. If yes, file it in the right place. **How to decide what to do with it** — the "is it worth tooling?" gate + routing by function (agnostic), then to the tool's mechanism: `knowledge-capture.md`. That's what makes the process **grow** instead of freezing in place.
 
-## Délégation (pour le gros travail)
+## Delegation (for heavy lifting)
 
-Quand une tâche dépasse une seule passe, la découper et la confier à des rôles **typés avec des frontières claires** (« fait X ; ne fait PAS Y »). Le projet définit les rôles utiles ; le process ne fournit que le principe.
+When a task exceeds a single pass, break it down and hand it to **typed roles with clear boundaries** ("does X; does NOT do Y"). The project defines the useful roles; the process only supplies the principle.
 
-## Les contrôles déterministes (garder le process honnête)
+## Deterministic checks (keeping the process honest)
 
-Le process se **vérifie lui-même** par des contrôles **déterministes, zéro faux positif** — premier étage d'un motif à **deux niveaux** : le *contrôle mécanique* (un script qui **constate**, ne juge pas) **→** la *revue sémantique* (le jugement, assuré par la **revue du projet**). Aucun ne corrige : ils **signalent**.
+The process **verifies itself** through **deterministic, zero-false-positive** checks — the first tier of a **two-level** pattern: the *mechanical check* (a script that **observes**, doesn't judge) **→** *semantic review* (judgment, carried by the **project's review**). None of them fix anything: they **flag**.
 
-Fournis dans `checks/` (agnostiques) : **intégrité du backlog** (`backlog-check`), **des décisions** (`decisions-check`) et **de la feature map** (`feature-map-check`) — orphelins, pointeurs morts, statuts/identifiants cohérents. À **câbler pour qu'ils tournent automatiquement** au bon moment (hook de fin de tâche / de session, ou CI — selon l'outil).
+Provided under `checks/` (agnostic): **backlog integrity** (`backlog-check`), **decision integrity** (`decisions-check`) and **feature map integrity** (`feature-map-check`) — orphans, dead pointers, consistent statuses/ids. To be **wired to run automatically** at the right moment (end-of-task/end-of-session hook, or CI — depending on the tool).
 
-**Audit mémoire multi-canal** : `checks/memory-audit.py` orchestre l'intégrité des **trois canaux** en un seul passage (`--tier1` : `feature-map-check` + `decisions-audit --tier1` — qui couvre déjà lui-même décisions/doc/index/backlog — + `memory-check`, sans dupliquer aucun des trois). Le canal Décision, seul à accumuler assez pour le justifier, garde son propre découpage en lots (`checks/decisions-audit.py --plan/--merge`, **contrôle de couverture** : chaque décision auditée exactement 1×) — c'est l'exécution concrète du déclencheur « Volume ». L'étage 2 (jugement — drift mémoire↔code pour Décision, fraîcheur de fiche pour Feature, ratification des entrées `à vérifier` pour Mémoire) suit le **barème** de revue `checks/memory-audit.md`, qui délègue son volet décisions à `checks/decisions-audit.md`. Recette canonique qu'un **installeur par outil** matérialise en skill/subagent.
+**Multi-channel memory audit**: `checks/memory-audit.py` orchestrates the integrity of the **three channels** in a single pass (`--tier1`: `feature-map-check` + `decisions-audit --tier1` — which already covers decisions/doc/index/backlog on its own — + `memory-check`, without duplicating any of the three). The Decision channel, the only one that accumulates enough to justify it, keeps its own batching (`checks/decisions-audit.py --plan/--merge`, **coverage check**: every decision audited exactly once) — the concrete execution of the "Volume" trigger. Tier 2 (judgment — memory↔code drift for Decision, entry freshness for Feature, ratification of `unverified` entries for Memory) follows the review **rubric** `checks/memory-audit.md`, which delegates its decisions portion to `checks/decisions-audit.md`. A canonical recipe that a **per-tool installer** turns into a skill/subagent.
 
-Le projet ajoute ses **propres** contrôles de **code** (lint, tests, analyzers) : tech-spécifiques, donc à lui. Le process ne fournit que les contrôles de *méthode* + le motif deux-niveaux + les garde-fous universels (scan de secrets, garde des commandes destructrices — à porter).
+The project adds its **own** code checks (lint, tests, analyzers): tech-specific, so it's on the project. The process only supplies *method* checks + the two-tier pattern + the universal guardrails (secret scanning, destructive-command guard — to be ported).
 
-## Ce que le process NE fournit PAS — c'est le projet
+## What the process does NOT supply — that's the project
 
-- L'**architecture** (couches, modules, organisation) — la sienne.
-- Les **outils de code** et standards (build, lint, tests, **revue**) — les siens.
-- La **doc technique** et les bonnes pratiques — la sienne.
+- **Architecture** (layers, modules, organization) — its own.
+- **Code tools** and standards (build, lint, tests, **review**) — its own.
+- **Technical doc** and best practices — its own.
 
-Le process **s'y branche** : là où il dit « les standards du projet », il *pointe* vers la doc / les outils du projet. Il ne les remplace pas, ne les invente pas.
+The process **plugs into these**: wherever it says "the project's standards", it *points* to the project's own doc / tools. It doesn't replace or invent them.

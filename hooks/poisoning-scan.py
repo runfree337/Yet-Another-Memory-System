@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Garde anti-empoisonnement (universelle, portable) — Unicode invisible/bidi.
+"""Anti-poisoning guard (universal, portable) — invisible/bidi Unicode.
 
-Détecte les caractères invisibles / de bidirectionnalité glissés dans les fichiers
-d'**instruction** et de **mémoire partagée** (vecteur « TrapDoor » : un CLAUDE.md /
-.cursorrules / règle empoisonné par des chars que l'humain ne voit pas).
+Detects invisible / bidirectional characters slipped into **instruction** and **shared
+memory** files (the "TrapDoor" vector: a CLAUDE.md / .cursorrules / rule poisoned with
+chars the human can't see).
 
-Portable (stdlib seule). Un **installeur** la câble dans le mécanisme de hook de
-l'outil : Claude Code (`SessionStart` / `PreToolUse`), Git (`pre-commit`), CI.
+Portable (stdlib only). An **installer** wires it into the tool's hook mechanism: Claude
+Code (`SessionStart` / `PreToolUse`), Git (`pre-commit`), CI.
 
-Modes :
-  poisoning-scan.py [chemins…]    scanne les fichiers donnés
-  poisoning-scan.py --staged      scanne les .md/.txt git **stagés** (pré-commit / CI)
-  poisoning-scan.py               scanne les fichiers d'instruction usuels présents
-  poisoning-scan.py --stdin-json  adaptateur Claude Code (lit tool_input.file_path)
+Modes:
+  poisoning-scan.py [paths…]      scans the given files
+  poisoning-scan.py --staged      scans the git-**staged** .md/.txt (pre-commit / CI)
+  poisoning-scan.py               scans the usual instruction files present
+  poisoning-scan.py --stdin-json  Claude Code adapter (reads tool_input.file_path)
 
-Exit 2 = chars suspects détectés (BLOQUER) ; 0 sinon. Lecture seule.
+Exit 2 = suspect chars detected (BLOCK); 0 otherwise. Read-only.
 """
 import argparse
 import json
@@ -22,10 +22,10 @@ import os
 import subprocess
 import sys
 
-# Plages suspectes par POINTS DE CODE (littéraux hexadécimaux ASCII uniquement — jamais
-# de char invisible dans CE fichier, sinon il se signale lui-même). Couvre :
-#   200B–200F zéro-largeur + marques LTR/RTL · 2028–202F séparateurs + embeddings/overrides
-#   2060–2064 word-joiner + invisibles · 2066–2069 isolates bidi · FEFF BOM
+# Suspect ranges by CODE POINT (ASCII hex literals only — never an invisible char in
+# THIS file, or it would flag itself). Covers:
+#   200B–200F zero-width + LTR/RTL marks · 2028–202F separators + embeddings/overrides
+#   2060–2064 word-joiner + invisibles · 2066–2069 bidi isolates · FEFF BOM
 _RANGES = [(0x200B, 0x200F), (0x2028, 0x202F), (0x2060, 0x2064), (0x2066, 0x2069), (0xFEFF, 0xFEFF)]
 SUSPECT = {cp for lo, hi in _RANGES for cp in range(lo, hi + 1)}
 
@@ -68,10 +68,10 @@ def gather(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Garde anti-empoisonnement (Unicode invisible/bidi).")
+    ap = argparse.ArgumentParser(description="Anti-poisoning guard (invisible/bidi Unicode).")
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--staged", action="store_true")
-    ap.add_argument("--stdin-json", action="store_true", help="adaptateur Claude Code")
+    ap.add_argument("--stdin-json", action="store_true", help="Claude Code adapter")
     a = ap.parse_args()
 
     if a.stdin_json:
@@ -87,7 +87,7 @@ def main():
         findings += scan_file(f)
     if not findings:
         return 0
-    print("BLOQUÉ : caractères Unicode invisibles/bidi détectés (empoisonnement possible).",
+    print("BLOCKED: invisible/bidi Unicode characters detected (possible poisoning).",
           file=sys.stderr)
     for path, line, col, code in findings:
         print(f"  {path}:{line}:{col}  {code}", file=sys.stderr)

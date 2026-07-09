@@ -1,52 +1,54 @@
 #!/usr/bin/env python3
-"""Contrôle d'intégrité du canal « Feature » (`FEATURE_MAP.md` + `features/`), agnostique.
+"""Integrity check of the "Feature" channel (`FEATURE_MAP.md` + `features/`), agnostic.
 
-Format : un fichier par fiche (`features/<slug>.md`, frontmatter du canal `feature`) +
-`FEATURE_MAP.md` = index (une ligne par fiche) — même motif que `memory-check.py` /
-`decisions-check.py`, généralisé via `entrylib.py` (`ENTRY-TEMPLATE.md`, canal « feature »).
-NE corrige rien — signale.
+Format: one file per entry (`features/<slug>.md`, "feature" channel frontmatter) +
+`FEATURE_MAP.md` = index (one line per entry) — same pattern as `memory-check.py` /
+`decisions-check.py`, generalized via `entrylib.py` (`ENTRY-TEMPLATE.md`, "feature"
+channel). Fixes NOTHING — flags.
 
-Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
+Follows `checks/TEMPLATE.md`: 5-field `Finding` namedtuple, two verdicts, pure rules.
 
-Règles :
-  FM-INDEX       (BLOQUANT)      concordance `features/*.md` <-> `FEATURE_MAP.md`, via
-                                  `entrylib.check_index_concordance` — surface
-                                  `R-ORPHAN-FILE` (fiche sans ligne d'index) et
-                                  `R-DEAD-INDEX` (ligne d'index sans fiche).
-  (R-*)          (voir entrylib) `entrylib.validate_entry(path, meta, "feature")` par fiche —
+Rules:
+  FM-INDEX       (BLOCKING)      `features/*.md` <-> `FEATURE_MAP.md` concordance, via
+                                  `entrylib.check_index_concordance` — surfaces
+                                  `R-ORPHAN-FILE` (entry with no index line) and
+                                  `R-DEAD-INDEX` (index line with no entry).
+  (R-*)          (see entrylib) `entrylib.validate_entry(path, meta, "feature")` per entry —
                                   `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`,
                                   `R-EXT-NO-CONF`, `R-UNVERIFIED`, `R-VERIFIED-NOT-RATIFIED`,
-                                  `R-BAD-DATE` ; `entrylib.check_links` pour les `links:` —
+                                  `R-BAD-DATE` ; `entrylib.check_links` for `links:` —
                                   `R-DEAD-LINK`.
-  FM1-role       (BLOQUANT)      pas de ligne `**Rôle :**` dans le corps.
-  FM1-code       (BLOQUANT)      aucun chemin de fichier (code) cité dans le corps.
-  FM1-durable    (BLOQUANT)      aucune réf durable : ni clé `**Doc (durable) :**` non vide,
-                                  ni id `D-AAAA-MM-JJ-NN` (corps ou `links:`).
-  FM-DECISION    (BLOQUANT)      un id `D-*` cité dans le CORPS n'a pas de fichier
-                                  `decisions/D-*.md` (le volet `links:` est couvert par
+  FM1-role       (BLOCKING)      no `**Role:**` line in the body.
+  FM1-code       (BLOCKING)      no code file path cited in the body.
+  FM1-durable    (BLOCKING)      no durable reference: neither a non-empty
+                                  `**Doc (durable):**` key, nor a `D-YYYY-MM-DD-NN` id
+                                  (body or `links:`).
+  FM-DECISION    (BLOCKING)      a `D-*` id cited in the BODY has no
+                                  `decisions/D-*.md` file (the `links:` side is covered by
                                   `entrylib.check_links` -> `R-DEAD-LINK`).
-  FM-TRANSIENT   (BLOQUANT)      référence transitoire (`backlog/…`) dans une fiche —
-                                  durable uniquement, le planifié vit au backlog (ex-FM5).
-  FM-FRESH       (À-CONFIRMER)   `updated` de la fiche antérieur au dernier commit git touchant
-                                  un des chemins cités par `**Code :**` — fiche possiblement
-                                  périmée. Soft : chemin non versionné/inexistant → ignoré
-                                  (déjà couvert par d'autres règles, pas de double signal).
-  FM-GRAN        (À-CONFIRMER)   corps > ~60 lignes utiles → candidat « deux sujets ».
+  FM-TRANSIENT   (BLOCKING)      transient reference (`backlog/…`) in an entry — durable
+                                  only, planned work lives in the backlog (ex-FM5).
+  FM-FRESH       (TO-CONFIRM)    entry `updated` older than the last git commit touching
+                                  one of the paths cited by `**Code:**` — entry possibly
+                                  stale. Soft: an unversioned/nonexistent path is ignored
+                                  (already covered by other rules, no double signal).
+  FM-GRAN        (TO-CONFIRM)    body > ~60 useful lines -> candidate "two subjects".
 
-⚠️ **Pattern à adapter au projet** : `TRANSIENT` (où vit le backlog du projet hôte) dépend du
-layout — le défaut ci-dessous couvre CE dépôt (`backlog/`).
+Note: `TRANSIENT` (where the host project's backlog lives) depends on layout — the
+default below covers THIS repo (`backlog/`).
 
-`--stamp [fichiers…]` / `--stamp --staged` : pose `updated: <aujourd'hui>` via
-`entrylib.stamp_updated` sur les fiches passées en argument (ou stagées avec `--staged`, scope
-strict `features/*.md`, re-stage git après écriture) — même triple garde-fou que
-`backlog-check.py --stamp` : scope stagé strict, un seul champ mécanique, jamais bloquant.
+`--stamp [files…]` / `--stamp --staged`: sets `updated: <today>` via
+`entrylib.stamp_updated` on the entries passed as arguments (or staged ones with
+`--staged`, strict `features/*.md` scope, re-stages with git after writing) — same triple
+safeguard as `backlog-check.py --stamp`: strict staged scope, a single mechanical field,
+never blocking.
 
-Usage :
-  python3 checks/feature-map-check.py                    # rapport texte
-  python3 checks/feature-map-check.py --json              # sortie JSON des findings
+Usage:
+  python3 checks/feature-map-check.py                    # text report
+  python3 checks/feature-map-check.py --json              # JSON findings output
   python3 checks/feature-map-check.py --stamp features/x.md
-  python3 checks/feature-map-check.py --stamp --staged    # pré-commit
-Code retour : 0 propre, 1 seulement des À-CONFIRMER, 2 au moins un BLOQUANT.
+  python3 checks/feature-map-check.py --stamp --staged    # pre-commit
+Exit code: 0 clean, 1 only TO-CONFIRM, 2 at least one BLOCKING.
 """
 from __future__ import annotations
 
@@ -60,15 +62,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib  # noqa: E402
 
-BLOQUANT = entrylib.BLOQUANT
-CONFIRMER = entrylib.CONFIRMER
+BLOCKING = entrylib.BLOCKING
+TO_CONFIRM = entrylib.TO_CONFIRM
 Finding = entrylib.Finding
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # …/ai-workflow
 FMAP = os.path.join(ROOT, "FEATURE_MAP.md")
 FEATURES_DIR = os.path.join(ROOT, "features")
 
-ROLE_KEY = re.compile(r"^\*\*\s*Rôle\b", re.IGNORECASE)
+ROLE_KEY = re.compile(r"^\*\*\s*Role\b", re.IGNORECASE)
 DOC_KEY = re.compile(r"^\*\*\s*Doc\b", re.IGNORECASE)
 DOC_KEY_VALUE = re.compile(r"^\*\*\s*Doc[^:*]*:?\*{0,2}\s*", re.IGNORECASE)
 CODE_PATH = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
@@ -88,19 +90,19 @@ def list_fiches() -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
-# FM-INDEX — concordance features/*.md <-> FEATURE_MAP.md                    #
+# FM-INDEX — features/*.md <-> FEATURE_MAP.md concordance                    #
 # --------------------------------------------------------------------------- #
 
-INDEX_HEADING = "## Fiches"
+INDEX_HEADING = "## Entries"
 
 
 def _index_section_tempfile() -> str | None:
-    """Isole la section `## Fiches` (l'index réel) dans un fichier temporaire — les lignes
-    précédentes sont remplacées par des lignes vides pour préserver la numérotation (les
-    findings restent `path:line`-adressables sur l'original). Nécessaire car le reste du
-    document (`§Le format`, `§Exemple complet`…) cite légitimement d'autres `.md`
-    (`ENTRY-TEMPLATE.md`, l'exemple `null-check-unity.md`…) sans rapport avec l'index — un
-    scan pleine-page produirait des `R-DEAD-INDEX` en faux positif sur ces mentions."""
+    """Isolates the `## Entries` section (the actual index) in a temp file — the preceding
+    lines are replaced with blank lines to preserve line numbering (findings stay
+    `path:line`-addressable on the original). Needed because the rest of the document
+    (`§The format`, `§Full example`…) legitimately cites other `.md` files
+    (`ENTRY-TEMPLATE.md`, the `null-check-unity.md` example…) unrelated to the index — a
+    full-page scan would produce false-positive `R-DEAD-INDEX` on those mentions."""
     if not os.path.isfile(FMAP):
         return None
     with open(FMAP, encoding="utf-8") as fh:
@@ -130,7 +132,7 @@ def check_index() -> list[Finding]:
 
 
 # --------------------------------------------------------------------------- #
-# Fraîcheur — FM-FRESH (soft)                                                 #
+# Freshness — FM-FRESH (soft)                                                 #
 # --------------------------------------------------------------------------- #
 
 def _git_last_commit_date(relpath: str) -> str | None:
@@ -144,10 +146,10 @@ def _git_last_commit_date(relpath: str) -> str | None:
 
 
 def check_freshness(fiche_path: str, meta: dict, body: str) -> list[Finding]:
-    """FM-FRESH — `updated` plus ancien que le dernier commit d'un chemin de `**Code :**`.
+    """FM-FRESH — `updated` older than the last commit touching a `**Code:**` path.
 
-    Tolérant : chemin inexistant (dead-path, déjà `doc-refs-check.py`) ou non versionné (git
-    log vide) → ignoré, pas de double signal.
+    Tolerant: a nonexistent path (dead-path, already `doc-refs-check.py`) or unversioned
+    (empty git log) -> ignored, no double signal.
     """
     updated = meta.get("updated")
     if not updated or not entrylib.DATE_RE.match(str(updated)):
@@ -163,14 +165,14 @@ def check_freshness(fiche_path: str, meta: dict, body: str) -> list[Finding]:
             continue
         commit_date = _git_last_commit_date(p)
         if commit_date and commit_date > str(updated):
-            findings.append(Finding(CONFIRMER, "FM-FRESH", rel(fiche_path), 1,
-                f"« {p} » modifié le {commit_date}, fiche « updated: {updated} » "
-                "— fiche possiblement périmée."))
+            findings.append(Finding(TO_CONFIRM, "FM-FRESH", rel(fiche_path), 1,
+                f"« {p} » modified on {commit_date}, entry « updated: {updated} » "
+                "— entry possibly stale."))
     return findings
 
 
 # --------------------------------------------------------------------------- #
-# Une fiche — frontmatter (entrylib) + clés-cœur du corps + garde-fous        #
+# One entry — frontmatter (entrylib) + core body keys + safeguards            #
 # --------------------------------------------------------------------------- #
 
 def check_fiche(fname: str) -> list[Finding]:
@@ -181,8 +183,8 @@ def check_fiche(fname: str) -> list[Finding]:
 
     meta, body, err = entrylib.parse_frontmatter(text)
     if err:
-        findings.append(Finding(BLOQUANT, "R-NO-FRONTMATTER", rel(path), 1, err))
-        return findings  # pas de corps exploitable sans frontmatter fermé
+        findings.append(Finding(BLOCKING, "R-NO-FRONTMATTER", rel(path), 1, err))
+        return findings  # no usable body without a closed frontmatter
 
     findings += entrylib.validate_entry(rel(path), meta, "feature")
     findings += entrylib.check_links(rel(path), meta, ROOT)
@@ -190,12 +192,12 @@ def check_fiche(fname: str) -> list[Finding]:
     body_lines = body.splitlines()
 
     if not any(ROLE_KEY.match(l.strip()) for l in body_lines):
-        findings.append(Finding(BLOQUANT, "FM1-role", rel(path), 1,
-                                 "pas de clé-cœur `**Rôle :**`."))
+        findings.append(Finding(BLOCKING, "FM1-role", rel(path), 1,
+                                 "no `**Role:**` core key."))
 
     if not CODE_PATH.search(body):
-        findings.append(Finding(BLOQUANT, "FM1-code", rel(path), 1,
-                                 "aucun chemin de fichier (code) cité."))
+        findings.append(Finding(BLOCKING, "FM1-code", rel(path), 1,
+                                 "no code file path cited."))
 
     doc_nonempty = any(
         DOC_KEY.match(l.strip()) and DOC_KEY_VALUE.sub("", l.strip()).strip()
@@ -207,38 +209,38 @@ def check_fiche(fname: str) -> list[Finding]:
     has_decision_link = any(entrylib.DECISION_ID.match(str(x).strip()) for x in links_meta)
     has_decision_mention = bool(DECISION_MENTION.search(body))
     if not (doc_nonempty or has_decision_link or has_decision_mention):
-        findings.append(Finding(BLOQUANT, "FM1-durable", rel(path), 1,
-                                 "aucune réf durable (clé `**Doc**` non vide, ou id `D-*`)."))
+        findings.append(Finding(BLOCKING, "FM1-durable", rel(path), 1,
+                                 "no durable reference (`**Doc**` key non-empty, or a `D-*` id)."))
 
     for m in TRANSIENT.finditer(body):
-        findings.append(Finding(BLOQUANT, "FM-TRANSIENT", rel(path), 1,
-                                 f"référence transitoire « {m.group(0)}… » — durable uniquement, "
-                                 "le planifié vit au backlog."))
+        findings.append(Finding(BLOCKING, "FM-TRANSIENT", rel(path), 1,
+                                 f"transient reference « {m.group(0)}… » — durable only, "
+                                 "planned work lives in the backlog."))
 
     for d in sorted(set(DECISION_MENTION.findall(body))):
         if not os.path.isfile(os.path.join(ROOT, "decisions", d + ".md")):
-            findings.append(Finding(BLOQUANT, "FM-DECISION", rel(path), 1,
-                                     f"id « {d} » cité dans le corps mais decisions/{d}.md introuvable."))
+            findings.append(Finding(BLOCKING, "FM-DECISION", rel(path), 1,
+                                     f"id « {d} » cited in the body but decisions/{d}.md not found."))
 
     useful = [l for l in body_lines if l.strip() and not l.strip().startswith("|---")]
     if len(useful) > GRAN_SEUIL:
-        findings.append(Finding(CONFIRMER, "FM-GRAN", rel(path), 1,
-                                 f"{len(useful)} lignes utiles (> {GRAN_SEUIL}) → envisager un "
-                                 "découpage (deux sujets ?)."))
+        findings.append(Finding(TO_CONFIRM, "FM-GRAN", rel(path), 1,
+                                 f"{len(useful)} useful lines (> {GRAN_SEUIL}) -> consider "
+                                 "splitting (two subjects?)."))
 
     findings += check_freshness(path, meta, body)
     return findings
 
 
 # --------------------------------------------------------------------------- #
-# --stamp — pose `updated` seul, jamais bloquant                              #
+# --stamp — sets `updated` alone, never blocking                              #
 # --------------------------------------------------------------------------- #
 
 def cmd_stamp(argv: list[str]) -> int:
-    """Pose `updated: aujourd'hui` sur les fiches citées (ou stagées avec `--staged`) + re-stage.
-    Motif mutualisé avec `backlog-check.py --stamp` : scope stagé strict (`features/*.md`
-    uniquement), un seul champ mécanique (`entrylib.stamp_updated` ne touche que `updated`),
-    jamais bloquant (code retour toujours 0)."""
+    """Sets `updated: today` on the cited entries (or staged ones with `--staged`) +
+    re-stages. Pattern shared with `backlog-check.py --stamp`: strict staged scope
+    (`features/*.md` only), a single mechanical field (`entrylib.stamp_updated` only
+    touches `updated`), never blocking (exit code always 0)."""
     today = datetime.date.today().isoformat()
     staged = "--staged" in argv
     if staged:
@@ -258,12 +260,12 @@ def cmd_stamp(argv: list[str]) -> int:
             changed.append(f)
             if staged:
                 subprocess.run(["git", "add", f], cwd=ROOT)
-    print(f"feature-map-check : --stamp — {len(changed)} fiche(s) datée(s) à {today}.")
+    print(f"feature-map-check: --stamp — {len(changed)} entrie(s) stamped {today}.")
     return 0
 
 
 # --------------------------------------------------------------------------- #
-# Rendu / CLI                                                                  #
+# Rendering / CLI                                                             #
 # --------------------------------------------------------------------------- #
 
 def run() -> list[Finding]:
@@ -275,12 +277,12 @@ def run() -> list[Finding]:
 
 def render_text(findings: list[Finding]) -> str:
     if not findings:
-        return "feature-map-check : OK."
-    bloq = [f for f in findings if f.severity == BLOQUANT]
-    conf = [f for f in findings if f.severity == CONFIRMER]
+        return "feature-map-check: OK."
+    bloq = [f for f in findings if f.severity == BLOCKING]
+    conf = [f for f in findings if f.severity == TO_CONFIRM]
     lines = [f"{f.severity:14} {f.path}:{f.line}  {f.rule}  {f.msg}"
-             for f in sorted(findings, key=lambda f: (f.severity != BLOQUANT, f.path, f.line))]
-    lines.append(f"\n— {len(findings)} finding(s) : {len(bloq)} bloquant-auto, {len(conf)} à-confirmer")
+             for f in sorted(findings, key=lambda f: (f.severity != BLOCKING, f.path, f.line))]
+    lines.append(f"\n— {len(findings)} finding(s): {len(bloq)} blocking-auto, {len(conf)} to-confirm")
     return "\n".join(lines)
 
 
@@ -294,9 +296,9 @@ def main(argv: list[str]) -> int:
     else:
         print(render_text(findings))
 
-    if any(f.severity == BLOQUANT for f in findings):
+    if any(f.severity == BLOCKING for f in findings):
         return 2
-    if any(f.severity == CONFIRMER for f in findings):
+    if any(f.severity == TO_CONFIRM for f in findings):
         return 1
     return 0
 

@@ -1,69 +1,71 @@
-# Carte des features — mémoire « feature »
+# Feature map — "feature" memory
 
-> Routeur **« feature → comprendre le sujet : ce qu'elle fait, le code à voir, la doc d'archi »**.
-> Quand une tâche touche une feature listée ici, **lire sa fiche avant de chercher**. Mettre la
-> fiche à jour **au même moment que le code** — une fiche qui ment est pire qu'absente.
-> **Référence DURABLE uniquement** : doc d'archi/spec + code + décisions. **Jamais** un doc
-> transitoire (backlog, spec/plan en cours) — le « planifié » vit au backlog. Une fiche dit ce
-> qui *existe*.
-> Une fiche ≈ « un seul sujet qu'on comprend d'un coup ». Trop longue → probablement deux
-> features (test **sémantique**, pas un simple compte de lignes ; `checks/feature-map-check.py`
-> donne un signal *soft* — `FM-GRAN` — mais ne tranche pas).
+> Router: **"feature → understand the subject: what it does, the code to look at, the
+> architecture doc"**. When a task touches a feature listed here, **read its entry before
+> searching**. Update the entry **at the same time as the code** — an entry that lies is worse
+> than none.
+> **DURABLE references only**: architecture/spec doc + code + decisions. **Never** a transient
+> doc (backlog, in-progress spec/plan) — "planned" lives in the backlog. An entry describes what
+> *exists*.
+> An entry ≈ "a single subject you understand in one pass". Too long → probably two features
+> (a **semantic** test, not a plain line count; `checks/feature-map-check.py` gives a *soft*
+> signal — `FM-GRAN` — but doesn't decide).
 
-Ce fichier est l'**index** du canal Feature — même rôle que `MEMORY.md` pour le canal Mémoire.
-C'est une **instance** de `ENTRY-TEMPLATE.md` (le méta-schéma commun à tous les canaux) : il n'en
-redéfinit pas le frontmatter, seulement ce qui est **propre** au canal Feature.
+This file is the **index** of the Feature channel — the same role `MEMORY.md` plays for the
+Memory channel. It's an **instance** of `ENTRY-TEMPLATE.md` (the common meta-schema shared by
+every channel): it doesn't redefine the frontmatter, only what's **specific** to the Feature
+channel.
 
-## Le format — un fichier par fiche + une ligne d'index
+## The format — one file per entry + one index line
 
-- **`features/<slug>.md`** — une fiche par feature, frontmatter du canal `feature` en tête (voir
-  `ENTRY-TEMPLATE.md §Le frontmatter commun` pour le détail des clés) :
+- **`features/<slug>.md`** — one entry per feature, `feature`-channel frontmatter up top (see
+  `ENTRY-TEMPLATE.md §The common frontmatter` for the key details):
   ```
   ---
   id: <slug>
-  created: AAAA-MM-JJ
-  updated: AAAA-MM-JJ
-  links: [D-AAAA-MM-JJ-NN]        # optionnel — ids de décisions liées, ou autres entrées
-  source: human                    # optionnel
-  confidence: verified             # optionnel
-  ratified: <qui>, AAAA-MM-JJ      # optionnel — requis si confidence: verified
+  created: YYYY-MM-DD
+  updated: YYYY-MM-DD
+  links: [D-YYYY-MM-DD-NN]        # optional — ids of related decisions, or other entries
+  source: human                    # optional
+  confidence: verified             # optional
+  ratified: <who>, YYYY-MM-DD      # optional — required if confidence: verified
   ---
   ```
-  Requis pour ce canal : `id`, `created`, `updated`. Pas de `status` — une fiche Feature n'a pas
-  d'états, contrairement au canal Décision ou Backlog.
-- **Cet index (`FEATURE_MAP.md`)** — une ligne par fiche, jamais le détail :
+  Required for this channel: `id`, `created`, `updated`. No `status` — a Feature entry has no
+  states, unlike the Decision or Backlog channel.
+- **This index (`FEATURE_MAP.md`)** — one line per entry, never the detail:
   ```
-  - [<slug>](features/<slug>.md) — <résumé ≤ 1 ligne>
+  - [<slug>](features/<slug>.md) — <summary ≤ 1 line>
   ```
 
-*(`features/` est **vide au départ** — le projet adoptant la peuple au fil de l'eau, à mesure
-qu'une feature devient assez importante pour mériter une fiche. `checks/feature-map-check.py`
-vérifie la concordance fichier↔index et le format — voir ses règles.)*
+*(`features/` starts **empty** — the adopting project populates it over time, as a feature becomes
+significant enough to deserve an entry. `checks/feature-map-check.py` checks the file↔index
+concordance and the format — see its rules.)*
 
-## Le corps d'une fiche — clés canoniques
+## An entry's body — canonical keys
 
-Le frontmatter est commun à tous les canaux ; le **corps**, lui, reste propre au canal Feature —
-prose libre organisée par les clés suivantes (français ou langue de l'équipe, cf.
-`ENTRY-TEMPLATE.md §Note — vocabulaire anglais par conception`) :
+The frontmatter is common to every channel; the **body**, though, stays specific to the Feature
+channel — free prose organized under the following keys (French or whatever the team's working
+language is, cf. `ENTRY-TEMPLATE.md §Note — English vocabulary by design`):
 
-| Clé | Sens | Statut |
+| Key | Meaning | Status |
 |---|---|---|
-| `**Rôle :**` | ce que la feature fait, en 1 phrase — pour comprendre le sujet | cœur |
-| `**Code :**` | les fichiers clés à regarder, regroupés par rôle du projet | cœur |
-| `**Doc (durable) :**` | renvoi vers la doc d'archi/spec DURABLE du projet — jamais transitoire | cœur |
-| `**Tests :**` | les tests qui couvrent le comportement | — |
-| `**Motif d'ajout :**` | recette de réplication — utile surtout en data-driven | optionnel |
+| `**Role:**` | what the feature does, in 1 sentence — to understand the subject | core |
+| `**Code:**` | the key files to look at, grouped by role in the project | core |
+| `**Doc (durable):**` | pointer to the project's DURABLE architecture/spec doc — never transient | core |
+| `**Tests:**` | the tests that cover the behavior | — |
+| `**Add pattern:**` | replication recipe — mostly useful for data-driven work | optional |
 
-**Clés-cœur** (`checks/feature-map-check.py`, règles `FM1-*`) : une ligne `**Rôle :**`, ≥ 1
-chemin de fichier sous `**Code :**`, et ≥ 1 référence durable — soit une clé `**Doc (durable) :**`
-non vide, soit un id de décision `D-AAAA-MM-JJ-NN` (dans le corps ou dans `links:`). Une fiche
-sans l'une de ces trois choses est **bloquante** : elle ne remplit pas son rôle de routeur.
+**Core keys** (`checks/feature-map-check.py`, rules `FM1-*`): a `**Role:**` line, ≥ 1 file path
+under `**Code:**`, and ≥ 1 durable reference — either a non-empty `**Doc (durable):**` key, or a
+decision id `D-YYYY-MM-DD-NN` (in the body or in `links:`). An entry missing any one of these
+three is **blocking**: it fails its job as a router.
 
-## Exemple complet
+## Full example
 
 <!-- template -->
 
-`features/null-check-unity.md` :
+`features/null-check-unity.md`:
 
 ```
 ---
@@ -76,28 +78,28 @@ confidence: verified
 ratified: raphael, 2026-07-09
 ---
 
-**Rôle :** Empêche les faux-négatifs Unity — un `UnityEngine.Object` détruit reste « non-null »
-pour `??`/`?.`, qui contournent l'override `==` d'Unity ; jamais de `??` sur un type Unity.
+**Role:** Prevents Unity false-negatives — a destroyed `UnityEngine.Object` still reads as
+"non-null" for `??`/`?.`, which bypass Unity's `==` override; never use `??` on a Unity type.
 
-**Code :** `Scripts/Combat/CombatManager.cs` (résolution de tour), `Scripts/Core/NullGuard.cs`
-(garde partagée `IsAlive`).
+**Code:** `Scripts/Combat/CombatManager.cs` (turn resolution), `Scripts/Core/NullGuard.cs`
+(shared `IsAlive` guard).
 
-**Doc (durable) :** `Docs/architecture/ARCHITECTURE.md §Null check Unity`.
+**Doc (durable):** `Docs/architecture/ARCHITECTURE.md §Unity null check`.
 
-**Tests :** `Tests/EditMode/NullGuardTests.cs`.
+**Tests:** `Tests/EditMode/NullGuardTests.cs`.
 
-**Motif d'ajout :** tout nouveau composant qui référence un `UnityEngine.Object` optionnel passe
-par `NullGuard.IsAlive(obj)` plutôt qu'un opérateur `??`/`?.` cru.
+**Add pattern:** any new component referencing an optional `UnityEngine.Object` goes through
+`NullGuard.IsAlive(obj)` rather than a raw `??`/`?.` operator.
 ```
 
-Ligne correspondante dans `FEATURE_MAP.md` :
+Matching line in `FEATURE_MAP.md`:
 
 ```
-- [null-check-unity](features/null-check-unity.md) — garde anti-faux-négatif sur les null check Unity.
+- [null-check-unity](features/null-check-unity.md) — guard against Unity null-check false negatives.
 ```
 
 <!-- /template -->
 
-## Fiches
+## Entries
 
-<!-- (vide) — le projet adoptant la peuple : une ligne par fiche `features/<slug>.md`. -->
+<!-- (empty) — the adopting project populates it: one line per `features/<slug>.md` entry. -->

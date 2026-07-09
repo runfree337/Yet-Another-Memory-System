@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""Contrôle d'intégrité du canal « Mémoire » (préférences), agnostique.
+"""Integrity check of the "Memory" channel (preferences), agnostic.
 
-Format : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index (une ligne
-par fichier) — instance du méta-schéma `ENTRY-TEMPLATE.md`. Toute la logique de frontmatter/
-concordance/liens vit dans la bibliothèque partagée `checks/entrylib.py` (un seul endroit définit
-ce qu'est une entrée mémoire valide, réutilisé par `decisions-check.py` / `feature-map-check.py` /
-`backlog-check.py`) — ce script se contente d'appeler `entrylib` avec le canal `"memory"` et
-d'agréger.
+Format: one fact per file + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index (one
+line per file) — instance of the `ENTRY-TEMPLATE.md` meta-schema. All the
+frontmatter/concordance/links logic lives in the shared library `checks/entrylib.py` (a
+single place defines what a valid memory entry is, reused by `decisions-check.py` /
+`feature-map-check.py` / `backlog-check.py`) — this script just calls `entrylib` with
+the `"memory"` channel and aggregates.
 
-Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts, code retour 0/1/2.
+Follows `checks/TEMPLATE.md`: 5-field `Finding` namedtuple, two verdicts, 0/1/2 exit code.
 
-Table des règles (id → sévérité → ce qu'elle prouve) :
+Rule table (id -> severity -> what it proves):
 
-| Règle                      | Sévérité      | Prouve |
-|-----------------------------|---------------|--------|
-| `R-NO-FRONTMATTER`          | BLOQUANT-AUTO | `memory/<slug>.md` ne commence pas par un bloc `--- … ---`. |
-| `R-MISSING-KEY`              | BLOQUANT-AUTO | une clé requise du canal (`id/source/confidence/created/updated`) est absente ou vide. |
-| `R-BAD-VALUE`                | BLOQUANT-AUTO | `source:` ou `confidence:` ne respecte pas son vocabulaire fermé (`inferred\|human\|external:<réf>`, `verified\|unverified`). |
-| `R-EXT-NO-CONF`              | BLOQUANT-AUTO | `source: external:...` sans champ `confidence` du tout — une source externe DOIT porter une confiance. |
-| `R-BAD-DATE`                 | BLOQUANT-AUTO | `created`/`updated` n'est pas au format `AAAA-MM-JJ`. |
-| `R-DEAD-LINK` (bloquant)     | BLOQUANT-AUTO | `links:` cite un id de décision `D-*` ou un chemin qui n'existe pas sur disque. |
-| `R-ORPHAN-FILE`              | BLOQUANT-AUTO | `memory/<slug>.md` existe mais aucune ligne de `MEMORY.md` ne le référence. |
-| `R-DEAD-INDEX`               | BLOQUANT-AUTO | une ligne de `MEMORY.md` référence `memory/<slug>.md` et le fichier n'existe pas. |
-| `R-UNVERIFIED`               | À-CONFIRMER   | `confidence: unverified` — candidate pour l'audit sémantique (étage 2, `memory-audit.md`), pas une erreur en soi. |
-| `R-VERIFIED-NOT-RATIFIED`    | À-CONFIRMER   | `confidence: verified` sans champ `ratified` — ratification humaine non tracée. |
-| `R-DEAD-LINK` (à-confirmer)  | À-CONFIRMER   | `links:` cite un slug d'entrée introuvable dans `memory/`/`features/`/`backlog/` — le canal cible n'est peut-être pas encore peuplé. |
+| Rule                         | Severity      | Proves |
+|-------------------------------|---------------|--------|
+| `R-NO-FRONTMATTER`           | BLOCKING-AUTO | `memory/<slug>.md` doesn't start with a `--- … ---` block. |
+| `R-MISSING-KEY`               | BLOCKING-AUTO | a required channel key (`id/source/confidence/created/updated`) is missing or empty. |
+| `R-BAD-VALUE`                 | BLOCKING-AUTO | `source:` or `confidence:` doesn't respect its closed vocabulary (`inferred\|human\|external:<ref>`, `verified\|unverified`). |
+| `R-EXT-NO-CONF`               | BLOCKING-AUTO | `source: external:...` with no `confidence` field at all — an external source MUST carry a confidence. |
+| `R-BAD-DATE`                  | BLOCKING-AUTO | `created`/`updated` isn't in `YYYY-MM-DD` format. |
+| `R-DEAD-LINK` (blocking)      | BLOCKING-AUTO | `links:` cites a decision id `D-*` or a path that doesn't exist on disk. |
+| `R-ORPHAN-FILE`               | BLOCKING-AUTO | `memory/<slug>.md` exists but no line of `MEMORY.md` references it. |
+| `R-DEAD-INDEX`                | BLOCKING-AUTO | a line of `MEMORY.md` references `memory/<slug>.md` and the file doesn't exist. |
+| `R-UNVERIFIED`                | TO-CONFIRM    | `confidence: unverified` — candidate for semantic audit (tier 2, `memory-audit.md`), not an error in itself. |
+| `R-VERIFIED-NOT-RATIFIED`     | TO-CONFIRM    | `confidence: verified` with no `ratified` field — human ratification not tracked. |
+| `R-DEAD-LINK` (to-confirm)    | TO-CONFIRM    | `links:` cites an entry slug not found in `memory/`/`features/`/`backlog/` — the target channel might just not be populated yet. |
 
-Ces ids sont l'API du canal — stables, grep-ables, cités par `checks/memory-audit.md` et les
-docs. Le détail de chaque règle est défini une seule fois dans `checks/entrylib.py` ; ce fichier
-ne les redéfinit jamais.
+These ids are the channel's API — stable, grep-able, cited by `checks/memory-audit.md`
+and the docs. Each rule's detail is defined once in `checks/entrylib.py`; this file never
+redefines them.
 
-Lecture seule par défaut. Ne corrige rien — signale. `--stamp` est la seule écriture (voir plus
-bas), bornée au champ `updated`.
+Read-only by default. Fixes nothing — flags. `--stamp` is the only write (see below),
+scoped to the `updated` field.
 
-Usage :
-  python3 checks/memory-check.py                 # MEMORY.md + memory/ par défaut
+Usage:
+  python3 checks/memory-check.py                 # MEMORY.md + memory/ by default
   python3 checks/memory-check.py --json
-  python3 checks/memory-check.py --stamp --staged # pré-commit uniquement
+  python3 checks/memory-check.py --stamp --staged # pre-commit only
 """
 from __future__ import annotations
 
@@ -49,19 +49,19 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib  # noqa: E402
 
-BLOQUANT = entrylib.BLOQUANT
-CONFIRMER = entrylib.CONFIRMER
+BLOCKING = entrylib.BLOCKING
+TO_CONFIRM = entrylib.TO_CONFIRM
 Finding = entrylib.Finding
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # racine du framework
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # framework root
 MEMORY_MD = os.path.join(ROOT, "MEMORY.md")
 MEMORY_DIR = os.path.join(ROOT, "memory")
 
-# Une entrée mémoire n'a pas de grammaire d'id rigide (contrairement à `D-AAAA-MM-JJ-NN` côté
-# décisions) — un `.md` nu ne suffit pas à prouver une référence (`MEMORY.md` en parle sans arrêt
-# de `ENTRY-TEMPLATE.md`, `memory-audit.md`…). On ancre donc sur la FORME de lien du gabarit :
-# soit un nom de fichier nu (`entries_dir`, ex. `mem-slug.md`), soit `(memory/<slug>.md)` dans le
-# texte de l'index — jamais un `.md` flottant en prose.
+# A memory entry has no rigid id grammar (unlike `D-YYYY-MM-DD-NN` on the decisions side)
+# — a bare `.md` isn't enough to prove a reference (`MEMORY.md` mentions
+# `ENTRY-TEMPLATE.md`, `memory-audit.md`… constantly). So we anchor on the template's
+# LINK FORM: either a bare file name (`entries_dir`, e.g. `mem-slug.md`), or
+# `(memory/<slug>.md)` in the index text — never a `.md` floating in prose.
 ID_RE = re.compile(r"(?<=\(memory/)[\w.-]+\.md(?=\))|^[\w.-]+\.md$")
 
 
@@ -70,11 +70,11 @@ def rel(path: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Règles pures — délèguent à entrylib, ce script ne fait qu'agréger.           #
+# Pure rules — delegate to entrylib, this script only aggregates.             #
 # --------------------------------------------------------------------------- #
 
 def audit_memory_dir() -> list:
-    """Frontmatter + liens croisés de chaque `memory/<slug>.md`, via `entrylib`."""
+    """Frontmatter + cross-references of every `memory/<slug>.md`, via `entrylib`."""
     findings: list = []
     if not os.path.isdir(MEMORY_DIR):
         return findings
@@ -91,21 +91,21 @@ def audit_memory_dir() -> list:
 
 
 def audit_index_concordance() -> list:
-    """Concordance `memory/<slug>.md` ⟺ lignes de `MEMORY.md`, via `entrylib`."""
+    """Concordance `memory/<slug>.md` <=> `MEMORY.md` lines, via `entrylib`."""
     findings = entrylib.check_index_concordance(MEMORY_MD, MEMORY_DIR, ID_RE)
     return [f._replace(path=rel(f.path)) for f in findings]
 
 
 # --------------------------------------------------------------------------- #
-# --stamp — même triple garde-fou que backlog-check.py : scope stagé,         #
-# champ mécanique (`updated`) seul, jamais bloquant.                          #
+# --stamp — same triple safeguard as backlog-check.py: staged scope,          #
+# mechanical field (`updated`) alone, never blocking.                        #
 # --------------------------------------------------------------------------- #
 
 def cmd_stamp(argv) -> int:
-    """Pose `updated: <aujourd'hui>` sur les `memory/*.md` cités (ou stagés avec --staged) et
-    re-stage. À câbler au pré-commit — la date du frontmatter suit la date du commit,
-    mécaniquement (zéro pourrissement). Scope stagé uniquement : ne tire jamais un fichier hors
-    du commit en cours."""
+    """Sets `updated: <today>` on the cited `memory/*.md` files (or staged ones with
+    --staged) and re-stages. Meant to be wired to pre-commit — the frontmatter date
+    follows the commit date, mechanically (zero rot). Staged scope only: never pulls a
+    file outside the commit in progress."""
     import datetime
     today = datetime.date.today().isoformat()
     staged = "--staged" in argv
@@ -127,7 +127,7 @@ def cmd_stamp(argv) -> int:
             if staged:
                 subprocess.run(["git", "add", f])
 
-    print(f"memory-check : --stamp — {len(changed)} memory/*.md daté(s) à {today}.")
+    print(f"memory-check: --stamp — {len(changed)} memory/*.md stamped {today}.")
     return 0
 
 
@@ -139,15 +139,15 @@ def main(argv) -> int:
     as_json = "--json" in argv
 
     findings = audit_memory_dir() + audit_index_concordance()
-    bloq = [f for f in findings if f.severity == BLOQUANT]
-    conf = [f for f in findings if f.severity == CONFIRMER]
+    bloq = [f for f in findings if f.severity == BLOCKING]
+    conf = [f for f in findings if f.severity == TO_CONFIRM]
 
     if as_json:
         print(json.dumps([f._asdict() for f in findings], ensure_ascii=False, indent=2))
     else:
-        for f in sorted(findings, key=lambda f: (f.severity != BLOQUANT, f.path, f.line)):
+        for f in sorted(findings, key=lambda f: (f.severity != BLOCKING, f.path, f.line)):
             print(f"{f.severity:14} {f.path}:{f.line}  {f.rule}  {f.msg}")
-        print(f"\n— {len(findings)} finding(s) : {len(bloq)} bloquant-auto, {len(conf)} à-confirmer")
+        print(f"\n— {len(findings)} finding(s): {len(bloq)} blocking-auto, {len(conf)} to-confirm")
 
     return 2 if bloq else (1 if conf else 0)
 

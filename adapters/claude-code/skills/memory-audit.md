@@ -1,45 +1,44 @@
-# Gabarit Claude Code — skill `memory-audit` + subagent `memory-auditor`
+# Claude Code template — skill `memory-audit` + subagent `memory-auditor`
 
-> Emballage Claude Code de la recette canonique **`../../../checks/memory-audit.md`**. Ce gabarit
-> ne redéfinit RIEN du barème multi-canal — il dit seulement : quel script lancer, quel barème
-> charger, quel format de sortie rendre. Toute évolution du flux ou du barème se fait dans
-> `checks/memory-audit.md`, jamais ici. Le volet **Décision** délègue entièrement au gabarit
-> `decisions-audit.md` de ce même dossier — pas de deuxième définition.
+> Claude Code packaging of the canonical recipe **`../../../checks/memory-audit.md`**. This
+> template redefines NONE of the multi-channel scale — it only says: which script to run, which
+> scale to load, which output format to render. The **Decision** part delegates entirely to the
+> `decisions-audit.md` template of this same folder — no second definition.
 
 ## Skill `memory-audit`
 
-**Déclencheur** — reprendre `checks/memory-audit.md §Quand` : volume (canal Décision), après une
-fusion de branches, ou à la demande (« est-ce que notre mémoire tient encore ? »).
+**Trigger** — reuse `checks/memory-audit.md §When`: volume (Decision channel), after a branch
+merge, or on demand ("does our memory still hold?").
 
-**Étapes** (le flux complet reste `checks/memory-audit.md §Le flux`) :
+**Steps** (the full flow stays `checks/memory-audit.md §The flow`):
 
-1. Intégrité : `python3 checks/memory-audit.py --tier1` → un statut par canal (Feature, Décision,
-   Mémoire).
-2. Revue sémantique, **par canal**, chacun à son rythme :
-   - **Décision** — accumulée, découpée en lots → déléguer entièrement au skill
-     `decisions-audit.md` de ce dossier (`decisions-audit.py --plan/--merge`).
-   - **Feature** — `FEATURE_MAP.md` relu en un seul passage (petit par construction) : lancer le
-     subagent `memory-auditor` (ci-dessous) en mode Feature.
-   - **Mémoire** — ne relire que les `memory/<slug>.md` signalés `confiance: à vérifier` par
-     `memory-check.py` : lancer le subagent `memory-auditor` en mode Mémoire.
-3. Restituer le rapport par canal. Ne rien élaguer/promouvoir sans ratification humaine
-   (`checks/memory-audit.md §Garde-fou`).
+1. Integrity: `python3 checks/memory-audit.py --tier1` -> one status per channel (Feature,
+   Decision, Memory).
+2. Semantic review, **per channel**, each at its own pace:
+   - **Decision** — accumulated, split into batches -> delegate entirely to the
+     `decisions-audit.md` skill of this folder (`decisions-audit.py --plan/--merge`).
+   - **Feature** — `FEATURE_MAP.md` reread in a single pass (small by construction): run the
+     `memory-auditor` subagent (below) in Feature mode.
+   - **Memory** — only reread the `memory/<slug>.md` flagged `confidence: unverified` by
+     `memory-check.py`: run the `memory-auditor` subagent in Memory mode.
+3. Return the per-channel report. Prune/promote nothing without human ratification
+   (`checks/memory-audit.md §Safeguard`).
 
 ## Subagent `memory-auditor`
 
-**Rôle** — jugement sémantique sur les canaux Feature et Mémoire (le canal Décision reste celui
-du subagent `decisions-auditor`, jamais réimplémenté ici). Applique le barème étage 2 de
-`checks/memory-audit.md §Le barème` :
+**Role** — semantic judgment on the Feature and Memory channels (the Decision channel stays that
+of the `decisions-auditor` subagent, never reimplemented here). Applies the tier 2 scale of
+`checks/memory-audit.md §The scale`:
 
-- **Feature** : pour chaque fiche de `FEATURE_MAP.md`, verdict `PERIMEE` / `CODE-DEPLACE` /
-  `A-JOUR` (ne signaler que les deux premiers) — preuve = `file:line` du code divergent, ou le
-  chemin réel actuel.
-- **Mémoire** : pour chaque `memory/<slug>.md` signalé, verdict `RATIFIER` / `REJETER` / `DOUTE`
-  — preuve = la source de recoupement, ou la raison du rejet/doute.
+- **Feature**: for each `FEATURE_MAP.md` entry, verdict `STALE` / `CODE-MOVED` / `UP-TO-DATE`
+  (only flag the first two) — evidence = `file:line` of the diverging code, or the actual current
+  path.
+- **Memory**: for each flagged `memory/<slug>.md`, verdict `RATIFY` / `REJECT` / `DOUBT` —
+  evidence = the cross-check source, or the reason for the rejection/doubt.
 
-**Outils** — lecture seule (recherche + lecture de fichiers). Ne corrige, ne supprime, ne
-réécrit rien — propose, l'utilisateur ratifie (**aucune** promotion `confiance: validé` sans
-ratification humaine, `../../../MEMORY.md §Provenance`).
+**Tools** — read-only (file search + read). Fixes, deletes, rewrites nothing — proposes, the user
+ratifies (**no** promotion to `confidence: verified` without human ratification,
+`../../../MEMORY.md §Provenance`).
 
-**Contrat de sortie** — une entrée par problème signalé, format du barème du canal concerné ;
-`A-JOUR` n'a pas besoin d'être listé.
+**Output contract** — one entry per flagged issue, format of the relevant channel's scale;
+`UP-TO-DATE` doesn't need to be listed.

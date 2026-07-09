@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""Garde anti-secrets (universelle, portable) — clés/jetons commités par accident.
+"""Anti-secret guard (universal, portable) — keys/tokens committed by accident.
 
-Porté du scanner de référence (18 motifs : Anthropic, OpenAI, AWS, GitHub, Slack,
-Stripe, Google, RSA, JWT, SendGrid, Twilio, affectation générique haute entropie).
-Suppression de faux positifs : lignes de commentaire pur, références à des variables
-d'environnement.
+Ported from the reference scanner (18 patterns: Anthropic, OpenAI, AWS, GitHub, Slack,
+Stripe, Google, RSA, JWT, SendGrid, Twilio, generic high-entropy assignment). False
+positive suppression: pure comment lines, environment variable references.
 
-Portable (stdlib seule). Un **installeur** la câble : Claude Code (`PreToolUse` sur
+Portable (stdlib only). An **installer** wires it in: Claude Code (`PreToolUse` on
 `Bash`/`Write`/`Edit`), Git (`pre-commit`), CI.
 
-Modes :
-  secret-scan.py --staged          scanne le contenu **stagé** (pré-commit / CI) — défaut
-  secret-scan.py [chemins…]        scanne les fichiers donnés
-  secret-scan.py --stdin-json      adaptateur Claude Code (Bash→stagé si git commit ;
-                                   Write/Edit→contenu)
+Modes:
+  secret-scan.py --staged          scans **staged** content (pre-commit / CI) — default
+  secret-scan.py [paths…]          scans the given files
+  secret-scan.py --stdin-json      Claude Code adapter (Bash->staged if git commit;
+                                   Write/Edit->content)
 
-Exit 2 = secret détecté (BLOQUER) ; 0 sinon. Valeurs masquées dans le rapport. Lecture seule.
+Exit 2 = secret detected (BLOCK); 0 otherwise. Values masked in the report. Read-only.
 """
 import argparse
 import json
@@ -119,10 +118,10 @@ def scan_staged():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Garde anti-secrets (portable).")
+    ap = argparse.ArgumentParser(description="Anti-secret guard (portable).")
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--staged", action="store_true")
-    ap.add_argument("--stdin-json", action="store_true", help="adaptateur Claude Code")
+    ap.add_argument("--stdin-json", action="store_true", help="Claude Code adapter")
     a = ap.parse_args()
 
     if a.stdin_json:
@@ -147,10 +146,10 @@ def main():
 
     if not findings:
         return 0
-    print("BLOQUÉ : secret(s) potentiel(s) détecté(s) — utiliser une variable d'environnement.",
+    print("BLOCKED: potential secret(s) detected — use an environment variable instead.",
           file=sys.stderr)
     for path, line, name, masked in findings:
-        print(f"  ⛔ {name} dans {path}:{line} → {masked}", file=sys.stderr)
+        print(f"  ⛔ {name} in {path}:{line} → {masked}", file=sys.stderr)
     return 2
 
 

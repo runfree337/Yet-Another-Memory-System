@@ -1,67 +1,67 @@
 # YAMS — Yet Another Memory System
 
-Un **orchestrateur méthodologique** pour travailler avec une IA sur un projet logiciel.
-**Agnostique** à l'outil (Claude Code, Copilot, autre) et à la techno/architecture. Le projet
-apporte son archi, ses outils de code, sa doc et sa revue ; YAMS apporte **comment travailler et
-mémoriser** — il s'y *branche*, il ne les remplace pas.
+A **methodological orchestrator** for working with an AI on a software project.
+**Agnostic** to the tool (Claude Code, Copilot, other) and to the tech/architecture. The project
+brings its architecture, its code tools, its doc and its review; YAMS brings **how to work and
+remember** — it *plugs into* the project, it doesn't replace any of that.
 
-## L'idée
+## The idea
 
-YAMS fournit cinq briques qui tiennent ensemble :
+YAMS provides five pieces that fit together:
 
-- une **boucle de travail** — se repérer et vérifier avant de coder, développer selon les
-  standards du projet, valider, mettre à jour le durable, capitaliser, rendre la main ;
-- une **mémoire temporaire** (`backlog/`) — le travail pas-encore-fait, distinct de tout canal
-  mémoire ;
-- une **mémoire long terme** en trois canaux — **feature** (`FEATURE_MAP.md`, où est le code),
-  **décision** (`decisions/`, le pourquoi d'un choix structurel) et **préférences**
-  (`MEMORY.md`, règles et apprentissages, partagés vs personnels) ;
-- une **navigation** (`index/`) — retrouver un fichier sans tout lire ;
-- des **contrôles déterministes** (`checks/`) qui gardent l'ensemble cohérent — orphelins,
-  pointeurs morts, statuts incohérents — et signalent sans jamais corriger à la place de l'humain.
+- a **work loop** — orient and verify before coding, develop per the project's standards,
+  validate, update the durable record, capture knowledge, hand back;
+- a **temporary memory** (`backlog/`) — work not yet done, distinct from any memory channel;
+- a **long-term memory** in three channels — **feature** (`FEATURE_MAP.md`, where the code is),
+  **decision** (`decisions/`, the why of a structural choice) and **preferences**
+  (`MEMORY.md`, rules and learnings, shared vs personal);
+- a **navigation** layer (`index/`) — find a file without reading everything;
+- **deterministic checks** (`checks/`) that keep the whole thing consistent — orphans,
+  dead pointers, inconsistent statuses — and flag issues without ever fixing them in the
+  human's place.
 
-Le détail de la boucle et l'articulation entre ces briques : **[`WORKFLOW.md`](WORKFLOW.md)** —
-c'est le cœur du framework.
+The detail of the loop and how these pieces fit together: **[`WORKFLOW.md`](WORKFLOW.md)** —
+that's the heart of the framework.
 
-## Déposer selon l'outil (le cœur est le même)
+## Where to drop it, by tool (the core stays the same)
 
-`WORKFLOW.md` est du Markdown brut qu'un agent lit comme contexte/instructions. Seul le
-**placement** change :
+`WORKFLOW.md` is plain Markdown that an agent reads as context/instructions. Only the
+**placement** changes:
 
-| Outil | Où l'accrocher |
+| Tool | Where to hook it |
 |---|---|
-| **Claude Code** | `CLAUDE.md` (ou une skill `.claude/skills/…`) qui inclut/pointe `WORKFLOW.md` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` qui pointent `WORKFLOW.md` | <!-- template -->
-| **Autre agent** | system prompt / fichier de contexte qui inclut `WORKFLOW.md` |
+| **Claude Code** | `CLAUDE.md` (or a `.claude/skills/…` skill) that includes/points to `WORKFLOW.md` |
+| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` pointing to `WORKFLOW.md` | <!-- template -->
+| **Other agent** | system prompt / context file that includes `WORKFLOW.md` |
 
-**Adapter** = renvoyer vers la doc et les outils **du projet** partout où le process dit « les
-standards du projet », et brancher la clôture sur le rituel existant (ex. la skill de review).
+**Adapting** = pointing to the **project's own** doc and tools everywhere the process says "the
+project's standards", and wiring closure into the existing ritual (e.g. the review skill).
 
-> **Adopter dans un projet → [`INSTALL.md`](INSTALL.md)** : le chemin d'adoption (échafaudage,
-> config d'index, **câblage des checks là où l'utilisateur veut**, trigger de l'audit sémantique).
-> Principe : *détecter + signaler, l'utilisateur décide quand les checks tournent*. L'`install.py`
-> interactif reste à bâtir ; `INSTALL.md` en tient la spec et sert de guide manuel d'ici là.
+> **Adopting into a project → [`INSTALL.md`](INSTALL.md)**: the adoption path (scaffolding,
+> index config, **wiring the checks wherever the user wants**, triggering the semantic audit).
+> Principle: *detect + flag, the user decides when checks run*. The interactive `install.py`
+> still needs to be built; `INSTALL.md` holds its spec and serves as a manual guide until then.
 
-## Contenu
+## Contents
 
-- `WORKFLOW.md` — la boucle + les principes (**le cœur**).
-- `backlog/` — le **travail en cours** (le todo + la DoD de clôture).
-- `FEATURE_MAP.md` — mémoire « feature » (gabarit).
-- `decisions/` — mémoire « décision » (protocole + INDEX).
-- `MEMORY.md` — mémoire « préférences / apprentissages » (partagé vs perso).
-- `index/INDEX.md` — navigation (gabarit) ; `index/manifest.py` maintient le détail par-fichier
-  en écriture (`set`/`rm`/`get`/`stamp`).
-- `checks/` — **contrôles déterministes** du process (intégrité backlog / décisions / index…) à
-  câbler en hook ou CI.
-- `hooks/` — **gardes universelles** (sécurité : secrets, empoisonnement, commandes
-  destructrices), portables.
-- `SCRIPTS.md` — **référence** de chaque script de `checks/`, `hooks/` et `index/` : intention +
-  paramétrage + codes de sortie.
-- `knowledge-capture.md` — routage agnostique d'un apprentissage de méthode (gate « faut-il
-  outiller ? » + fonction → mécanisme par outil).
+- `WORKFLOW.md` — the loop + the principles (**the core**).
+- `backlog/` — **work in progress** (the todo + the closure Definition of Done).
+- `FEATURE_MAP.md` — "feature" memory channel (template).
+- `decisions/` — "decision" memory channel (protocol + INDEX).
+- `MEMORY.md` — "preferences / learnings" memory channel (shared vs personal).
+- `index/INDEX.md` — navigation (template); `index/manifest.py` maintains the per-file detail
+  on write (`set`/`rm`/`get`/`stamp`).
+- `checks/` — the process's **deterministic checks** (backlog / decisions / index integrity…) to
+  be wired into a hook or CI.
+- `hooks/` — **universal guardrails** (security: secrets, poisoning, destructive commands),
+  portable.
+- `SCRIPTS.md` — **reference** for every script under `checks/`, `hooks/` and `index/`: intent +
+  parameters + exit codes.
+- `knowledge-capture.md` — agnostic routing for a method-level learning (the "is it worth
+  tooling?" gate + function → per-tool mechanism).
 
-## Amender
+## Amend it
 
-C'est une **graine**. Le projet et l'utilisateur ajustent : placement, conventions, rôles de
-délégation, branchement sur la revue/clôture existante. Le process est fait pour être
-**modifié**, pas subi.
+This is a **seed**. The project and the user adjust it: placement, conventions, delegation
+roles, wiring into the existing review/closure ritual. The process is meant to be
+**modified**, not endured as-is.

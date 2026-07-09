@@ -1,44 +1,44 @@
-# `adapters/claude-code/` — matérialisation Claude Code du câblage
+# `adapters/claude-code/` — Claude Code materialization of the wiring
 
-> **Rôle.** `checks/README.md` et `hooks/README.md` décrivent le câblage sous forme de **tables**
-> (quelle garde, quel déclencheur, quel outil) et de squelettes `sh` illustratifs — agnostiques par
-> construction, pour rester valables hors Claude Code. Ce dossier est la **matérialisation
-> concrète** de ces tables pour **Claude Code** : des fichiers de hook réels, exécutables, plus un
-> fragment `settings.json` qui les câble. C'est la **première brique** du futur `install.py`
-> (`INSTALL.md §Forme cible`) : quand l'installeur détectera Claude Code comme hôte, il copiera ce
-> dossier et proposera ce fragment plutôt que de générer la glu à la volée.
+> **Role.** `checks/README.md` and `hooks/README.md` describe the wiring as **tables** (which
+> guard, which trigger, which tool) and illustrative `sh` skeletons — agnostic by construction, to
+> stay valid outside Claude Code. This folder is the **concrete materialization** of those tables
+> for **Claude Code**: real, executable hook files, plus a `settings.json` fragment that wires
+> them in. This is the **first brick** of the future `install.py` (`INSTALL.md §Target shape`):
+> when the installer detects Claude Code as the host, it will copy this folder and offer this
+> fragment instead of generating the glue on the fly.
 >
-> Rien ici ne réimplémente une garde ou un check — chaque script de ce dossier ne fait
-> qu'**appeler** un script de `../../checks/` ou `../../hooks/` avec les bons arguments, au bon
-> déclencheur. La logique reste **canonique** dans `checks/`/`hooks/` ; ici, seule la glu.
+> Nothing here reimplements a guard or a check — every script in this folder only **calls** a
+> script from `../../checks/` or `../../hooks/` with the right arguments, at the right trigger.
+> The logic stays **canonical** in `checks/`/`hooks/`; here, only the glue.
 
-## Inventaire
+## Inventory
 
-| Fichier | Émballe | Déclencheur Claude Code |
+| File | Wraps | Claude Code trigger |
 |---|---|---|
-| `hooks/session-start-sweep.sh` | `checks/*.py` (6 checks structurels), agrégés | `SessionStart` |
-| `hooks/stop-check.sh <nom-du-check>` | un `checks/<nom-du-check>.py`, en détail | `Stop` (un hook par check voulu) |
-| `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, avant `git commit` |
+| `hooks/session-start-sweep.sh` | `checks/*.py` (6 structural checks), aggregated | `SessionStart` |
+| `hooks/stop-check.sh <check-name>` | one `checks/<check-name>.py`, in detail | `Stop` (one hook per desired check) |
+| `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, before `git commit` |
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
-| `skills/decisions-audit.md` | recette `checks/decisions-audit.md` | skill + subagent (à la demande / volume) |
-| `skills/memory-audit.md` | recette `checks/memory-audit.md` | skill + subagent (à la demande / volume) |
+| `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
+| `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
 
-Tous les `.sh` sont **muets sur succès**, sauf `security-guards.sh` (bloque avec un message sur
-`exit 2`, comme le prescrivent les gardes qu'il appelle) et `pre-commit-stamp.sh` (n'écrit jamais
-bloquant — cf. `checks/README.md §Câblage pré-commit`). Chaque script détecte `python3`/`python` et
-résout la racine du dépôt via `$CLAUDE_PROJECT_DIR` (fourni par Claude Code) ou, à défaut,
-`git rev-parse --show-toplevel` — aucun chemin absolu codé en dur.
+All `.sh` scripts are **silent on success**, except `security-guards.sh` (blocks with a message on
+`exit 2`, as prescribed by the guards it calls) and `pre-commit-stamp.sh` (never writes as a
+blocking step — cf. `checks/README.md §Pre-commit wiring`). Each script detects `python3`/`python`
+and resolves the repo root via `$CLAUDE_PROJECT_DIR` (provided by Claude Code) or, failing that,
+`git rev-parse --show-toplevel` — no hardcoded absolute path.
 
-## Fragment `settings.json`
+## `settings.json` fragment
 
 <!-- template -->
-À fusionner dans `.claude/settings.json` (ou `.claude/settings.local.json`) du projet qui adopte
-le framework — chemins **côté projet adoptant**, pas dans ce dépôt (YAMS n'est pas lui-même
-consommateur de Claude Code).
+To merge into `.claude/settings.json` (or `.claude/settings.local.json`) of the project adopting
+the framework — paths **on the adopting project's side**, not in this repo (YAMS is not itself a
+Claude Code consumer).
 <!-- /template -->
 
-Comme partout dans ce framework (`INSTALL.md §Principe directeur`) : ceci est une
-**proposition**, pas un câblage imposé — chaque bloc peut être adopté séparément.
+As everywhere in this framework (`INSTALL.md §Guiding principle`): this is a **proposal**, not
+imposed wiring — each block can be adopted separately.
 
 ```json
 {
@@ -99,26 +99,25 @@ Comme partout dans ce framework (`INSTALL.md §Principe directeur`) : ceci est u
 }
 ```
 
-**Notes de lecture :**
-- `Stop` liste 3 checks en exemple (`index-check`, `backlog-check`, `decisions-check`) — un hook
-  de plus par check qu'on veut voir rappelé en détail avant la fin de session ; le sweep
-  `SessionStart` couvre déjà les 6 en agrégé. Ajouter `memory-check`/`feature-map-check`/
-  `doc-refs-check` de la même façon si voulu.
-- `PreToolUse(Bash)` porte **deux** hooks : `security-guards.sh` (secret-scan + destructive-guard,
-  chacun lit `tool_name`/`tool_input` sur son propre `--stdin-json`) et `pre-commit-stamp.sh`
-  (n'agit que si la commande contient `git commit`, sinon no-op immédiat). Les deux reçoivent le
-  même JSON sur stdin, indépendamment.
-- L'audit sémantique (`skills/decisions-audit.md`, `skills/memory-audit.md`) n'apparaît **jamais**
-  dans `settings.json` — ce n'est pas un hook, cf. `checks/README.md §Sémantique — agent,
-  mémoire↔code`. Il se déclenche par skill (à la demande) ou par la boucle rapport du cron OS
-  (`INSTALL.md étape 5`).
+**Reading notes:**
+- `Stop` lists 3 checks as an example (`index-check`, `backlog-check`, `decisions-check`) — one
+  more hook per check you want recalled in detail before end of session; the `SessionStart` sweep
+  already covers all 6 in aggregate. Add `memory-check`/`feature-map-check`/`doc-refs-check` the
+  same way if wanted.
+- `PreToolUse(Bash)` carries **two** hooks: `security-guards.sh` (secret-scan + destructive-guard,
+  each reading `tool_name`/`tool_input` from its own `--stdin-json`) and `pre-commit-stamp.sh`
+  (only acts if the command contains `git commit`, otherwise an immediate no-op). Both receive the
+  same JSON on stdin, independently.
+- The semantic audit (`skills/decisions-audit.md`, `skills/memory-audit.md`) **never** appears in
+  `settings.json` — it's not a hook, cf. `checks/README.md §Semantic — agent,
+  memory<->code`. It triggers via skill (on demand) or the OS cron job's report loop
+  (`INSTALL.md step 5`).
 
-## Gabarits skill/subagent
+## Skill/subagent templates
 
-`skills/decisions-audit.md` et `skills/memory-audit.md` ne sont **pas** des scripts — ce sont des
-gabarits texte au format skill/subagent Claude Code, qui **pointent** vers le barème canonique
-(`checks/decisions-audit.md`, `checks/memory-audit.md`) sans jamais le dupliquer : ils précisent
-seulement quel script lancer, quel barème charger, quel format de sortie rendre. Adapter au format
-concret d'un skill/subagent Claude Code (frontmatter, nom de fichier sous `.claude/skills/` /
-`.claude/agents/`) relève de l'installeur ou d'une copie manuelle — le contenu métier ne change
-pas.
+`skills/decisions-audit.md` and `skills/memory-audit.md` are **not** scripts — they are text
+templates in Claude Code's skill/subagent format, which **point** to the canonical scale
+(`checks/decisions-audit.md`, `checks/memory-audit.md`) without ever duplicating it: they only
+specify which script to run, which scale to load, which output format to render. Adapting to the
+concrete format of a Claude Code skill/subagent (frontmatter, file name under `.claude/skills/` /
+`.claude/agents/`) is up to the installer or a manual copy — the business content doesn't change.

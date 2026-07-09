@@ -1,21 +1,21 @@
-# `hooks/` — gardes universelles (portables) + câblage par outil
+# `hooks/` — universal guards (portable) + per-tool wiring
 
-> Deuxième famille de contrôles, à côté de `checks/`. Un **hook** = une **garde** (logique
-> portable, ici en Python stdlib) **+** un **point de déclenchement** (mécanisme spécifique à
-> l'outil). La garde vit ici, **canonique** ; un **installeur par outil** la câble au bon
-> déclencheur. Aucune ne corrige : elles **signalent** / demandent confirmation.
+> Second family of controls, alongside `checks/`. A **hook** = a **guard** (portable
+> logic, here in Python stdlib) **+** a **trigger point** (mechanism specific to
+> the tool). The guard lives here, **canonical**; a **per-tool installer** wires it to the
+> right trigger. None of them fix anything: they **report** / ask for confirmation.
 
-## Les gardes fournies (universelles, agnostiques)
+## Guards provided (universal, agnostic)
 
-| Garde | Ce qu'elle attrape | Verdict |
+| Guard | What it catches | Verdict |
 |---|---|---|
-| `poisoning-scan.py` | Unicode **invisible/bidi** dans les fichiers d'instruction & de mémoire (vecteur « TrapDoor ») | exit 2 = bloquer |
-| `secret-scan.py` | **clés/jetons** commités (18 motifs) — Anthropic, AWS, GitHub, Slack, Stripe… | exit 2 = bloquer |
-| `destructive-guard.py` | commandes shell **destructrices** larges (`find -delete`, `-exec rm`) | « ask » (confirmer) |
+| `poisoning-scan.py` | **invisible/bidi** Unicode in instruction & memory files (a "TrapDoor" poisoning vector) | exit 2 = block |
+| `secret-scan.py` | committed **keys/tokens** (18 patterns) — Anthropic, AWS, GitHub, Slack, Stripe… | exit 2 = block |
+| `destructive-guard.py` | broad **destructive** shell commands (`find -delete`, `-exec rm`) | "ask" (confirm) |
 
-Chacune est **portable** (stdlib, sans dépendance) et offre deux entrées :
-- **universelle** : `--staged` (contenu git stagé — pré-commit / CI) ou des chemins en argument ;
-- **adaptateur Claude Code** : `--stdin-json` (lit le JSON `tool_name`/`tool_input` du hook).
+Each one is **portable** (stdlib, no dependency) and offers two entry points:
+- **universal**: `--staged` (git-staged content — pre-commit / CI) or paths as arguments;
+- **Claude Code adapter**: `--stdin-json` (reads the hook's `tool_name`/`tool_input` JSON).
 
 ```bash
 python3 hooks/poisoning-scan.py --staged
@@ -23,31 +23,31 @@ python3 hooks/secret-scan.py --staged
 python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 ```
 
-## Câblage par outil — ce que l'installeur matérialise
+## Wiring per tool — what the installer materializes
 
-Le **déclencheur** est spécifique à l'outil ; la garde, non. Table de matérialisation :
+The **trigger** is tool-specific; the guard is not. Materialization table:
 
-| Garde | Quand | Claude Code | Git / CI |
+| Guard | When | Claude Code | Git / CI |
 |---|---|---|---|
-| poisoning-scan | début de session · avant écriture d'un fichier d'instruction | hook `SessionStart` / `PreToolUse(Write\|Edit)` → `--stdin-json` | `pre-commit` → `--staged` |
-| secret-scan | avant un commit · avant écriture | hook `PreToolUse(Bash\|Write\|Edit)` → `--stdin-json` | `pre-commit` → `--staged` |
-| destructive-guard | avant une commande shell | hook `PreToolUse(Bash)` → `--stdin-json` (décision « ask ») | `pre-commit` (exit 2 = bloquer) |
+| poisoning-scan | session start · before writing an instruction file | `SessionStart` / `PreToolUse(Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
+| secret-scan | before a commit · before writing | `PreToolUse(Bash\|Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
+| destructive-guard | before a shell command | `PreToolUse(Bash)` hook → `--stdin-json` ("ask" decision) | `pre-commit` (exit 2 = block) |
 
-> Les **contrôles de méthode** de `checks/` (`backlog-check`, `decisions-check`, `memory-audit`)
-> se câblent aussi en hook — typiquement `Stop` (fin de tâche) / `SessionStart` (dérive
-> post-fusion) côté Claude Code, ou un job CI. Voir `../checks/README.md`.
+> The `checks/` **method controls** (`backlog-check`, `decisions-check`, `memory-audit`)
+> also get wired as hooks — typically `Stop` (end of task) / `SessionStart` (post-merge
+> drift) on the Claude Code side, or a CI job. See `../checks/README.md`.
 
-## Ce qui N'est PAS ici — le projet l'apporte
+## What is NOT here — the project brings it
 
-Les gardes/contrôles **tech-spécifiques** (lint, tests, analyzers, standards de style du
-langage hôte) sont au **projet**, pas au process. Ici : seulement les gardes **universelles**
-(sécurité, intégrité) que toute équipe veut, quel que soit le langage.
+**Tech-specific** guards/controls (lint, tests, analyzers, host-language style
+standards) belong to the **project**, not the process. Here: only the **universal**
+guards (security, integrity) that every team wants, regardless of language.
 
-## Modèle d'installeur (à venir)
+## Installer model (to come)
 
-Un installeur par outil (Claude Code, Copilot…) lira ce dossier + `../checks/` et **générera**
-les artefacts concrets — fichiers de hook, entrées de config (`settings.json`,
-`.pre-commit-config.yaml`, workflow CI…) — en pointant chaque garde sur son déclencheur via la
-table ci-dessus. La logique n'est **jamais** réécrite : seule la glue de câblage diffère.
-Implémentation embarquée Claude Code : `adapters/claude-code/hooks/security-guards.sh` +
-`adapters/claude-code/README.md` (fragment `settings.json` qui câble le tout).
+A per-tool installer (Claude Code, Copilot…) will read this folder + `../checks/` and
+**generate** the concrete artifacts — hook files, config entries
+(`settings.json`, `.pre-commit-config.yaml`, CI workflow…) — pointing each guard to its
+trigger via the table above. The logic is **never** rewritten: only the wiring
+glue differs. Embedded Claude Code implementation: `adapters/claude-code/hooks/security-guards.sh` +
+`adapters/claude-code/README.md` (the `settings.json` fragment that wires it all up).

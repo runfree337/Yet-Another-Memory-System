@@ -1,86 +1,86 @@
-# Référence des scripts — intention + paramétrage
+# Script reference — intent + parameters
 
-> Un script par entrée : ce qu'il **constate** (jamais ce qu'il corrige, sauf mention explicite),
-> ses **paramètres**, ses **codes de sortie**. Les patrons de *câblage* (quand/où les lancer) sont
-> documentés à part — `checks/README.md §À câbler` et `hooks/README.md §Câblage par outil` pour le
-> **comment**, `INSTALL.md §Vue d'ensemble du câblage` pour l'arbre de décision. Ici : uniquement le
-> script lui-même, indépendamment de son câblage.
+> One script per entry: what it **finds** (never what it fixes, unless explicitly noted),
+> its **parameters**, its **exit codes**. The *wiring* patterns (when/where to run them) are
+> documented separately — `checks/README.md §To wire` and `hooks/README.md §Wiring per tool` for the
+> **how**, `INSTALL.md §Wiring overview` for the decision tree. Here: only the
+> script itself, independent of its wiring.
 
-## `checks/` — contrôles de méthode (Tier 1, déterministe)
+## `checks/` — method checks (Tier 1, deterministic)
 
 ### `backlog-check.py`
-**Intention :** intégrité du `backlog/` (modèle frontmatter, canal Backlog du gabarit commun
-d'entrée mémoire) — chaque chantier doc-backed a un `STATE.md` avec un frontmatter complet et
-cohérent (`id/title/status/milestone/after/docs/updated`, validé via `entrylib.validate_entry`)
-et une rubrique `## Tâches` obligatoire (une ligne par tâche, état `todo/in-progress/blocked/done`,
-libellé ≤ 30 mots ou renvoi `→ doc-de-travail.md`).
+**Intent:** integrity of `backlog/` (frontmatter model, Backlog channel of the common
+memory entry template) — every doc-backed work item has a `STATE.md` with a complete and
+consistent frontmatter (`id/title/status/milestone/after/docs/updated`, validated via `entrylib.validate_entry`)
+and a mandatory `## Tasks` section (one line per task, state `todo/in-progress/blocked/done`,
+label ≤ 30 words or a `→ working-doc.md` pointer).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| *(aucun)* | lance le contrôle complet, imprime le rapport texte | — |
-| `--json` | même contrôle, sortie JSON des findings | désactivé |
-| `--board` | vue chantiers-par-jalon avec compteurs de tâches par état (état live tiré des frontmatters + rubrique `## Tâches`) | — |
-| `--state <id>` | déroule un chantier précis (tâches + compteurs) ; sans `<id>` liste les ids valides | — |
-| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `STATE.md` cités via `entrylib.stamp_updated`, ré-enregistre le fichier | agit sur les fichiers passés en argument |
-| `--stamp --staged` | même effet que `--stamp`, mais scope = `STATE.md` **stagés** en git (`git diff --cached`), et **re-stage** après écriture | à câbler en pré-commit |
-| `--checklist [id]` | imprime la checklist de clôture (DoD, 5 étapes) pour un chantier | — |
+| *(none)* | runs the full check, prints the text report | — |
+| `--json` | same check, JSON output of findings | disabled |
+| `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
+| `--state <id>` | expands one specific work item (tasks + counts); without `<id>` lists the valid ids | — |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | acts on the files passed as arguments |
+| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit |
+| `--checklist [id]` | prints the closure checklist (Definition of Done, 5 steps) for a work item | — |
 
-**Codes de sortie :** `0` propre · `1` seulement des À-CONFIRMER (`--state` sans hit renvoie aussi `1`) · `2` au moins un BLOQUANT-AUTO.
-**Écriture (mode `--stamp`) :** mute le champ `updated` et rien d'autre — borné, mécanique, jamais bloquant (cf. `checks/README.md §Câblage pré-commit`). Même mode sur `feature-map-check.py` et `memory-check.py`.
+**Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.
+**Write (`--stamp` mode):** mutates the `updated` field and nothing else — bounded, mechanical, never blocking (see `checks/README.md §Pre-commit wiring`). Same mode on `feature-map-check.py` and `memory-check.py`.
 
 ```bash
-python3 checks/backlog-check.py                 # rapport texte
-python3 checks/backlog-check.py --board          # vue d'ensemble (avec compteurs de tâches)
-python3 checks/backlog-check.py --stamp --staged # pré-commit uniquement
+python3 checks/backlog-check.py                 # text report
+python3 checks/backlog-check.py --board          # overview (with task counts)
+python3 checks/backlog-check.py --stamp --staged # pre-commit only
 ```
 
 ### `feature-map-check.py`
-**Intention :** intégrité du canal Feature (modèle `entrylib`) — un fichier par fiche
-(`features/<slug>.md`) + `FEATURE_MAP.md` en index. Concordance fichier↔index, frontmatter du
-canal `feature` (`entrylib.validate_entry`), clés-cœur du corps (Rôle/Code/réf durable),
-existence des ids `D-*` cités, absence de référence transitoire, fraîcheur et granularité en
-signal *soft*.
+**Intent:** integrity of the Feature channel (`entrylib` model) — one file per
+entry (`features/<slug>.md`) + `FEATURE_MAP.md` as index. File↔index concordance,
+frontmatter of the `feature` channel (`entrylib.validate_entry`), core body keys (Role/Code/durable
+reference), existence of cited `D-*` ids, absence of transient references, freshness and
+granularity as a *soft* signal.
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| *(aucun)* | rapport texte, trié bloquants puis à-confirmer | — |
-| `--json` | sortie JSON des findings (`Finding` à 5 champs) | désactivé |
-| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les fiches citées | agit sur les fichiers passés en argument |
-| `--stamp --staged` | même effet, mais scope = `features/*.md` **stagés** en git, et **re-stage** après écriture | à câbler en pré-commit |
+| *(none)* | text report, sorted blocking then to-confirm | — |
+| `--json` | JSON output of findings (5-field `Finding`) | disabled |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited entries | acts on the files passed as arguments |
+| `--stamp --staged` | same effect, but scope = `features/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
-**Codes de sortie :** `0` propre · `1` uniquement des À-CONFIRMER (`FM-FRESH`, `FM-GRAN` — soft)
-· `2` au moins un BLOQUANT (`FM-INDEX`, frontmatter `entrylib`, `FM1-*`, `FM-DECISION`,
+**Exit codes:** `0` clean · `1` only TO-CONFIRM (`FM-FRESH`, `FM-GRAN` — soft)
+· `2` at least one BLOCKING (`FM-INDEX`, `entrylib` frontmatter, `FM1-*`, `FM-DECISION`,
 `FM-TRANSIENT`).
-**Écriture (mode `--stamp`) :** mute le champ `updated` et rien d'autre — borné, mécanique,
-jamais bloquant (même garde-fou que `backlog-check.py --stamp`).
+**Write (`--stamp` mode):** mutates the `updated` field and nothing else — bounded, mechanical,
+never blocking (same safeguard as `backlog-check.py --stamp`).
 
 ```bash
 python3 checks/feature-map-check.py
-python3 checks/feature-map-check.py --stamp --staged   # pré-commit uniquement
+python3 checks/feature-map-check.py --stamp --staged   # pre-commit only
 ```
 
 ### `decisions-check.py`
-**Intention :** intégrité du canal **Décision** (instance de `ENTRY-TEMPLATE.md`, cf.
-`decisions/README.md`) — sept règles, de la concordance fichier↔INDEX au graphe de révocation.
-Importe `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
+**Intent:** integrity of the **Decision** channel (instance of `ENTRY-TEMPLATE.md`, see
+`decisions/README.md`) — seven rules, from file↔INDEX concordance to the revocation graph.
+Imports `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
 
-| Règle | Sévérité | Ce qu'elle prouve |
+| Rule | Severity | What it proves |
 |---|---|---|
-| `D1` | bloquant | `decisions/D-*.md` orphelin (absent de `INDEX.md`) |
-| `D2` | bloquant | id cité dans `INDEX.md` sans fichier `D-….md` |
-| `D3` | bloquant/à-confirmer | frontmatter complet et valide pour le canal `decision` (`entrylib.validate_entry`) |
-| `D4` | bloquant | rubriques canoniques (`**Décision**`/`**Pourquoi**`/`**Invariant**`) présentes dans le corps |
-| `D5` | bloquant | `status` ⟺ section de `INDEX.md` (`archived` sous `## Actives`, ou `active` sous `## Archivées`, est bloquant ; `revoked` non contraint) |
-| `D6` | bloquant | graphe de révocation sain : `replaced-by`/`replaces` résolus, réciprocité, aucun cycle |
-| `D7` (`R-DEAD-LINK`) | bloquant/à-confirmer | `links:` inter-canaux résolus (`entrylib.check_links`) |
+| `D1` | blocking | orphan `decisions/D-*.md` (missing from `INDEX.md`) |
+| `D2` | blocking | id cited in `INDEX.md` with no `D-….md` file |
+| `D3` | blocking/to-confirm | complete and valid frontmatter for the `decision` channel (`entrylib.validate_entry`) |
+| `D4` | blocking | canonical sections (`**Decision**`/`**Why**`/`**Invariant**`) present in the body |
+| `D5` | blocking | `status` ⟺ `INDEX.md` section (`archived` under `## Active`, or `active` under `## Archived`, is blocking; `revoked` unconstrained) |
+| `D6` | blocking | sound revocation graph: `replaced-by`/`replaces` resolved, reciprocal, no cycle |
+| `D7` (`R-DEAD-LINK`) | blocking/to-confirm | cross-channel `links:` resolved (`entrylib.check_links`) |
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| *(aucun)* | rapport texte | — |
-| `--json` | sortie JSON | désactivé |
+| *(none)* | text report | — |
+| `--json` | JSON output | disabled |
 
-**Codes de sortie :** `0` propre · `1` uniquement des à-confirmer (`R-UNVERIFIED`,
-`R-VERIFIED-NOT-RATIFIED`, `R-DEAD-LINK` non résolu en slug) · `2` au moins un bloquant.
+**Exit codes:** `0` clean · `1` only to-confirm (`R-UNVERIFIED`,
+`R-VERIFIED-NOT-RATIFIED`, `R-DEAD-LINK` not resolved to a slug) · `2` at least one blocking.
 
 ```bash
 python3 checks/decisions-check.py
@@ -88,208 +88,208 @@ python3 checks/decisions-check.py --json
 ```
 
 ### `doc-refs-check.py`
-**Intention :** références de fichiers mortes dans la doc — un chemin cité dans un `.md` qui
-n'existe pas/plus. Heuristique git (a existé puis disparu = bloquant ; jamais créé = à-confirmer).
+**Intent:** dead file references in the docs — a path cited in a `.md` that
+no longer/never existed. Git heuristic (existed then vanished = blocking; never created = to-confirm).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `paths…` | limite le scan à ces chemins/fichiers | tout le corpus si omis avec `--staged` absent aussi → voir `gather()` |
-| `--staged` | scanne le contenu **stagé** en git plutôt que le disque | désactivé |
+| `paths…` | limits the scan to these paths/files | whole corpus if omitted and `--staged` also absent → see `gather()` |
+| `--staged` | scans **staged** git content instead of disk | disabled |
 
-**Codes de sortie :** `0` aucune référence morte · `1` uniquement des « à-confirmer » · `2` au moins un « BLOQUANT ».
+**Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING".
 
-**Exemption gabarit :** un chemin d'exemple (jamais destiné à exister — gabarit de nommage,
-config pas encore créée par le projet…) échappe au scan via un marqueur **HTML explicite dans
-le texte**, jamais une allowlist cachée dans le script. Deux formes, gérées par `gabarit_span()` :
-ligne — un chemin sur une ligne qui contient `<!-- template -->` est ignoré ; bloc — les chemins
-des lignes **entre** `<!-- template -->` et `<!-- /template -->` sont ignorés. Le marqueur reste lisible
-en clair dans le `.md` (commentaire HTML — invisible au rendu, visible à l'édition) : pas de liste
-séparée à maintenir en synchronisation avec la doc.
+**Template exemption:** an example path (never meant to exist — naming template, config not
+yet created by the project…) escapes the scan via an explicit **HTML marker in
+the text**, never a hidden allowlist in the script. Two forms, handled by `gabarit_span()`:
+line — a path on a line containing `<!-- template -->` is ignored; block — paths on the lines
+**between** `<!-- template -->` and `<!-- /template -->` are ignored. The marker stays readable
+in plain text in the `.md` (HTML comment — invisible when rendered, visible when editing): no
+separate list to keep in sync with the docs.
 
 ```bash
-python3 checks/doc-refs-check.py                 # corpus par défaut du script
-python3 checks/doc-refs-check.py --staged         # pré-commit
-python3 checks/doc-refs-check.py Docs/architecture/  # un sous-dossier
+python3 checks/doc-refs-check.py                 # script's default corpus
+python3 checks/doc-refs-check.py --staged         # pre-commit
+python3 checks/doc-refs-check.py Docs/architecture/  # one subfolder
 ```
 
 ### `index-check.py`
 <!-- template -->
-**Intention :** intégrité de l'index par-fichier (`index/manifest.tsv` ↔ fichiers réels du dépôt).
-**Inactif sans configuration** — le projet hôte doit fournir `index/index-config.json`.
+**Intent:** integrity of the per-file index (`index/manifest.tsv` ↔ actual repo files).
+**Inactive without configuration** — the host project must provide `index/index-config.json`.
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--config <chemin>` | chemin du fichier de config (`roots`, `extensions`, `ignore`, `base`, `manifest`) | `index/index-config.json` |
-| `--base <chemin>` | racine du dépôt à scanner | `config.base`, sinon `cwd` |
+| `--config <path>` | path to the config file (`roots`, `extensions`, `ignore`, `base`, `manifest`) | `index/index-config.json` |
+| `--base <path>` | repo root to scan | `config.base`, otherwise `cwd` |
 <!-- /template -->
 
-**Codes de sortie :** `0` propre **ou** config absente/incomplète (inactif, pas une erreur) · `2` manifeste introuvable, config illisible, ou dérive détectée (`I1` entrée morte, `I2` fichier non indexé).
+**Exit codes:** `0` clean **or** config missing/incomplete (inactive, not an error) · `2` manifest missing, config unreadable, or drift detected (`I1` dead entry, `I2` unindexed file).
 
 ```bash
-python3 checks/index-check.py                                    # nécessite index/index-config.json
+python3 checks/index-check.py                                    # requires index/index-config.json
 python3 checks/index-check.py --config index/index-config.json --base .
 ```
 
 ### `entrylib.py`
-**Intention :** **bibliothèque partagée**, PAS un check autonome — parseur de frontmatter minimal
-maison (pas de dépendance yaml) + validation du schéma commun d'une **entrée mémoire**
-(`ENTRY-TEMPLATE.md`), plus la concordance fichier↔index généralisée depuis `memory-check.py` /
-`decisions-check.py`. Importée par les checks de **canal** (`memory-check.py`, `decisions-check.py`,
-`feature-map-check.py`, `backlog-check.py`) — **un seul endroit définit ce qu'est une entrée
-valide**, plus de duplication de regex entre checks.
+**Intent:** **shared library**, NOT a standalone check — an in-house minimal frontmatter
+parser (no yaml dependency) + validation of the common **memory entry** schema
+(`ENTRY-TEMPLATE.md`), plus the file↔index concordance generalized from `memory-check.py` /
+`decisions-check.py`. Imported by the **channel** checks (`memory-check.py`, `decisions-check.py`,
+`feature-map-check.py`, `backlog-check.py`) — **a single place defines what a valid
+entry is**, no more regex duplication between checks.
 
-API publique : `Finding`/`BLOQUANT`/`CONFIRMER` (le gabarit `checks/TEMPLATE.md`), `CHANNELS`
-(spec required/optional/enums par canal), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
+Public API: `Finding`/`BLOCKING`/`CONFIRM` (the `checks/TEMPLATE.md` template), `CHANNELS`
+(required/optional/enum spec per channel), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
 `check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`.
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--selftest` | **seul mode exécutable** — jeu d'essais embarqué (fixtures en chaînes + tempfile), un par règle | — |
+| `--selftest` | **only runnable mode** — embedded test suite (string fixtures + tempfile), one per rule | — |
 
-**Aucun effet quand importé** — pas de `main()` déclenché à l'`import`, seulement des définitions.
+**No effect when imported** — no `main()` triggered on `import`, only definitions.
 
-**Codes de sortie (`--selftest`) :** `0` tous les essais passent · `1` au moins un échec (détail
-imprimé, un par ligne). Hors `--selftest`, `main()` imprime l'usage et retourne `0` (rappel que
-ce n'est pas un check à câbler seul).
+**Exit codes (`--selftest`):** `0` all tests pass · `1` at least one failure (detail
+printed, one per line). Outside `--selftest`, `main()` prints usage and returns `0` (a reminder
+that this isn't a check to be wired on its own).
 
 ```bash
 python3 checks/entrylib.py --selftest
-python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # sans effet de bord
+python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # no side effect
 ```
 
 ### `memory-check.py`
-**Intention :** intégrité du canal **Mémoire** — format « un fait par fichier + frontmatter »
-(`memory/<slug>.md`), `MEMORY.md` = index. Instance de `ENTRY-TEMPLATE.md` : toute la logique
-(frontmatter, concordance fichier↔index, liens croisés) vit dans `checks/entrylib.py` — ce
-script se contente d'appeler `entrylib` avec le canal `"memory"` et d'agréger, il ne redéfinit
-aucune règle localement.
+**Intent:** integrity of the **Memory** channel — "one fact per file + frontmatter" format
+(`memory/<slug>.md`), `MEMORY.md` = index. Instance of `ENTRY-TEMPLATE.md`: all the logic
+(frontmatter, file↔index concordance, cross-links) lives in `checks/entrylib.py` — this
+script just calls `entrylib` with the `"memory"` channel and aggregates, it doesn't redefine
+any rule locally.
 
-Règles remontées telles quelles depuis `entrylib.validate_entry(..., "memory")` :
+Rules surfaced as-is from `entrylib.validate_entry(..., "memory")`:
 `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`, `R-EXT-NO-CONF`, `R-BAD-DATE`,
-`R-UNVERIFIED` (à-confirmer), `R-VERIFIED-NOT-RATIFIED` (à-confirmer) ; plus concordance
-fichier↔index via `entrylib.check_index_concordance` (`R-ORPHAN-FILE`, `R-DEAD-INDEX`) et liens
-croisés via `entrylib.check_links` (`R-DEAD-LINK`, bloquant sur id/chemin, à-confirmer sur slug
-d'un canal pas encore peuplé). Suit `TEMPLATE.md` à la lettre.
+`R-UNVERIFIED` (to-confirm), `R-VERIFIED-NOT-RATIFIED` (to-confirm); plus file↔index concordance
+via `entrylib.check_index_concordance` (`R-ORPHAN-FILE`, `R-DEAD-INDEX`) and cross-links
+via `entrylib.check_links` (`R-DEAD-LINK`, blocking on id/path, to-confirm on a
+slug from a not-yet-populated channel). Follows `TEMPLATE.md` to the letter.
 
-Pas de paramètre de ciblage (comme `decisions-check.py`, compare toujours `MEMORY.md` et
-`memory/` en entier — une concordance fichier↔index ne se scope pas à un sous-ensemble).
-**Écriture (mode `--stamp`) :** bornée au champ `updated` (même triple garde-fou que
-`backlog-check.py` — scope stagé, champ mécanique seul, jamais bloquant).
+No targeting parameter (like `decisions-check.py`, always compares `MEMORY.md` and
+`memory/` in full — a file↔index concordance can't be scoped to a subset).
+**Write (`--stamp` mode):** bounded to the `updated` field (same triple safeguard as
+`backlog-check.py` — staged scope, mechanical field only, never blocking).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--json` | sortie JSON | désactivé |
-| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `memory/*.md` cités | agit sur les fichiers passés en argument |
-| `--stamp --staged` | même effet, mais scope = `memory/*.md` **stagés** en git, et **re-stage** après écriture | à câbler en pré-commit |
+| `--json` | JSON output | disabled |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `memory/*.md` files | acts on the files passed as arguments |
+| `--stamp --staged` | same effect, but scope = `memory/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
-**Codes de sortie :** `0` propre · `1` uniquement des « à-confirmer » · `2` au moins un bloquant.
+**Exit codes:** `0` clean · `1` only "to-confirm" · `2` at least one blocking.
 
 ```bash
 python3 checks/memory-check.py
 python3 checks/memory-check.py --json
-python3 checks/memory-check.py --stamp --staged   # pré-commit uniquement
+python3 checks/memory-check.py --stamp --staged   # pre-commit only
 ```
 
 ### `decisions-audit.py`
-**Intention :** orchestrateur du **journal de décisions** — ne contrôle rien lui-même, enchaîne/agrège
-les 4 scripts ci-dessus et pilote le cycle Tier 1 → Tier 2. Renommé depuis `memory-audit.py` : son
-scope réel est le journal de décisions, pas toute la mémoire — voir `memory-audit.py` ci-dessous
-pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs (priorité dans l'ordre :
-`--report` > `--merge` > `--plan` > `--tier1` > *défaut = les deux*).
+**Intent:** orchestrator for the **decisions journal** — checks nothing itself, chains/aggregates
+the 4 scripts above and drives the Tier 1 → Tier 2 cycle. Renamed from `memory-audit.py`: its
+real scope is the decisions journal, not the whole memory — see `memory-audit.py` below
+for the multi-channel orchestrator. Four mutually exclusive modes (priority order:
+`--report` > `--merge` > `--plan` > `--tier1` > *default = both*).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--tier1` | enchaîne `decisions-check`, `backlog-check`, `doc-refs-check`, `index-check`, imprime un verdict agrégé | — |
-| `--plan` | découpe `decisions/INDEX.md` en lots équilibrés (offset/limit), un lot par reviewer | — |
-| `--stale-first` | (`--plan` seul) priorise l'ORDRE des lots par `updated` de frontmatter le plus ancien — offset/limit de chaque lot reste une plage contiguë de lignes | désactivé |
-| `--merge <fichiers…>` | agrège des sorties d'agents Tier 2, **contrôle de couverture** (chaque décision auditée exactement 1×) | — |
-| `--report [dir]` | écrit un **rapport déterministe** (sans LLM) — pensé pour un cron OS headless | dossier : `$YAMS_MEMORY_REPORT_DIR` ou `.memory-reports/` |
-| `--batch-size <n>` | taille des lots pour `--plan` | `33` |
-| `--index <chemin>` | chemin du journal de décisions | `decisions/INDEX.md` |
-| `--json` | sortie JSON (`--plan` seulement) | désactivé |
-| *(aucun)* | équivaut à `--tier1` puis `--plan` | — |
+| `--tier1` | chains `decisions-check`, `backlog-check`, `doc-refs-check`, `index-check`, prints an aggregated verdict | — |
+| `--plan` | splits `decisions/INDEX.md` into balanced batches (offset/limit), one batch per reviewer | — |
+| `--stale-first` | (`--plan` only) prioritizes batch ORDER by oldest frontmatter `updated` — each batch's offset/limit stays a contiguous range of lines | disabled |
+| `--merge <files…>` | aggregates Tier 2 agent outputs, **coverage check** (each decision audited exactly 1×) | — |
+| `--report [dir]` | writes a **deterministic report** (no LLM) — meant for a headless OS cron | folder: `$YAMS_MEMORY_REPORT_DIR` or `.memory-reports/` |
+| `--batch-size <n>` | batch size for `--plan` | `33` |
+| `--index <path>` | path to the decisions journal | `decisions/INDEX.md` |
+| `--json` | JSON output (`--plan` only) | disabled |
+| *(none)* | equivalent to `--tier1` then `--plan` | — |
 
-**Codes de sortie :** `--tier1` → le pire code retour des 4 scripts sous-jacents (`0`/`1`/`2`) · `--plan`/`--report` → `0` (jamais bloquant, produisent un artefact) · `--merge` → `0` couverture complète, `1` décision non auditée ou auditée en double.
+**Exit codes:** `--tier1` → the worst exit code among the 4 underlying scripts (`0`/`1`/`2`) · `--plan`/`--report` → `0` (never blocking, they produce an artifact) · `--merge` → `0` full coverage, `1` a decision unaudited or audited twice.
 
 ```bash
-python3 checks/decisions-audit.py                              # tier1 + plan, usage courant
+python3 checks/decisions-audit.py                              # tier1 + plan, common usage
 python3 checks/decisions-audit.py --plan --stale-first --batch-size 20
-python3 checks/decisions-audit.py --merge sortie_lot1.txt sortie_lot2.txt
-python3 checks/decisions-audit.py --report                      # cron OS, headless
+python3 checks/decisions-audit.py --merge batch1_output.txt batch2_output.txt
+python3 checks/decisions-audit.py --report                      # OS cron, headless
 ```
 
 ### `memory-audit.py`
-**Intention :** orchestrateur **multi-canal** (Feature + Décision + Mémoire, `WORKFLOW.md §Les
-trois mémoires`) — enchaîne `feature-map-check.py` et `decisions-audit.py --tier1` (qui couvre
-déjà décisions/doc/index/backlog) et `memory-check.py`, résume par canal. Pas de `--plan`/`--merge`/
-`--report` propres : seul le canal Décision accumule assez pour justifier un découpage en lots —
-délégué à `decisions-audit.py`. Feature et Mémoire se relisent en un seul passage (petits par
-construction).
+**Intent:** **multi-channel** orchestrator (Feature + Decision + Memory, `WORKFLOW.md §The
+three memories`) — chains `feature-map-check.py` and `decisions-audit.py --tier1` (which
+already covers decisions/doc/index/backlog) and `memory-check.py`, summarizes per channel. No
+`--plan`/`--merge`/`--report` of its own: only the Decision channel accumulates enough to
+justify splitting into batches — delegated to `decisions-audit.py`. Feature and Memory are reread
+in one single pass (small by construction).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--tier1` | enchaîne les 3 canaux, imprime un verdict par canal | — |
-| `--json` | sortie JSON | désactivé |
-| *(aucun)* | équivaut à `--tier1` | — |
+| `--tier1` | chains the 3 channels, prints one verdict per channel | — |
+| `--json` | JSON output | disabled |
+| *(none)* | equivalent to `--tier1` | — |
 
-**Codes de sortie :** le pire code retour des 3 canaux sous-jacents (`0`/`1`/`2`).
+**Exit codes:** the worst exit code among the 3 underlying channels (`0`/`1`/`2`).
 
 ```bash
-python3 checks/memory-audit.py                              # tier1 sur les 3 canaux
+python3 checks/memory-audit.py                              # tier1 on the 3 channels
 python3 checks/memory-audit.py --json
 ```
 
 ---
 
-## `index/` — maintenance du manifeste (écriture)
+## `index/` — manifest maintenance (write)
 
 <!-- template -->
-Pendant en écriture de `index-check.py` ci-dessus (qui reste lecture seule). Même config
-agnostique (`index/index-config.json`), pas de logique de vérification dupliquée entre les deux.
+Write-side counterpart to `index-check.py` above (which stays read-only). Same
+config-agnostic setup (`index/index-config.json`), no verification logic duplicated between the two.
 
 ### `manifest.py`
-**Intention :** seul moyen d'éditer `index/manifest.tsv` — ajoute/retire une entrée, garde le
-fichier trié et dédupliqué. **Inactif sans configuration**, comme `index-check.py`.
+**Intent:** the only way to edit `index/manifest.tsv` — add/remove an entry, keep the
+file sorted and deduplicated. **Inactive without configuration**, like `index-check.py`.
 <!-- /template -->
 
-| Commande | Effet |
+| Command | Effect |
 |---|---|
-| `set <chemin> <intent>` | upsert l'entrée (ajoute ou remplace l'intent), ré-écrit le manifeste trié |
-| `rm <chemin>` | retire l'entrée ; no-op si absente |
-| `get <chemin>` | imprime l'intent de ce chemin (vide si absent) |
-| `stamp` | si `hub` est renseigné dans la config, met à jour sa ligne `> Last updated: ...` (date + commit court) ; **no-op** si `hub` est `null`/absent, ou si le fichier n'a pas cette ligne |
+| `set <path> <intent>` | upserts the entry (adds or replaces the intent), rewrites the manifest sorted |
+| `rm <path>` | removes the entry; no-op if absent |
+| `get <path>` | prints the intent of this path (empty if absent) |
+| `stamp` | if `hub` is set in the config, updates its `> Last updated: ...` line (date + short commit); **no-op** if `hub` is `null`/absent, or if the file doesn't have that line |
 
-Pas de commande `check` ici — c'est `checks/index-check.py` qui vérifie la dérive ; `manifest.py`
-ne fait qu'écrire ce qu'on lui donne, il ne scanne pas le dépôt pour la détecter lui-même.
+No `check` command here — `checks/index-check.py` is the one that verifies drift; `manifest.py`
+only writes what it's given, it doesn't scan the repo to detect drift itself.
 
-**Codes de sortie :** `0` commande exécutée · `1` config absente/illisible, ou usage invalide (aucune commande reconnue, imprime l'aide) · `2` `hub` configuré mais introuvable sur disque.
+**Exit codes:** `0` command executed · `1` config missing/unreadable, or invalid usage (no recognized command, prints help) · `2` `hub` configured but not found on disk.
 
 ```bash
-python3 index/manifest.py set src/foo.py "point d'entrée du parseur"
+python3 index/manifest.py set src/foo.py "parser entry point"
 python3 index/manifest.py rm src/old.py
 python3 index/manifest.py get src/foo.py
-python3 index/manifest.py stamp             # met à jour index/INDEX.md si `hub` pointe dessus
+python3 index/manifest.py stamp             # updates index/INDEX.md if `hub` points to it
 ```
 
 ---
 
-## `hooks/` — gardes universelles (sécurité, portables)
+## `hooks/` — universal guards (security, portable)
 
-Toutes partagent le même contrat à deux entrées : une **entrée universelle** (chemins/`--staged`,
-pour git ou usage manuel) et une **entrée adaptateur Claude Code** (`--stdin-json`, lit le JSON
-`tool_name`/`tool_input` du hook). Voir `hooks/README.md §Câblage par outil` pour le où/quand.
+All share the same two-entry contract: a **universal entry** (paths/`--staged`,
+for git or manual use) and a **Claude Code adapter entry** (`--stdin-json`, reads the
+`tool_name`/`tool_input` JSON of the hook). See `hooks/README.md §Wiring per tool` for the where/when.
 
 ### `poisoning-scan.py`
-**Intention :** détecte l'Unicode invisible/bidi dans les fichiers d'instruction et de mémoire
-(vecteur d'empoisonnement — texte caché qui trompe l'IA sans être visible à l'œil).
+**Intent:** detects invisible/bidi Unicode in instruction and memory files
+(poisoning vector — hidden text that fools the AI without being visible to the eye).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `paths…` | fichiers/chemins à scanner | — |
-| `--staged` | scanne le contenu stagé en git | désactivé |
-| `--stdin-json` | lit `{tool_name, tool_input}` sur stdin, extrait `tool_input.file_path` | désactivé |
+| `paths…` | files/paths to scan | — |
+| `--staged` | scans staged git content | disabled |
+| `--stdin-json` | reads `{tool_name, tool_input}` on stdin, extracts `tool_input.file_path` | disabled |
 
-**Codes de sortie :** `0` propre (ou JSON illisible en mode `--stdin-json` — n'échoue jamais l'hook) · `2` caractères suspects trouvés → **bloquer**.
+**Exit codes:** `0` clean (or unreadable JSON in `--stdin-json` mode — never fails the hook) · `2` suspicious characters found → **block**.
 
 ```bash
 python3 hooks/poisoning-scan.py --staged
@@ -297,32 +297,32 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md"}}' | python3 ho
 ```
 
 ### `secret-scan.py`
-**Intention :** détecte des clés/jetons commités ou écrits (18 motifs — fournisseurs cloud, VCS,
-messagerie, paiement…).
+**Intent:** detects committed or written keys/tokens (18 patterns — cloud providers, VCS,
+messaging, payment…).
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `paths…` | fichiers à scanner directement | — |
-| `--staged` | scanne le contenu stagé en git | comportement par défaut si ni `paths` ni `--stdin-json` |
-| `--stdin-json` | adaptateur Claude Code : sur `Bash` avec `git commit` → scanne le stagé ; sur `Write`/`Edit` → scanne le contenu écrit (fichiers allowlistés/extensions à ignorer exclus) | désactivé |
+| `paths…` | files to scan directly | — |
+| `--staged` | scans staged git content | default behavior if neither `paths` nor `--stdin-json` |
+| `--stdin-json` | Claude Code adapter: on `Bash` with `git commit` → scans staged content; on `Write`/`Edit` → scans written content (allowlisted files/ignored extensions excluded) | disabled |
 
-**Codes de sortie :** `0` propre · `2` secret potentiel trouvé → **bloquer**, masqué dans le rapport.
+**Exit codes:** `0` clean · `2` potential secret found → **block**, masked in the report.
 
 ```bash
 python3 hooks/secret-scan.py --staged
-python3 hooks/secret-scan.py chemin/vers/fichier.env
+python3 hooks/secret-scan.py path/to/file.env
 ```
 
 ### `destructive-guard.py`
-**Intention :** repère les commandes shell destructrices larges (`find … -delete`, `-exec rm`,
-etc.) — seule garde qui ne bloque pas mais **demande confirmation**.
+**Intent:** spots broad destructive shell commands (`find … -delete`, `-exec rm`,
+etc.) — the only guard that doesn't block but **asks for confirmation**.
 
-| Paramètre | Effet | Défaut |
+| Parameter | Effect | Default |
 |---|---|---|
-| `--command "<cmd>"` | commande à évaluer, mode universel | `""` |
-| `--stdin-json` | adaptateur Claude Code : sur `Bash` destructrice → émet une réponse `permissionDecision: "ask"` (JSON sur stdout) au lieu de bloquer | désactivé |
+| `--command "<cmd>"` | command to evaluate, universal mode | `""` |
+| `--stdin-json` | Claude Code adapter: on a destructive `Bash` command → emits a `permissionDecision: "ask"` response (JSON on stdout) instead of blocking | disabled |
 
-**Codes de sortie :** mode universel — `0` inoffensive · `2` destructrice → **bloquer** (le mode non-interactif ne peut pas « demander », donc il bloque). Mode `--stdin-json` — toujours `0`, la décision est portée par le JSON émis (`ask` ou rien).
+**Exit codes:** universal mode — `0` harmless · `2` destructive → **block** (non-interactive mode can't "ask", so it blocks). `--stdin-json` mode — always `0`, the decision is carried by the emitted JSON (`ask` or nothing).
 
 ```bash
 python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
@@ -330,16 +330,16 @@ python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 
 ---
 
-## Ce qui n'a PAS sa place ici
+## What does NOT belong here
 
-Les scripts **tech-spécifiques** du projet hôte (lint, tests, analyzers…) ne sont pas dans ce
-framework — ils restent documentés par le projet lui-même. Ce fichier ne référence que ce que
-**YAMS** fournit. Pour en écrire un côté projet (comme `audit.py` du projet hôte de
-référence) : `checks/TEMPLATE.md` donne la forme commune, pas le contenu tech-spécifique.
+The **tech-specific** scripts of the host project (lint, tests, analyzers…) are not part of this
+framework — they stay documented by the project itself. This file only references what
+**YAMS** provides. To write one on the project side (like the reference host project's
+`audit.py`): `checks/TEMPLATE.md` gives the common shape, not the tech-specific content.
 
-> **Attention à l'homonymie** : un projet qui adopte YAMS peut déjà avoir ses propres scripts
-> `manifest.py` / `doc-audit.py` (ou équivalents), plus riches et câblés sur son arborescence
-> réelle — ne pas les confondre avec ceux fournis ici. Le `index/manifest.py` **de ce framework**
-> est un script distinct, généralisé sur `index-config.json` — il n'a pas de commande `check`
-> (déléguée à `checks/index-check.py`) ni de filtre dédié (couvert par `roots`/`extensions`/
-> `ignore` de la config).
+> **Watch for homonyms**: a project adopting YAMS may already have its own `manifest.py` /
+> `doc-audit.py` scripts (or equivalents), richer and wired to its actual tree — don't confuse
+> them with the ones provided here. **This framework's** `index/manifest.py`
+> is a distinct script, generalized over `index-config.json` — it has no `check`
+> command (delegated to `checks/index-check.py`) nor a dedicated filter (covered by
+> `roots`/`extensions`/`ignore` in the config).

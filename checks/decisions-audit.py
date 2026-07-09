@@ -1,40 +1,41 @@
 #!/usr/bin/env python3
-"""Orchestrateur déterministe d'AUDIT DU JOURNAL DE DÉCISIONS — agnostique (premier étage).
+"""Deterministic DECISION LOG AUDIT orchestrator — agnostic (first tier).
 
-Le journal de décisions doit être audité périodiquement — déclencheur « Volume » du
-modèle de pruning quand l'INDEX gonfle. L'audit a DEUX natures, traitées séparément
-(même motif deux niveaux que le reste de `checks/`) :
+The decision log should be audited periodically — the "Volume" trigger of the pruning
+model fires when the INDEX grows large. The audit has TWO natures, handled separately
+(same two-tier pattern as the rest of `checks/`):
 
-  Étage 1 — CE SCRIPT (mécanique, zéro jugement, zéro faux positif) :
-    --tier1   lance les contrôles d'intégrité du framework (decisions, backlog) et résume.
-    --plan    découpe `decisions/INDEX.md` en lots ÉQUILIBRÉS → offset/limit/ids par lot.
-              (Supprime le découpage manuel : une revue par lot.) `--stale-first` priorise
-              les lots dont le `updated` de frontmatter est le plus ancien (l'offset/limit de
-              chaque lot reste une plage contiguë de lignes — seul l'ORDRE de présentation
-              des lots change).
-    --merge   agrège les sorties de revue (format strict `id | VERDICT | … | confiance:…`)
-              → rapport classé + CONTRÔLE DE COUVERTURE (chaque id audité exactement 1×).
-    (défaut)  --tier1 puis --plan + mode d'emploi.
+  Tier 1 — THIS SCRIPT (mechanical, zero judgment, zero false positive):
+    --tier1   runs the framework's integrity checks (decisions, backlog) and summarizes.
+    --plan    splits `decisions/INDEX.md` into BALANCED batches -> offset/limit/ids per
+              batch. (Removes manual splitting — one review per batch.) `--stale-first`
+              prioritizes the batches whose frontmatter `updated` is oldest (each batch's
+              offset/limit stays a contiguous range of lines — only the ORDER batches are
+              presented in changes).
+    --merge   aggregates review outputs (strict format `id | VERDICT | … | confidence:…`)
+              -> classified report + COVERAGE CHECK (every id audited exactly once).
+    (default) --tier1 then --plan + instructions.
 
-  Étage 2 — REVUE SÉMANTIQUE (jugement) : recoupe chaque décision avec le CODE réel
-            (retrieve-then-verify), classe sujet disparu / invariant migré / redondance /
-            drift mémoire↔code / conflit. Assurée par la revue du projet (un agent, la skill
-            de review, ou un humain). Barème : voir `MEMORY.md` et `decisions/README.md`.
+  Tier 2 — SEMANTIC REVIEW (judgment): cross-checks each decision against the actual
+            CODE (retrieve-then-verify), classifies vanished subject / migrated invariant
+            / redundancy / memory<->code drift / conflict. Handled by the project's own
+            review (an agent, the review skill, or a human). Scale: see `MEMORY.md` and
+            `decisions/README.md`.
 
-Portée = le journal de décisions uniquement. Pour l'audit multi-canal (feature/décision/
-préférences), voir `memory-audit.py` (orchestrateur, appelle celui-ci pour son volet
-décisions).
+Scope = the decision log only. For the multi-channel audit (feature/decision/
+preferences), see `memory-audit.py` (orchestrator, calls this one for its decisions
+part).
 
-Le projet apporte ses propres contrôles de CODE et sa revue. Ici : la méthode, agnostique.
+The project brings its own CODE checks and its review. Here: the method, agnostic.
 
-Lecture seule. Ne corrige/supprime/archive RIEN. La ratification reste humaine — rien
-n'est élagué en silence (cf. `MEMORY.md §Provenance`, `decisions/README.md §pruning`).
+Read-only. Fixes/deletes/archives NOTHING. Ratification stays human — nothing is pruned
+silently (cf. `MEMORY.md §Provenance`, `decisions/README.md §pruning`).
 
-Usage :
+Usage:
   python3 checks/decisions-audit.py                       # tier1 + plan
   python3 checks/decisions-audit.py --plan [--batch-size 33] [--stale-first] [--json]
-  python3 checks/decisions-audit.py --merge revue1.txt …  # agrège + couverture
-  python3 checks/decisions-audit.py --index <chemin/INDEX.md>   # autre journal
+  python3 checks/decisions-audit.py --merge review1.txt …  # aggregates + coverage
+  python3 checks/decisions-audit.py --index <path/INDEX.md>   # another log
 """
 from __future__ import annotations
 
@@ -50,19 +51,19 @@ CHECKS = os.path.dirname(os.path.abspath(__file__))
 INDEX_DEFAULT = os.path.join(ROOT, "decisions", "INDEX.md")
 
 ID_RE = re.compile(r"^(D-\d{4}-\d{2}-\d{2}-\d{2})\b")
-# Ligne d'INDEX.md, format uniforme du gabarit d'entrée (`ENTRY-TEMPLATE.md`) :
-# "- [D-AAAA-MM-JJ-NN](D-AAAA-MM-JJ-NN.md) — <titre> · <invariant>". Distinct de `ID_RE`
-# ci-dessus, qui reste le format des lignes de REVUE (`decisions-audit.md`), inchangé.
+# INDEX.md line, uniform entry-template format (`ENTRY-TEMPLATE.md`):
+# "- [D-YYYY-MM-DD-NN](D-YYYY-MM-DD-NN.md) — <title> · <invariant>". Distinct from `ID_RE`
+# above, which stays the format of REVIEW lines (`decisions-audit.md`), unchanged.
 INDEX_LINE_RE = re.compile(r"^-\s*\[(D-\d{4}-\d{2}-\d{2}-\d{2})\]")
 ANY_ID_RE = re.compile(r"D-\d{4}-\d{2}-\d{2}-\d{2}")
 UPDATED_RE = re.compile(r"(?m)^updated:\s*(\d{4}-\d{2}-\d{2})")
-VERDICTS = {"ARCHIVER-1", "ARCHIVER-4", "REDONDANTE", "DRIFT-CODE", "CONFLIT", "DOUTE"}
+VERDICTS = {"ARCHIVE-1", "ARCHIVE-4", "REDUNDANT", "CODE-DRIFT", "CONFLICT", "DOUBT"}
 
 TIER1 = [
-    ("décisions (fichier↔INDEX)",   "decisions-check.py"),
-    ("backlog (intégrité process)", "backlog-check.py"),
-    ("réfs mortes doc",             "doc-refs-check.py"),
-    ("intégrité index",             "index-check.py"),
+    ("decisions (file<->INDEX)",    "decisions-check.py"),
+    ("backlog (process integrity)", "backlog-check.py"),
+    ("dead doc refs",               "doc-refs-check.py"),
+    ("index integrity",             "index-check.py"),
 ]
 
 
@@ -77,9 +78,9 @@ def parse_entries(index_path: str):
 
 
 def _decision_updated(idv: str, decisions_dir: str):
-    """Champ `updated` du frontmatter de `decisions/<idv>.md`, ou `None` (fichier/champ
-    absent). Regex volontairement légère (pas d'import `entrylib`) — ce script reste portable
-    sans dépendance, cf. `decisions-audit.md §Emballage par outil`."""
+    """`updated` frontmatter field of `decisions/<idv>.md`, or `None` (file/field
+    absent). Deliberately lightweight regex (no `entrylib` import) — this script stays
+    portable with no dependency, cf. `decisions-audit.md §Per-tool packaging`."""
     fpath = os.path.join(decisions_dir, idv + ".md")
     if not os.path.isfile(fpath):
         return None
@@ -103,14 +104,14 @@ def make_batches(entries, total_lines, batch_size):
 def cmd_plan(index_path, batch_size, as_json, stale_first=False) -> int:
     entries, total = parse_entries(index_path)
     if not entries:
-        print(f"PLAN : aucune décision dans {os.path.relpath(index_path, ROOT)} "
-              "(journal vide — rien à auditer).")
+        print(f"PLAN: no decision in {os.path.relpath(index_path, ROOT)} "
+              "(empty log — nothing to audit).")
         return 0
     batches = make_batches(entries, total, batch_size)
     if stale_first:
-        # Priorise les lots contenant les décisions dont `updated` est le plus ancien —
-        # ne touche PAS offset/limit (toujours une plage CONTIGUË de lignes, lisible telle
-        # quelle) : seul l'ORDRE de présentation des lots change.
+        # Prioritizes the batches containing the decisions with the oldest `updated` —
+        # does NOT touch offset/limit (always a CONTIGUOUS range of lines, readable as
+        # is): only the presentation ORDER of the batches changes.
         decisions_dir = os.path.dirname(index_path)
         for b in batches:
             dates = [d for d in (_decision_updated(i, decisions_dir) for i in b["ids"]) if d]
@@ -120,47 +121,47 @@ def cmd_plan(index_path, batch_size, as_json, stale_first=False) -> int:
         print(json.dumps({"entries": len(entries), "batches": batches},
                          ensure_ascii=False, indent=2))
         return 0
-    print(f"PLAN D'AUDIT — {len(entries)} décisions, {len(batches)} lot(s) de ~{batch_size}"
-          f"{' (triés du plus périmé au plus frais)' if stale_first else ''}.")
-    print("Confier un lot par reviewer, avec l'offset/limit indiqué :\n")
+    print(f"AUDIT PLAN — {len(entries)} decisions, {len(batches)} batch(es) of ~{batch_size}"
+          f"{' (sorted from stalest to freshest)' if stale_first else ''}.")
+    print("Assign one batch per reviewer, with the given offset/limit:\n")
     for b in batches:
-        stale = f"  — plus ancien : {b['oldest_updated'] or 'inconnu'}" if stale_first else ""
-        print(f"  Lot {b['batch']} — lire offset={b['offset']} limit={b['limit']} "
-              f"({b['count']} décisions : {b['ids'][0]} … {b['ids'][-1]}){stale}")
-    print("\nPuis : python3 checks/decisions-audit.py --merge <sorties_revue…>")
+        stale = f"  — oldest: {b['oldest_updated'] or 'unknown'}" if stale_first else ""
+        print(f"  Batch {b['batch']} — read offset={b['offset']} limit={b['limit']} "
+              f"({b['count']} decisions: {b['ids'][0]} … {b['ids'][-1]}){stale}")
+    print("\nThen: python3 checks/decisions-audit.py --merge <batch outputs…>")
     return 0
 
 
 def cmd_tier1() -> int:
-    print("ÉTAGE 1 — INTÉGRITÉ MÉMOIRE (mécanique, zéro-FP)\n")
+    print("TIER 1 — MEMORY INTEGRITY (mechanical, zero-FP)\n")
     worst = 0
     for label, script in TIER1:
         path = os.path.join(CHECKS, script)
         if not os.path.isfile(path):
-            print(f"  ⨯ {label} : {script} absent — ignoré")
+            print(f"  ⨯ {label}: {script} missing — skipped")
             continue
         r = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True, text=True)
         worst = max(worst, r.returncode)
         mark = "OK " if r.returncode == 0 else ("?? " if r.returncode == 1 else "!! ")
         tail = (r.stdout.strip().splitlines() or [""])[-1]
-        print(f"  [{mark}] {label} : exit={r.returncode}  {tail}")
-    verdict = "OK" if worst == 0 else ("écart(s)" if worst >= 2 else "OK (à confirmer)")
-    print(f"\nVerdict étage 1 : {verdict}.")
+        print(f"  [{mark}] {label}: exit={r.returncode}  {tail}")
+    verdict = "OK" if worst == 0 else ("drift(s)" if worst >= 2 else "OK (to confirm)")
+    print(f"\nTier 1 verdict: {verdict}.")
     return worst
 
 
 def parse_review(text: str):
-    flagged, gardees = [], set()
+    flagged, kept = [], set()
     for line in text.splitlines():
         s = line.strip()
-        if s.upper().startswith("GARD"):
-            gardees.update(ANY_ID_RE.findall(s)); continue
+        if s.upper().startswith("KEPT"):
+            kept.update(ANY_ID_RE.findall(s)); continue
         if "|" in s:
             parts = [p.strip() for p in s.split("|")]
             m = ID_RE.match(parts[0])
             if m and len(parts) >= 2 and parts[1] in VERDICTS:
                 flagged.append((m.group(1), parts[1], " | ".join(parts[2:])))
-    return flagged, gardees
+    return flagged, kept
 
 
 def cmd_merge(files, index_path) -> int:
@@ -171,17 +172,17 @@ def cmd_merge(files, index_path) -> int:
         try:
             fl, ga = parse_review(open(f, encoding="utf-8").read())
         except OSError as e:
-            print(f"⨯ illisible : {f} ({e})", file=sys.stderr); continue
+            print(f"⨯ unreadable: {f} ({e})", file=sys.stderr); continue
         for fid, v, rest in fl:
             flagged.append((fid, v, rest)); seen[fid] = seen.get(fid, 0) + 1
         for gid in ga:
             seen[gid] = seen.get(gid, 0) + 1
 
-    print("RAPPORT D'AUDIT — agrégé\n")
+    print("AUDIT REPORT — aggregated\n")
     by_v = {}
     for fid, v, rest in flagged:
         by_v.setdefault(v, []).append((fid, rest))
-    for v in ["DRIFT-CODE", "CONFLIT", "ARCHIVER-1", "ARCHIVER-4", "REDONDANTE", "DOUTE"]:
+    for v in ["CODE-DRIFT", "CONFLICT", "ARCHIVE-1", "ARCHIVE-4", "REDUNDANT", "DOUBT"]:
         if by_v.get(v):
             print(f"## {v}  ({len(by_v[v])})")
             for fid, rest in by_v[v]:
@@ -191,40 +192,41 @@ def cmd_merge(files, index_path) -> int:
     audited = set(seen)
     missing = sorted(all_ids - audited)
     dups = sorted(i for i, n in seen.items() if n > 1)
-    print("## COUVERTURE")
-    print(f"  décisions à l'INDEX : {len(all_ids)}  ·  auditées : {len(audited & all_ids)}  "
-          f"·  signalées : {len(flagged)}")
+    print("## COVERAGE")
+    print(f"  decisions in the INDEX: {len(all_ids)}  ·  audited: {len(audited & all_ids)}  "
+          f"·  flagged: {len(flagged)}")
     rc = 0
     if missing:
-        print(f"  !! NON AUDITÉES ({len(missing)}) : {' '.join(missing)}"); rc = 1
+        print(f"  !! NOT AUDITED ({len(missing)}): {' '.join(missing)}"); rc = 1
     if dups:
-        print(f"  !! AUDITÉES >1× ({len(dups)}) : {' '.join(dups)}"); rc = 1
+        print(f"  !! AUDITED >1x ({len(dups)}): {' '.join(dups)}"); rc = 1
     if not missing and not dups and all_ids:
-        print("  OK couverture complète : chaque décision auditée exactement une fois.")
-    print("\nRappel : ce rapport SIGNALE. Aucun élagage sans ratification humaine. "
-          "Tout élagage reste journalisé.")
+        print("  OK full coverage: every decision audited exactly once.")
+    print("\nReminder: this report FLAGS. No pruning without human ratification. "
+          "Any pruning stays logged.")
     return rc
 
 
-VOLUME_ALERTE = 285   # l'INDEX approche du seuil d'audit (~300) → recommander l'étage 2
+VOLUME_ALERTE = 285   # the INDEX is approaching the audit threshold (~300) -> recommend tier 2
 
 
 def _report_dir(arg):
-    """Dossier du rapport : argument > $YAMS_MEMORY_REPORT_DIR > défaut .memory-reports/ (à gitignorer)."""
+    """Report folder: argument > $YAMS_MEMORY_REPORT_DIR > default .memory-reports/ (to gitignore)."""
     d = arg or os.environ.get("YAMS_MEMORY_REPORT_DIR") or os.path.join(ROOT, ".memory-reports")
     return d if os.path.isabs(d) else os.path.join(ROOT, d)
 
 
 def cmd_report(report_dir) -> int:
-    """Écrit un rapport déterministe (étage 1). Pensé pour un cron OS (headless, SANS LLM) :
-    l'hôte le surface au démarrage de session, l'utilisateur décide de le traiter (étage 2)."""
+    """Writes a deterministic report (tier 1). Designed for an OS cron job (headless, NO
+    LLM): the host surfaces it at session start, the user decides whether to act on it
+    (tier 2)."""
     import datetime
     today = datetime.date.today().isoformat()
     results, worst = [], 0
     for label, script in TIER1:
         path = os.path.join(CHECKS, script)
         if not os.path.isfile(path):
-            results.append((label, None, f"{script} absent")); continue
+            results.append((label, None, f"{script} missing")); continue
         r = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True,
                            text=True, encoding="utf-8", errors="replace")
         worst = max(worst, r.returncode)
@@ -233,36 +235,36 @@ def cmd_report(report_dir) -> int:
     recommend = (worst >= 2) or (n_dec >= VOLUME_ALERTE)
     rdir = _report_dir(report_dir); os.makedirs(rdir, exist_ok=True)
     rpath = os.path.join(rdir, "memory-report.md")
-    out = [f"# Rapport mémoire — {today}", "",
-           "> Produit par le cron OS (étage 1 déterministe, **sans LLM**). À traiter en session :",
-           "> l'agent demande, **l'utilisateur décide**. Supprimer une fois traité.", "",
-           "## Étage 1 — intégrité", ""]
+    out = [f"# Memory report — {today}", "",
+           "> Produced by the OS cron job (deterministic tier 1, **no LLM**). Handle it in",
+           "> session: the agent asks, **the user decides**. Delete once handled.", "",
+           "## Tier 1 — integrity", ""]
     for label, code, tail in results:
-        mark = "[OK]" if code == 0 else ("[BLOQUANT]" if (code or 0) >= 2
-               else ("[à confirmer]" if code == 1 else "[absent]"))
+        mark = "[OK]" if code == 0 else ("[BLOCKING]" if (code or 0) >= 2
+               else ("[to confirm]" if code == 1 else "[missing]"))
         out.append(f"- {mark} {label} — {tail}")
-    out += ["", "## Décisions", "", f"- {n_dec} à l'INDEX (alerte ≥ {VOLUME_ALERTE}).", "",
+    out += ["", "## Decisions", "", f"- {n_dec} in the INDEX (alert >= {VOLUME_ALERTE}).", "",
             "## Verdict", "",
-            ("**Audit sémantique recommandé** — lancer l'étage 2 (agents décision↔code) puis ratifier."
-             if recommend else "**Rien d'urgent** — un audit reste possible à la demande."), ""]
+            ("**Semantic audit recommended** — run tier 2 (decision<->code agents) then ratify."
+             if recommend else "**Nothing urgent** — an audit is still possible on request."), ""]
     with open(rpath, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(out))
-    print(f"rapport écrit : {rpath} (audit sémantique {'recommandé' if recommend else 'non requis'})")
+    print(f"report written: {rpath} (semantic audit {'recommended' if recommend else 'not required'})")
     return 0
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Orchestrateur d'audit mémoire (étage 1, agnostique).")
+    ap = argparse.ArgumentParser(description="Memory audit orchestrator (tier 1, agnostic).")
     ap.add_argument("--tier1", action="store_true")
     ap.add_argument("--plan", action="store_true")
-    ap.add_argument("--merge", nargs="+", metavar="FICHIER")
+    ap.add_argument("--merge", nargs="+", metavar="FILE")
     ap.add_argument("--report", nargs="?", const="", metavar="DIR",
-                    help="rapport déterministe (cron OS) ; DIR ou $YAMS_MEMORY_REPORT_DIR ou défaut .memory-reports/")
+                    help="deterministic report (OS cron); DIR or $YAMS_MEMORY_REPORT_DIR or default .memory-reports/")
     ap.add_argument("--batch-size", type=int, default=33)
     ap.add_argument("--index", default=INDEX_DEFAULT)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--stale-first", action="store_true",
-                    help="--plan : priorise les lots contenant les `updated` les plus anciens")
+                    help="--plan: prioritizes the batches containing the oldest `updated`")
     a = ap.parse_args()
     if a.report is not None:
         return cmd_report(a.report or None)

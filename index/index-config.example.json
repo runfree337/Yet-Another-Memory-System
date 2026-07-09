@@ -1,10 +1,10 @@
 {
-  "_README": "Copier en index/index-config.json et remplir. Définit ce que LE PROJET indexe — racines + extensions de fichiers — pour le détail par-fichier (Format A). Rempli typiquement à l'installation du framework : les extensions dépendent du langage du projet, le framework ne les présume pas. Vérifié en LECTURE par checks/index-check.py ; édité en ÉCRITURE par index/manifest.py (set/rm/get/stamp).",
+  "_README": "Copy to index/index-config.json and fill in. Defines what THE PROJECT indexes — roots + file extensions — for the per-file detail (Format A). Typically filled in when the framework is installed: the extensions depend on the project's language, the framework doesn't assume them. Checked in READ mode by checks/index-check.py; edited in WRITE mode by index/manifest.py (set/rm/get/stamp).",
   "base": ".",
   "manifest": "index/manifest.tsv",
   "roots": ["src/"],
   "extensions": [".py", ".md"],
   "ignore": ["**/vendor/**", "**/node_modules/**", "**/__pycache__/**"],
   "hub": null,
-  "_hub": "Optionnel — chemin d'un fichier (ex. 'index/INDEX.md') portant une ligne '> Last updated: ...' que `manifest.py stamp` maintiendra (date + commit court). null = stamp désactivé, no-op."
+  "_hub": "Optional — path to a file (e.g. 'index/INDEX.md') carrying a '> Last updated: ...' line that `manifest.py stamp` will maintain (date + short commit). null = stamp disabled, no-op."
 }

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Intégrité de l'INDEX par-fichier (universel, portable).
+"""Per-file INDEX integrity (universal, portable).
 
-Vérifie la concordance entre un index plat `chemin<TAB>intent` et les fichiers réels —
-le « détail par-fichier » (Format A) de la couche navigation (cf. `index/INDEX.md`).
+Verifies the concordance between a flat `path<TAB>intent` index and the real files —
+the "per-file detail" (Format A) of the navigation layer (cf. `index/INDEX.md`).
 
-AGNOSTIQUE : les **racines** et **extensions** à indexer ne sont PAS codées en dur. C'est le
-PROJET qui les définit (typiquement **à l'installation du framework**) dans
-`index/index-config.json` — schéma : `index/index-config.example.json`. Sans config, il n'y a
-rien à vérifier (le projet n'a pas opté pour un index par-fichier) → exit 0.
+AGNOSTIC: the **roots** and **extensions** to index are NOT hardcoded. It's the PROJECT
+that defines them (typically **at framework install time**) in
+`index/index-config.json` — schema: `index/index-config.example.json`. Without a config,
+there is nothing to verify (the project didn't opt into a per-file index) -> exit 0.
 
-Vérifs (zéro faux positif) :
-  I1  toute ligne de l'index → un fichier réel existe.
-  I2  tout fichier sous `roots` d'extension `extensions` (hors `ignore`) → présent dans l'index.
+Checks (zero false positive):
+  I1  every index line -> a real file exists.
+  I2  every file under `roots` with a `extensions` extension (outside `ignore`) -> present
+      in the index.
 
-Exit 2 si dérive, 0 sinon. Lecture seule, signale — ne réécrit jamais l'index.
+Exit 2 on drift, 0 otherwise. Read-only, flags — never rewrites the index.
 """
 import argparse
 import fnmatch
@@ -52,21 +53,21 @@ def walk_files(base, roots, exts, ignore):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Intégrité de l'index par-fichier (portable).")
+    ap = argparse.ArgumentParser(description="Per-file index integrity (portable).")
     ap.add_argument("--config", default=DEFAULT_CONFIG)
-    ap.add_argument("--base", default=None, help="racine du dépôt (défaut : config.base ou cwd)")
+    ap.add_argument("--base", default=None, help="repo root (default: config.base or cwd)")
     a = ap.parse_args()
 
     try:
         with open(a.config, encoding="utf-8") as fh:
             cfg = json.load(fh)
     except OSError:
-        print(f"index-check : pas de config ({a.config}) — le projet n'a pas défini de "
-              "racines/extensions à indexer. Rien à vérifier.")
-        print("  → copier/remplir index/index-config.example.json (à l'installation du framework).")
+        print(f"index-check: no config ({a.config}) — the project has not defined "
+              "roots/extensions to index. Nothing to verify.")
+        print("  → copy/fill in index/index-config.example.json (at framework install time).")
         return 0
     except json.JSONDecodeError as e:
-        print(f"index-check : config illisible ({e}).", file=sys.stderr)
+        print(f"index-check: unreadable config ({e}).", file=sys.stderr)
         return 2
 
     base = a.base or cfg.get("base") or os.getcwd()
@@ -74,12 +75,12 @@ def main():
     exts = cfg.get("extensions", [])
     ignore = cfg.get("ignore", [])
     if not roots or not exts:
-        print("index-check : config sans `roots` ou `extensions` — rien à indexer.")
+        print("index-check: config with no `roots` or `extensions` — nothing to index.")
         return 0
 
     manifest_path = os.path.join(base, cfg.get("manifest", "index/manifest.tsv"))
     if not os.path.isfile(manifest_path):
-        print(f"index-check : manifeste introuvable ({manifest_path}).", file=sys.stderr)
+        print(f"index-check: manifest not found ({manifest_path}).", file=sys.stderr)
         return 2
 
     indexed = read_manifest(manifest_path)
@@ -89,14 +90,14 @@ def main():
     missing = sorted(actual - set(indexed))
 
     for p in dead:
-        print(f"I1 : indexé mais fichier absent → {p} (ligne {indexed[p]})")
+        print(f"I1: indexed but file missing → {p} (line {indexed[p]})")
     for p in missing:
-        print(f"I2 : fichier non indexé → {p}")
+        print(f"I2: file not indexed → {p}")
 
     if dead or missing:
-        print(f"\nindex-check : {len(dead)} entrée(s) morte(s), {len(missing)} fichier(s) à indexer.")
+        print(f"\nindex-check: {len(dead)} dead entry(ies), {len(missing)} file(s) to index.")
         return 2
-    print(f"index-check : OK ({len(indexed)} entrées, {len(actual)} fichiers couverts).")
+    print(f"index-check: OK ({len(indexed)} entries, {len(actual)} files covered).")
     return 0
 
 

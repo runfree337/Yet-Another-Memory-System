@@ -1,94 +1,94 @@
-# Audit mémoire multi-canal — recette + barème (deux niveaux)
+# Multi-channel memory audit — recipe + rubric (two levels)
 
-> Le **script** `memory-audit.py` (étage 1, mécanique) ne *juge* pas — il enchaîne les
-> trois contrôles d'intégrité (`feature-map-check`, `decisions-audit --tier1` — qui
-> couvre déjà lui-même décisions/doc/index/backlog — et `memory-check`) et résume, sans
-> dupliquer aucun des trois. Ce document porte le **barème de revue**
-> (étage 2, sémantique) pour les **trois canaux** de `WORKFLOW.md §Les trois mémoires` —
-> la part qu'aucun script ne peut trancher.
+> The `memory-audit.py` **script** (tier 1, mechanical) does not *judge* — it chains the
+> three integrity checks (`feature-map-check`, `decisions-audit --tier1` — which
+> already covers decisions/doc/index/backlog on its own — and `memory-check`) and
+> summarizes, without duplicating any of the three. This document carries the **review rubric**
+> (tier 2, semantic) for the **three channels** of `WORKFLOW.md §The three memories` —
+> the part no script can settle.
 >
-> *Équivalent, en format Claude Code, du couple skill `memory-audit` + subagent
-> `memory-auditor`.*
+> *Equivalent, in Claude Code format, to the `memory-audit` skill + `memory-auditor`
+> subagent pair.*
 
-## Quand
+## When
 
-- **Volume** — le journal de décisions gonfle (déclencheur détaillé : `decisions-audit.md`).
-- **Après une fusion de branches** — dérive possible sur les trois canaux à la fois.
-- **À la demande** — « est-ce que notre mémoire tient encore ? »
+- **Volume** — the decisions journal swells (trigger detailed in `decisions-audit.md`).
+- **After a branch merge** — possible drift on all three channels at once.
+- **On demand** — "does our memory still hold up?"
 
-**Jamais par âge / TTL seul** (« pas utilisé » ≠ « inutile », `decisions/README.md §pruning`).
+**Never by age / TTL alone** ("not used" ≠ "useless", `decisions/README.md §pruning`).
 
-## Le flux
+## The flow
 
-1. **Intégrité** (mécanique) : `python3 checks/memory-audit.py --tier1` → un statut par canal.
-2. **Revue sémantique, PAR CANAL** — chacun a son propre rythme, aucun besoin d'un
-   passage unique sur les trois :
-   - **Décision** — accumulée, donc **découpée en lots** : suivre `decisions-audit.md`
-     (`decisions-audit.py --plan/--merge`, un reviewer par lot).
-   - **Feature** — `FEATURE_MAP.md` reste volontairement assez petit pour être **relu en
-     entier** (`WORKFLOW.md`) : pas de découpage, un seul passage.
-   - **Mémoire** — ne relire que les `memory/<slug>.md` que `memory-check.py` repère
-     candidates : `confidence: unverified` (`R-UNVERIFIED`) OU `confidence: verified` sans
-     `ratified` (`R-VERIFIED-NOT-RATIFIED`) ; le reste (`verified` + `ratified` tracé) n'a
-     rien à revoir.
+1. **Integrity** (mechanical): `python3 checks/memory-audit.py --tier1` → one status per channel.
+2. **Semantic review, PER CHANNEL** — each has its own pace, no need for a
+   single pass across all three:
+   - **Decision** — accumulates, so **split into batches**: follow `decisions-audit.md`
+     (`decisions-audit.py --plan/--merge`, one reviewer per batch).
+   - **Feature** — `FEATURE_MAP.md` is deliberately kept small enough to be **read in
+     full** (`WORKFLOW.md`): no splitting, a single pass.
+   - **Memory** — only reread the `memory/<slug>.md` files that `memory-check.py` flags
+     as candidates: `confidence: unverified` (`R-UNVERIFIED`) OR `confidence: verified` without
+     `ratified` (`R-VERIFIED-NOT-RATIFIED`); the rest (`verified` + `ratified` traced) has
+     nothing to review.
 
-## Le barème (étage 2)
+## The rubric (tier 2)
 
-### Canal Décision
+### Decision channel
 
-Barème complet, format de sortie, contrôle de couverture → `decisions-audit.md`. Ce script
-délègue entièrement ce volet — il ne le réimplémente pas.
+Full rubric, output format, coverage check → `decisions-audit.md`. This script
+fully delegates this part — it doesn't reimplement it.
 
-### Canal Feature
+### Feature channel
 
-Chaque fiche vit dans `features/<slug>.md` (un fichier par fiche, indexé par `FEATURE_MAP.md`) :
-décrit-elle encore la réalité du code qu'elle cite ? Le pré-filtre mécanique s'est enrichi de
-`FM-FRESH` (`feature-map-check.py` : `updated` de la fiche antérieur au dernier commit d'un
-chemin cité en `**Code :**`) — l'étage 2 **traite ces fiches en priorité**, sans s'y limiter
-(une fiche fraîche peut quand même avoir dérivé sémantiquement).
+Each entry lives in `features/<slug>.md` (one file per entry, indexed by `FEATURE_MAP.md`):
+does it still describe the reality of the code it cites? The mechanical pre-filter has been
+enriched with `FM-FRESH` (`feature-map-check.py`: entry `updated` older than the last commit of a
+path cited under `**Code:**`) — tier 2 **treats these entries as priority**, without limiting
+itself to them (a fresh entry can still have drifted semantically).
 
-| Verdict | Condition | Preuve attendue |
+| Verdict | Condition | Expected proof |
 |---|---|---|
-| `PERIMEE` | le **Rôle** décrit un comportement que le code ne fait plus | `file:line` du code divergent |
-| `CODE-DEPLACE` | un chemin cité existe encore mais **ailleurs** — la fiche pointe faux sans être « morte » (dead-path, lui, est mécanique — `doc-refs-check.py`) | le chemin réel actuel |
-| `A-JOUR` | rien à signaler | — |
+| `STALE` | the **Role** describes a behavior the code no longer does | `file:line` of the diverging code |
+| `CODE-MOVED` | a cited path still exists but **elsewhere** — the entry points wrong without being "dead" (dead-path itself is mechanical — `doc-refs-check.py`) | the current real path |
+| `UP-TO-DATE` | nothing to report | — |
 
-Ne signaler QUE `PERIMEE` et `CODE-DEPLACE` — `A-JOUR` n'a pas besoin d'être listé.
+Only report `STALE` and `CODE-MOVED` — `UP-TO-DATE` doesn't need to be listed.
 
-### Canal Mémoire (préférences)
+### Memory (preferences) channel
 
-Pour chaque `memory/<slug>.md` signalé par `memory-check.py` (`confidence: unverified` →
-`R-UNVERIFIED`, `confidence: verified` sans `ratified` → `R-VERIFIED-NOT-RATIFIED`, ou
-`source: external:...`) — les verdicts décrivent désormais l'**écriture de frontmatter
-attendue**, pas juste un jugement en prose :
+For every `memory/<slug>.md` flagged by `memory-check.py` (`confidence: unverified` →
+`R-UNVERIFIED`, `confidence: verified` without `ratified` → `R-VERIFIED-NOT-RATIFIED`, or
+`source: external:...`) — the verdicts now describe the **expected frontmatter
+write**, not just a prose judgment:
 
-| Verdict | Condition | Preuve attendue |
+| Verdict | Condition | Expected proof |
 |---|---|---|
-| `RATIFIER` | recoupée avec le code/une source fiable, elle tient → l'agent **propose** le diff de frontmatter qui pose `confidence: verified` + `ratified: <qui>, <AAAA-MM-JJ>` | la source de recoupement |
-| `REJETER` | recoupée, elle ne tient pas (obsolète, contredite, jamais vérifiée) → retrait du fichier + de sa ligne d'index, **journalisé** (raison + historique git) | pourquoi elle ne tient pas |
-| `DOUTE` | non concluant en l'état | 1 phrase de raison |
+| `RATIFY` | recouped against the code/a reliable source, it holds → the agent **proposes** the frontmatter diff that sets `confidence: verified` + `ratified: <who>, <YYYY-MM-DD>` | the recoupment source |
+| `REJECT` | recouped, it doesn't hold (stale, contradicted, never verified) → removal of the file + its index line, **logged** (reason + git history) | why it doesn't hold |
+| `DOUBT` | inconclusive as-is | 1-sentence reason |
 
-**Aucune écriture sans ratification humaine** (`MEMORY.md §Provenance` : « rien n'est promu en
-partagé sans passer par le cycle de vie tracé »). `RATIFIER` n'est **jamais** une
-auto-application : l'agent propose le diff (`confidence: verified` + `ratified:`), c'est
-l'humain qui le pose.
+**No write without human ratification** (`MEMORY.md §Provenance`: "nothing gets promoted to
+shared memory without going through the traced lifecycle"). `RATIFY` is **never** an
+auto-apply: the agent proposes the diff (`confidence: verified` + `ratified:`), the
+human applies it.
 
-## Garde-fou
+## Safeguard
 
-Le mécanisme **signale**, sur les trois canaux. Aucun élagage (suppression, fiche
-réécrite, entrée promue/retirée) n'est appliqué sans **ratification humaine**. Un
-`DRIFT-CODE` (canal Décision) ou une `PERIMEE` (canal Feature) se tranchent par
-l'utilisateur — l'IA n'aligne jamais silencieusement la mémoire sur le code ni l'inverse.
+The mechanism **reports**, on all three channels. No pruning (deletion, entry
+rewritten, entry promoted/removed) is applied without **human ratification**. A
+`CODE-DRIFT` (Decision channel) or a `STALE` (Feature channel) is settled by
+the user — the AI never silently aligns memory on code, nor the reverse.
 
-## Emballage par outil
+## Packaging per tool
 
-| | Le flux (recette) | Le barème (étage 2) |
+| | The flow (recipe) | The rubric (tier 2) |
 |---|---|---|
-| **Claude Code** | un **skill** (`memory-audit`) | un **subagent** (`memory-auditor`), jugement multi-canal |
-| **Copilot / autre** | une instruction / commande | un **prompt de revue** (system prompt) par canal |
-| **Tout outil** | le **script** `memory-audit.py` est portable tel quel (Python, sans dépendance) | ce barème, inchangé |
+| **Claude Code** | a **skill** (`memory-audit`) | a **subagent** (`memory-auditor`), multi-channel judgment |
+| **Copilot / other** | an instruction / command | a **review prompt** (system prompt) per channel |
+| **Any tool** | the `memory-audit.py` **script** is portable as-is (Python, no dependency) | this rubric, unchanged |
 
-Cette recette est la **définition canonique** ; des **installeurs par outil** la
-matérialiseront en artefacts concrets sans la réécrire. Gabarit embarqué Claude Code :
-`adapters/claude-code/skills/memory-audit.md` (délègue son volet décisions au gabarit
-`adapters/claude-code/skills/decisions-audit.md`).
+This recipe is the **canonical definition**; **per-tool installers** will
+materialize it into concrete artifacts without rewriting it. Embedded Claude Code template:
+`adapters/claude-code/skills/memory-audit.md` (delegates its decisions part to the
+`adapters/claude-code/skills/decisions-audit.md` template).

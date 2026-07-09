@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Maintenance du manifeste plat `index/manifest.tsv` (le « détail par-fichier »,
-Format A de `index/INDEX.md`) — un `chemin<TAB>intent` par ligne, trié par chemin.
+"""Maintenance of the flat manifest `index/manifest.tsv` (the "per-file detail",
+Format A of `index/INDEX.md`) — one `path<TAB>intent` per line, sorted by path.
 
-AGNOSTIQUE, comme `checks/index-check.py` : ce script ne code en dur ni racines ni
-extensions. Il lit `index/index-config.json` (schéma : `index-config.example.json`),
-que le projet remplit **à l'installation du framework**.
+AGNOSTIC, like `checks/index-check.py`: this script hardcodes neither roots nor
+extensions. It reads `index/index-config.json` (schema: `index-config.example.json`),
+which the project fills in **at framework install time**.
 
-Sous-commandes :
-  manifest.py set   <chemin> <intent>   upsert (ajoute ou remplace l'intent), garde trié
-  manifest.py rm    <chemin>            retire l'entrée
-  manifest.py get   <chemin>            imprime l'intent (ou rien)
-  manifest.py stamp                     si `hub` est configuré, met à jour sa ligne
-                                        "> Last updated: ..." (date + commit court) — no-op sinon
+Subcommands:
+  manifest.py set   <path> <intent>   upsert (adds or replaces the intent), keeps it sorted
+  manifest.py rm    <path>            removes the entry
+  manifest.py get   <path>            prints the intent (or nothing)
+  manifest.py stamp                   if `hub` is configured, updates its
+                                        "> Last updated: ..." line (date + short commit) — no-op otherwise
 
-Ce script est le pendant EN ÉCRITURE de `checks/index-check.py` (lecture seule, vérifie
-la dérive). Aucune commande `check` ici : lancer `checks/index-check.py` pour ça — pas
-de logique de vérification dupliquée entre les deux fichiers.
+This script is the WRITE counterpart of `checks/index-check.py` (read-only, checks for
+drift). No `check` command here: run `checks/index-check.py` for that — no verification
+logic duplicated between the two files.
 
-Le manifeste se grep pour la recherche ; il s'édite via ce script (jamais à la main —
-l'en-tête du fichier le rappelle, et `set` re-trie/dédup)."""
+The manifest is grepped for lookups; it's edited via this script (never by hand — the
+file header says so, and `set` re-sorts/dedupes)."""
 import datetime
 import json
 import os
@@ -27,8 +27,8 @@ import sys
 
 FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ai-workflow/
 DEFAULT_CONFIG = os.path.join(FRAMEWORK, "index", "index-config.json")
-HEADER = ("# chemin\tintent — manifeste plat, source de vérité de l'index par-fichier. "
-          "Éditer via index/manifest.py, pas à la main.")
+HEADER = ("# path\tintent — flat manifest, source of truth for the per-file index. "
+          "Edit via index/manifest.py, not by hand.")
 
 
 def load_config(path):
@@ -36,11 +36,11 @@ def load_config(path):
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
     except OSError:
-        print(f"manifest : pas de config ({path}) — copier/remplir "
-              "index/index-config.example.json avant d'utiliser ce script.", file=sys.stderr)
+        print(f"manifest: no config ({path}) — copy/fill in "
+              "index/index-config.example.json before using this script.", file=sys.stderr)
         return None
     except json.JSONDecodeError as e:
-        print(f"manifest : config illisible ({e}).", file=sys.stderr)
+        print(f"manifest: unreadable config ({e}).", file=sys.stderr)
         return None
 
 
@@ -74,16 +74,16 @@ def cmd_set(rows_path, chemin, intent):
     existed = chemin in rows
     rows[chemin] = " ".join(intent.split())
     save(rows_path, rows)
-    print(("maj" if existed else "ajout") + f" : {chemin}")
+    print(("updated" if existed else "added") + f": {chemin}")
 
 
 def cmd_rm(rows_path, chemin):
     rows = load(rows_path)
     if rows.pop(chemin, None) is None:
-        print(f"absent : {chemin}")
+        print(f"absent: {chemin}")
         return
     save(rows_path, rows)
-    print(f"retiré : {chemin}")
+    print(f"removed: {chemin}")
 
 
 def cmd_get(rows_path, chemin):
@@ -93,12 +93,12 @@ def cmd_get(rows_path, chemin):
 def cmd_stamp(cfg, base):
     hub = cfg.get("hub")
     if not hub:
-        print("manifest : pas de `hub` configuré dans index-config.json — stamp désactivé "
-              "(champ optionnel : chemin d'un fichier portant une ligne '> Last updated: ...').")
+        print("manifest: no `hub` configured in index-config.json — stamp disabled "
+              "(optional field: path of a file carrying a '> Last updated: ...' line).")
         return 0
     hub_path = os.path.join(base, hub)
     if not os.path.isfile(hub_path):
-        print(f"manifest : hub introuvable ({hub_path}).", file=sys.stderr)
+        print(f"manifest: hub not found ({hub_path}).", file=sys.stderr)
         return 2
     today = datetime.date.today().isoformat()
     try:
@@ -115,7 +115,7 @@ def cmd_stamp(cfg, base):
             stamped = True
             break
     if not stamped:
-        print(f"manifest : aucune ligne '> Last updated: ...' dans {hub} — rien à tamponner.")
+        print(f"manifest: no '> Last updated: ...' line in {hub} — nothing to stamp.")
         return 0
     open(hub_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     print(f"stamped: {today} ({head}) → {hub}")

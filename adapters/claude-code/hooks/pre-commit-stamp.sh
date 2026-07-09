@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) — le cas MUTANT (checks/README.md §Câblage pré-commit).
+# PreToolUse(Bash) — the MUTATING case (checks/README.md §Pre-commit wiring).
 #
-# Seul câblage qui ÉCRIT plutôt que signaler : pose updated=aujourd'hui sur les entrées STAGÉES
-# des trois canaux stampables (backlog/STATE.md, features/*.md, memory/*.md),
-# AVANT que `git commit` ne s'exécute, puis les re-stage — la date du frontmatter devient
-# mécaniquement la date du commit, sans bump manuel qui pourrit.
+# The only wiring that WRITES rather than flags: sets updated=today on the STAGED entries
+# of the three stampable channels (backlog/STATE.md, features/*.md, memory/*.md),
+# BEFORE `git commit` runs, then re-stages them — the frontmatter date mechanically
+# becomes the commit date, with no manual bump that would rot.
 #
-# Triple garde-fou (repris du script appelé, checks/backlog-check.py --stamp --staged) :
-# (1) scope strictement STAGÉ — ne tire jamais un fichier hors du commit en cours ;
-# (2) champ touché MÉCANIQUE (une date), jamais un jugement ;
-# (3) JAMAIS BLOQUANT — si l'écriture échoue, le commit part quand même, non tamponné.
+# Triple safeguard (inherited from the called script, checks/backlog-check.py --stamp --staged):
+# (1) strictly STAGED scope — never pulls a file outside the commit in progress;
+# (2) MECHANICAL field touched (a date), never a judgment;
+# (3) NEVER BLOCKING — if the write fails, the commit proceeds anyway, unstamped.
 #
-# Le hook reçoit le JSON {tool_name, tool_input} sur stdin ; on n'agit que si la commande
-# Bash contient "git commit" (le matcher settings.json filtre déjà sur l'outil "Bash").
+# The hook receives the JSON {tool_name, tool_input} on stdin; it only acts if the Bash
+# command contains "git commit" (the settings.json matcher already filters on the "Bash" tool).
 set -u
 
 INPUT="$(cat)"
@@ -32,4 +32,4 @@ PY=$(command -v python3 || command -v python)
 "$PY" checks/feature-map-check.py --stamp --staged >/dev/null 2>&1
 "$PY" checks/memory-check.py      --stamp --staged >/dev/null 2>&1
 
-exit 0   # ne bloque jamais — la correction est silencieuse, git commit voit le stamp
+exit 0   # never blocks — the correction is silent, git commit sees the stamp

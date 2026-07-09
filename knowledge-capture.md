@@ -1,48 +1,48 @@
-# Capitalisation — router un apprentissage de méthode
+# Knowledge capture — routing a method learning
 
-> Complète la §Capitalisation de `WORKFLOW.md`. À la clôture d'un chantier : *ce travail a-t-il révélé un apprentissage de **méthode** réutilisable ?*
-> **La logique (étapes 1–2) est agnostique** ; seul le **dernier pas** (étape 3 : quel mécanisme concret) dépend de l'outil → c'est le même adaptateur que le placement du framework (`README.md`).
-> Périmètre = apprentissage de **méthode / process** (comment on travaille). L'apprentissage de *contenu* (ce qu'est le projet) va déjà dans sa doc d'archi.
+> Complements `WORKFLOW.md`'s §Knowledge capture. At the closure of a work item: *did this work reveal a reusable **method** learning?*
+> **The logic (steps 1–2) is agnostic**; only the **last step** (step 3: which concrete mechanism) depends on the tool → the same adapter as the framework's placement (`README.md`).
+> Scope = **method / process** learning (how the team works). A *content* learning (what the project is) already goes into its architecture doc.
 
-## 1. Faut-il seulement le capter ? (le gate)
+## 1. Is it even worth capturing? (the gate)
 
-Ne pas outiller au ressenti — **un déclencheur vérifiable suffit** :
+Don't tool by gut feel — **one verifiable trigger is enough**:
 
-- **Répétition** : même procédure refaite **≥ 3×**.
-- **Tâtonnement** : même commande corrigée **≥ 2×** avant de marcher → capter l'invocation juste.
-- **Procédure longue déterministe** : **≥ 5 étapes** reproductibles (même entrée → même sortie).
-- **Invariant vérifié à la main** : une règle contrôlée manuellement qui doit *toujours* tenir.
-- **Régression** : une erreur déjà vue revient.
-- **Étape de process oubliée** puis rattrapée.
+- **Repetition**: the same procedure redone **≥ 3 times**.
+- **Trial and error**: the same command corrected **≥ 2 times** before it worked → capture the correct invocation.
+- **Long deterministic procedure**: **≥ 5 steps**, reproducible (same input → same output).
+- **Manually checked invariant**: a rule checked by hand that must *always* hold.
+- **Regression**: an error already seen comes back.
+- **Forgotten process step**, later caught.
 
-**Anti-déclencheurs (ne PAS outiller)** : vrai one-off · la vérification exige un **jugement** (→ pas de script, sinon faux positifs) · coût de maintenance > gain cumulé. La réponse **« rien à capitaliser »** est légitime — mais la question est *posée*, jamais sautée par défaut.
+**Anti-triggers (do NOT tool)**: a genuine one-off · the check requires **judgment** (→ no script, or it'll produce false positives) · maintenance cost > cumulative gain. **"Nothing to capture"** is a legitimate answer — but the question is *asked*, never skipped by default.
 
-## 2. Quelle FONCTION ? (agnostique)
+## 2. Which FUNCTION? (agnostic)
 
-Classer l'apprentissage par ce qu'il doit *devenir* — une **fonction**, pas un outil :
+Classify the learning by what it should *become* — a **function**, not a tool:
 
-| L'apprentissage est… | → Fonction durable |
+| The learning is… | → Durable function |
 |---|---|
-| une règle/préférence normative, courte | **règle partagée** |
-| un invariant **mécanique**, vérifiable sans jugement | **contrôle déterministe** (zéro faux positif) |
-| un jugement **sémantique** récurrent qu'aucun script ne tranche | **rôle de revue / délégation** |
-| une procédure/recette réutilisable, non mécanisable | **recette documentée** |
-| un invariant à ne jamais re-casser | **test de non-régression** |
-| un choix structurel | **décision** (`decisions/`) |
-| perso, machine-local | **mémoire personnelle** (hors dépôt) |
-| un trou dans la méthode elle-même | **améliorer le protocole concerné** |
+| a normative, short rule/preference | **shared rule** |
+| a **mechanical** invariant, checkable without judgment | **deterministic check** (zero false positive) |
+| a recurring **semantic** judgment no script can settle | **review / delegation role** |
+| a reusable procedure/recipe, not mechanizable | **documented recipe** |
+| an invariant that must never break again | **regression test** |
+| a structural choice | **decision** (`decisions/`) |
+| personal, machine-local | **personal memory** (outside the repo) |
+| a hole in the method itself | **improve the protocol concerned** |
 
-> Plusieurs fonctions à la fois sont possibles (ex. un contrôle déterministe **+** la règle qu'il protège). Le foyer le plus léger qui capte vraiment l'apprentissage gagne.
+> Several functions at once are possible (e.g. a deterministic check **+** the rule it protects). The lightest home that actually captures the learning wins.
 
-## 3. Mapper la fonction au mécanisme (le SEUL pas tool-spécifique)
+## 3. Mapping the function to a mechanism (the ONLY tool-specific step)
 
-| Fonction | Claude Code | GitHub Copilot | Autre agent |
+| Function | Claude Code | GitHub Copilot | Other agent |
 |---|---|---|---|
-| recette documentée | skill | prompt file | doc / fichier de contexte |
-| contrôle déterministe | script + hook (auto) | script + job CI | script + ton ordonnanceur |
-| rôle de revue / délégation | subagent | chat mode | rôle / prompt dédié |
-| règle partagée | `CLAUDE.md` / `.claude/rules/` | `copilot-instructions` / `.github/instructions` | system prompt / doc partagée |
-| test de non-régression | suite de tests du projet | idem | idem |
-| mémoire personnelle | auto-memory | custom instructions perso | la mémoire de ton outil |
+| documented recipe | skill | prompt file | doc / context file |
+| deterministic check | script + hook (auto) | script + CI job | script + your scheduler |
+| review / delegation role | subagent | chat mode | dedicated role / prompt |
+| shared rule | `CLAUDE.md` / `.claude/rules/` | `copilot-instructions` / `.github/instructions` | system prompt / shared doc |
+| regression test | project's test suite | same | same |
+| personal memory | auto-memory | personal custom instructions | your tool's memory |
 
-> La logique (**1 + 2**) ne change **pas** d'un outil à l'autre. Seule la **colonne** du tableau **3** change. Remplir/adapter cette colonne pour ton outil = la même opération que choisir où déposer le framework.
+> The logic (**1 + 2**) does **not** change from one tool to another. Only the table's **column** in step **3** changes. Filling in/adapting that column for your tool is the same operation as choosing where to drop the framework.
