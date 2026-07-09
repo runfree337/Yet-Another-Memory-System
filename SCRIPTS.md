@@ -10,7 +10,7 @@
 
 ### `backlog-check.py`
 **Intention :** intégrité du `backlog/` (modèle frontmatter, canal Backlog du gabarit commun
-d'entrée mémoire) — chaque chantier doc-backed a un `ETAT.md` avec un frontmatter complet et
+d'entrée mémoire) — chaque chantier doc-backed a un `STATE.md` avec un frontmatter complet et
 cohérent (`id/title/status/milestone/after/docs/updated`, validé via `entrylib.validate_entry`)
 et une rubrique `## Tâches` obligatoire (une ligne par tâche, état `todo/in-progress/blocked/done`,
 libellé ≤ 30 mots ou renvoi `→ doc-de-travail.md`).
@@ -21,8 +21,8 @@ libellé ≤ 30 mots ou renvoi `→ doc-de-travail.md`).
 | `--json` | même contrôle, sortie JSON des findings | désactivé |
 | `--board` | vue chantiers-par-jalon avec compteurs de tâches par état (état live tiré des frontmatters + rubrique `## Tâches`) | — |
 | `--state <id>` | déroule un chantier précis (tâches + compteurs) ; sans `<id>` liste les ids valides | — |
-| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `ETAT.md` cités via `entrylib.stamp_updated`, ré-enregistre le fichier | agit sur les fichiers passés en argument |
-| `--stamp --staged` | même effet que `--stamp`, mais scope = `ETAT.md` **stagés** en git (`git diff --cached`), et **re-stage** après écriture | à câbler en pré-commit |
+| `--stamp [fichiers…]` | **écrit** `updated: <aujourd'hui>` sur les `STATE.md` cités via `entrylib.stamp_updated`, ré-enregistre le fichier | agit sur les fichiers passés en argument |
+| `--stamp --staged` | même effet que `--stamp`, mais scope = `STATE.md` **stagés** en git (`git diff --cached`), et **re-stage** après écriture | à câbler en pré-commit |
 | `--checklist [id]` | imprime la checklist de clôture (DoD, 5 étapes) pour un chantier | — |
 
 **Codes de sortie :** `0` propre · `1` seulement des À-CONFIRMER (`--state` sans hit renvoie aussi `1`) · `2` au moins un BLOQUANT-AUTO.
@@ -60,7 +60,7 @@ python3 checks/feature-map-check.py --stamp --staged   # pré-commit uniquement
 ```
 
 ### `decisions-check.py`
-**Intention :** intégrité du canal **Décision** (instance de `GABARIT-ENTREE.md`, cf.
+**Intention :** intégrité du canal **Décision** (instance de `ENTRY-TEMPLATE.md`, cf.
 `decisions/README.md`) — sept règles, de la concordance fichier↔INDEX au graphe de révocation.
 Importe `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
 
@@ -101,8 +101,8 @@ n'existe pas/plus. Heuristique git (a existé puis disparu = bloquant ; jamais c
 **Exemption gabarit :** un chemin d'exemple (jamais destiné à exister — gabarit de nommage,
 config pas encore créée par le projet…) échappe au scan via un marqueur **HTML explicite dans
 le texte**, jamais une allowlist cachée dans le script. Deux formes, gérées par `gabarit_span()` :
-ligne — un chemin sur une ligne qui contient `<!-- gabarit -->` est ignoré ; bloc — les chemins
-des lignes **entre** `<!-- gabarit -->` et `<!-- /gabarit -->` sont ignorés. Le marqueur reste lisible
+ligne — un chemin sur une ligne qui contient `<!-- template -->` est ignoré ; bloc — les chemins
+des lignes **entre** `<!-- template -->` et `<!-- /template -->` sont ignorés. Le marqueur reste lisible
 en clair dans le `.md` (commentaire HTML — invisible au rendu, visible à l'édition) : pas de liste
 séparée à maintenir en synchronisation avec la doc.
 
@@ -113,7 +113,7 @@ python3 checks/doc-refs-check.py Docs/architecture/  # un sous-dossier
 ```
 
 ### `index-check.py`
-<!-- gabarit -->
+<!-- template -->
 **Intention :** intégrité de l'index par-fichier (`index/manifest.tsv` ↔ fichiers réels du dépôt).
 **Inactif sans configuration** — le projet hôte doit fournir `index/index-config.json`.
 
@@ -121,7 +121,7 @@ python3 checks/doc-refs-check.py Docs/architecture/  # un sous-dossier
 |---|---|---|
 | `--config <chemin>` | chemin du fichier de config (`roots`, `extensions`, `ignore`, `base`, `manifest`) | `index/index-config.json` |
 | `--base <chemin>` | racine du dépôt à scanner | `config.base`, sinon `cwd` |
-<!-- /gabarit -->
+<!-- /template -->
 
 **Codes de sortie :** `0` propre **ou** config absente/incomplète (inactif, pas une erreur) · `2` manifeste introuvable, config illisible, ou dérive détectée (`I1` entrée morte, `I2` fichier non indexé).
 
@@ -133,12 +133,12 @@ python3 checks/index-check.py --config index/index-config.json --base .
 ### `entrylib.py`
 **Intention :** **bibliothèque partagée**, PAS un check autonome — parseur de frontmatter minimal
 maison (pas de dépendance yaml) + validation du schéma commun d'une **entrée mémoire**
-(`GABARIT-ENTREE.md`), plus la concordance fichier↔index généralisée depuis `memory-check.py` /
+(`ENTRY-TEMPLATE.md`), plus la concordance fichier↔index généralisée depuis `memory-check.py` /
 `decisions-check.py`. Importée par les checks de **canal** (`memory-check.py`, `decisions-check.py`,
 `feature-map-check.py`, `backlog-check.py`) — **un seul endroit définit ce qu'est une entrée
 valide**, plus de duplication de regex entre checks.
 
-API publique : `Finding`/`BLOQUANT`/`CONFIRMER` (le gabarit `checks/GABARIT.md`), `CHANNELS`
+API publique : `Finding`/`BLOQUANT`/`CONFIRMER` (le gabarit `checks/TEMPLATE.md`), `CHANNELS`
 (spec required/optional/enums par canal), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
 `check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`.
 
@@ -159,7 +159,7 @@ python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # sans 
 
 ### `memory-check.py`
 **Intention :** intégrité du canal **Mémoire** — format « un fait par fichier + frontmatter »
-(`memory/<slug>.md`), `MEMORY.md` = index. Instance de `GABARIT-ENTREE.md` : toute la logique
+(`memory/<slug>.md`), `MEMORY.md` = index. Instance de `ENTRY-TEMPLATE.md` : toute la logique
 (frontmatter, concordance fichier↔index, liens croisés) vit dans `checks/entrylib.py` — ce
 script se contente d'appeler `entrylib` avec le canal `"memory"` et d'agréger, il ne redéfinit
 aucune règle localement.
@@ -169,7 +169,7 @@ Règles remontées telles quelles depuis `entrylib.validate_entry(..., "memory")
 `R-UNVERIFIED` (à-confirmer), `R-VERIFIED-NOT-RATIFIED` (à-confirmer) ; plus concordance
 fichier↔index via `entrylib.check_index_concordance` (`R-ORPHAN-FILE`, `R-DEAD-INDEX`) et liens
 croisés via `entrylib.check_links` (`R-DEAD-LINK`, bloquant sur id/chemin, à-confirmer sur slug
-d'un canal pas encore peuplé). Suit `GABARIT.md` à la lettre.
+d'un canal pas encore peuplé). Suit `TEMPLATE.md` à la lettre.
 
 Pas de paramètre de ciblage (comme `decisions-check.py`, compare toujours `MEMORY.md` et
 `memory/` en entier — une concordance fichier↔index ne se scope pas à un sous-ensemble).
@@ -203,7 +203,7 @@ pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs (priorité
 | `--plan` | découpe `decisions/INDEX.md` en lots équilibrés (offset/limit), un lot par reviewer | — |
 | `--stale-first` | (`--plan` seul) priorise l'ORDRE des lots par `updated` de frontmatter le plus ancien — offset/limit de chaque lot reste une plage contiguë de lignes | désactivé |
 | `--merge <fichiers…>` | agrège des sorties d'agents Tier 2, **contrôle de couverture** (chaque décision auditée exactement 1×) | — |
-| `--report [dir]` | écrit un **rapport déterministe** (sans LLM) — pensé pour un cron OS headless | dossier : `$UC_MEMORY_REPORT_DIR` ou `.memory-reports/` |
+| `--report [dir]` | écrit un **rapport déterministe** (sans LLM) — pensé pour un cron OS headless | dossier : `$YAMS_MEMORY_REPORT_DIR` ou `.memory-reports/` |
 | `--batch-size <n>` | taille des lots pour `--plan` | `33` |
 | `--index <chemin>` | chemin du journal de décisions | `decisions/INDEX.md` |
 | `--json` | sortie JSON (`--plan` seulement) | désactivé |
@@ -243,14 +243,14 @@ python3 checks/memory-audit.py --json
 
 ## `index/` — maintenance du manifeste (écriture)
 
-<!-- gabarit -->
+<!-- template -->
 Pendant en écriture de `index-check.py` ci-dessus (qui reste lecture seule). Même config
 agnostique (`index/index-config.json`), pas de logique de vérification dupliquée entre les deux.
 
 ### `manifest.py`
 **Intention :** seul moyen d'éditer `index/manifest.tsv` — ajoute/retire une entrée, garde le
 fichier trié et dédupliqué. **Inactif sans configuration**, comme `index-check.py`.
-<!-- /gabarit -->
+<!-- /template -->
 
 | Commande | Effet |
 |---|---|
@@ -335,7 +335,7 @@ python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 Les scripts **tech-spécifiques** du projet hôte (lint, tests, analyzers…) ne sont pas dans ce
 framework — ils restent documentés par le projet lui-même. Ce fichier ne référence que ce que
 **YAMS** fournit. Pour en écrire un côté projet (comme `audit.py` du projet hôte de
-référence) : `checks/GABARIT.md` donne la forme commune, pas le contenu tech-spécifique.
+référence) : `checks/TEMPLATE.md` donne la forme commune, pas le contenu tech-spécifique.
 
 > **Attention à l'homonymie** : un projet qui adopte YAMS peut déjà avoir ses propres scripts
 > `manifest.py` / `doc-audit.py` (ou équivalents), plus riches et câblés sur son arborescence

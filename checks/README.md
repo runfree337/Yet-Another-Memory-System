@@ -3,19 +3,19 @@
 > Premier étage du motif **deux niveaux** : un **script mécanique zéro faux positif** (il *constate*, ne juge pas) **→** une **revue sémantique** (le jugement, assuré par la **revue du projet**). Par défaut aucun ne corrige : ils **signalent** — seule exception assumée, le mode `--stamp` (`backlog-check.py`, `feature-map-check.py`, `memory-check.py` — mécanique, borné au champ `updated` et au scope stagé), voir « Câblage pré-commit » plus bas.
 >
 > **Écrire un nouveau contrôle** (agnostique ici, ou tech-spécifique côté projet hôte) → suivre
-> [`GABARIT.md`](GABARIT.md) : la forme commune (`Finding`, deux verdicts, `collect()` git-aware,
+> [`TEMPLATE.md`](TEMPLATE.md) : la forme commune (`Finding`, deux verdicts, `collect()` git-aware,
 > règles pures, code retour `0/1/2`) que tous les linters de ce type convergent vers, indépendamment.
 
 ## Fournis (agnostiques)
 
-- **`backlog-check.py`** — intégrité du `backlog/` (canal Backlog du gabarit d'entrée, `GABARIT-ENTREE.md`) : chaque chantier doc-backed = un dossier `<id>/` dont l'`ETAT.md` porte un frontmatter complet (`id/title/status/milestone/after/docs/updated`, validé via `entrylib`) **et une rubrique `## Tâches`** (états `todo/in-progress/blocked/done`, libellé ≤ 30 mots ou renvoi `→ doc de travail`) ; `milestone`⟺groupe INDEX, `after`→id réel, `docs`⟺compagnons ; garde anti-accumulation *soft* (ETAT.md > 80 lignes ou rubrique hors canon → « du durable vit dans l'état »). Vues `--board` et `--state <id>` avec compteurs de tâches, `--json` possible. **`--stamp --staged`** : pose `updated = aujourd'hui` sur les ETAT.md stagés + re-stage — **à câbler au PRÉ-COMMIT**.
+- **`backlog-check.py`** — intégrité du `backlog/` (canal Backlog du gabarit d'entrée, `ENTRY-TEMPLATE.md`) : chaque chantier doc-backed = un dossier `<id>/` dont l'`STATE.md` porte un frontmatter complet (`id/title/status/milestone/after/docs/updated`, validé via `entrylib`) **et une rubrique `## Tâches`** (états `todo/in-progress/blocked/done`, libellé ≤ 30 mots ou renvoi `→ doc de travail`) ; `milestone`⟺groupe INDEX, `after`→id réel, `docs`⟺compagnons ; garde anti-accumulation *soft* (STATE.md > 80 lignes ou rubrique hors canon → « du durable vit dans l'état »). Vues `--board` et `--state <id>` avec compteurs de tâches, `--json` possible. **`--stamp --staged`** : pose `updated = aujourd'hui` sur les STATE.md stagés + re-stage — **à câbler au PRÉ-COMMIT**.
 - **`feature-map-check.py`** — intégrité du canal **Feature** (un fichier par fiche `features/<slug>.md` + `FEATURE_MAP.md` en index) : concordance fichier↔index, frontmatter du canal (`entrylib`), clés-cœur du corps (une ligne `**Rôle`, ≥ 1 chemin de code, ≥ 1 réf durable), existence des ids `D-*` cités, aucune réf transitoire (`backlog/`), fraîcheur (`updated` vs dernier commit des chemins cités) et granularité en signal **soft**. Dead-path délégué à `doc-refs-check.py`. `--stamp --staged` sur `updated`.
 - **`decisions-check.py`** — intégrité du canal **Décision** : concordance fichiers `D-*.md` ↔ lignes d'`INDEX.md` (D1/D2), frontmatter du canal via `entrylib` (D3), rubriques canoniques du corps (D4), `status` ⟺ section Actives/Archivées (D5), graphe de révocation `replaces`/`replaced-by` sain — réciprocité, pas de cycle (D6), liens croisés résolus (D7).
-- **`memory-check.py`** — intégrité du canal **Mémoire** : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index. Toute la logique vit dans `entrylib` (frontmatter du canal, concordance fichier↔index, liens croisés) ; `source: external:` sans `confidence` → bloquant ; `confidence: unverified` ou `verified` non `ratified` → candidate à l'étage 2. `--stamp --staged` sur `updated`. Suit `GABARIT.md` à la lettre.
+- **`memory-check.py`** — intégrité du canal **Mémoire** : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index. Toute la logique vit dans `entrylib` (frontmatter du canal, concordance fichier↔index, liens croisés) ; `source: external:` sans `confidence` → bloquant ; `confidence: unverified` ou `verified` non `ratified` → candidate à l'étage 2. `--stamp --staged` sur `updated`. Suit `TEMPLATE.md` à la lettre.
 - **`decisions-audit.py`** — orchestrateur d'**audit du journal de décisions** (déclencheur « Volume » quand l'INDEX gonfle — le seul canal qui accumule assez pour le justifier). `--tier1` enchaîne `decisions-check`/`backlog-check`/`doc-refs-check`/`index-check` ; `--plan` découpe `decisions/INDEX.md` en lots équilibrés (offset/limit) pour confier une tranche par reviewer ; `--merge` agrège les sorties de revue **avec contrôle de couverture** (chaque décision auditée exactement 1×). Étage 1 (mécanique) ; l'étage 2 (jugement : drift mémoire↔code, redondance, conflit) suit le **barème** de revue `decisions-audit.md`.
 - **`memory-audit.py`** — orchestrateur **multi-canal** (Feature + Décision + Mémoire) : `--tier1` enchaîne `feature-map-check` + `decisions-audit --tier1` + `memory-check`, résume par canal. Pas de `--plan`/`--merge` propres — délégués à `decisions-audit.py` pour son seul canal qui en a besoin. Étage 2 (jugement, les 3 canaux) : barème `memory-audit.md`.
 - **`doc-refs-check.py`** — **références mortes** dans la doc : un chemin de fichier cité dans un `.md` qui n'existe pas / plus. Tier ferme zéro-FP (heuristique git : a existé puis disparu → bloquant ; jamais créé → à-confirmer). La dérive *sémantique* reste à la revue.
-- **`index-check.py`** — **intégrité de l'index par-fichier** (`manifest.tsv` ↔ fichiers réels). Le **projet** définit racines + extensions dans `index/index-config.json` (à l'installation) ; sans config, inactif. Cf. `../index/INDEX.md`. <!-- gabarit -->
+- **`index-check.py`** — **intégrité de l'index par-fichier** (`manifest.tsv` ↔ fichiers réels). Le **projet** définit racines + extensions dans `index/index-config.json` (à l'installation) ; sans config, inactif. Cf. `../index/INDEX.md`. <!-- template -->
 
 Code retour ≠ 0 si dérive → exploitables en gate. Lancer à la main :
 
@@ -50,7 +50,7 @@ python3 checks/memory-audit.py            # tier1 multi-canal (feature + décisi
 > "$PY" checks/doc-refs-check.py 2>/dev/null | grep -q BLOQUANT && lines="${lines}• doc: réf morte\n"
 > [ -n "$lines" ] && printf "⚠️ dérive structurelle au démarrage :\n%b" "$lines"
 > # rapport d'audit en attente (produit hors session par le cron OS, cf. §Sémantique) → l'agent DEMANDE
-> REPORT="${UC_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
+> REPORT="${YAMS_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
 > [ -f "$REPORT" ] && printf "📋 rapport mémoire en attente: %s — DEMANDER à l'utilisateur de le traiter, puis le supprimer.\n" "$REPORT"
 > exit 0          # MUET si ni dérive ni rapport → 0 token injecté
 > ```
@@ -100,7 +100,7 @@ python3 checks/memory-audit.py            # tier1 multi-canal (feature + décisi
 > Généralisable à tout check qui gagnerait un mode `--stamp` sur un champ mécanique
 > similaire (ex. une date de fraîcheur équivalente ailleurs) — même triple garde-fou.
 
-**Sémantique — agent, mémoire↔code :** l'audit `memory-audit` (étage 2, les 3 canaux) **n'est pas un hook** — il exige un jugement *retrieve-then-verify* et ne peut pas tourner muet à chaque session. Son régime : **déclencheur Volume** (côté Décision, le seul canal qui gonfle assez pour ça), **ou planifié**, **ou à la demande**. Pour le planifié *pendant l'absence*, la boucle rapport (cf. `INSTALL.md` étape 5) : un **cron OS** lance `decisions-audit.py --report` → écrit un rapport **déterministe** (étage 1, **sans LLM**, 0 token) dans `$UC_MEMORY_REPORT_DIR` (défaut `.memory-reports/`, **à gitignorer**) ; le sweep `SessionStart` ci-dessus le **détecte et le surface** ; l'agent **demande**, l'utilisateur **décide** de réveiller l'étage 2 (LLM, à la demande — `memory-audit.py --tier1` d'abord si les canaux Feature/Mémoire sont aussi en doute). Dans tous les cas il **signale** ; l'élagage reste **ratifié par un humain** — un cron ne corrige jamais seul.
+**Sémantique — agent, mémoire↔code :** l'audit `memory-audit` (étage 2, les 3 canaux) **n'est pas un hook** — il exige un jugement *retrieve-then-verify* et ne peut pas tourner muet à chaque session. Son régime : **déclencheur Volume** (côté Décision, le seul canal qui gonfle assez pour ça), **ou planifié**, **ou à la demande**. Pour le planifié *pendant l'absence*, la boucle rapport (cf. `INSTALL.md` étape 5) : un **cron OS** lance `decisions-audit.py --report` → écrit un rapport **déterministe** (étage 1, **sans LLM**, 0 token) dans `$YAMS_MEMORY_REPORT_DIR` (défaut `.memory-reports/`, **à gitignorer**) ; le sweep `SessionStart` ci-dessus le **détecte et le surface** ; l'agent **demande**, l'utilisateur **décide** de réveiller l'étage 2 (LLM, à la demande — `memory-audit.py --tier1` d'abord si les canaux Feature/Mémoire sont aussi en doute). Dans tous les cas il **signale** ; l'élagage reste **ratifié par un humain** — un cron ne corrige jamais seul.
 
 ## Le projet apporte les SIENS
 
@@ -112,10 +112,10 @@ Les contrôles de **code** (lint, tests, analyzers, standards de style) sont **t
 invisible/bidi), `secret-scan` (clés/jetons), `destructive-guard` (commandes larges). À câbler au
 bon déclencheur — table par outil dans `../hooks/README.md`.
 
-<!-- gabarit -->
+<!-- template -->
 **Navigation / fraîcheur doc — FOURNIE** ici : `doc-refs-check.py` (références mortes) et
 `index-check.py` (intégrité de l'index par-fichier — le projet définit racines+extensions dans
 `index/index-config.json`).
-<!-- /gabarit -->
+<!-- /template -->
 Un projet adoptant garde la liberté d'avoir ses propres `manifest.py` / `doc-audit.py`, plus
 riches et câblés sur son arborescence réelle — voir `SCRIPTS.md §Attention à l'homonymie`.

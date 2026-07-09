@@ -31,7 +31,7 @@ c'est le cœur du framework.
 | Outil | Où l'accrocher |
 |---|---|
 | **Claude Code** | `CLAUDE.md` (ou une skill `.claude/skills/…`) qui inclut/pointe `WORKFLOW.md` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` qui pointent `WORKFLOW.md` | <!-- gabarit -->
+| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` qui pointent `WORKFLOW.md` | <!-- template -->
 | **Autre agent** | system prompt / fichier de contexte qui inclut `WORKFLOW.md` |
 
 **Adapter** = renvoyer vers la doc et les outils **du projet** partout où le process dit « les
@@ -57,7 +57,7 @@ standards du projet », et brancher la clôture sur le rituel existant (ex. la s
   destructrices), portables.
 - `SCRIPTS.md` — **référence** de chaque script de `checks/`, `hooks/` et `index/` : intention +
   paramétrage + codes de sortie.
-- `capitalisation.md` — routage agnostique d'un apprentissage de méthode (gate « faut-il
+- `knowledge-capture.md` — routage agnostique d'un apprentissage de méthode (gate « faut-il
   outiller ? » + fonction → mécanisme par outil).
 
 ## Amender

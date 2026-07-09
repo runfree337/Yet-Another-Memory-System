@@ -11,13 +11,13 @@
 > donne un signal *soft* — `FM-GRAN` — mais ne tranche pas).
 
 Ce fichier est l'**index** du canal Feature — même rôle que `MEMORY.md` pour le canal Mémoire.
-C'est une **instance** de `GABARIT-ENTREE.md` (le méta-schéma commun à tous les canaux) : il n'en
+C'est une **instance** de `ENTRY-TEMPLATE.md` (le méta-schéma commun à tous les canaux) : il n'en
 redéfinit pas le frontmatter, seulement ce qui est **propre** au canal Feature.
 
 ## Le format — un fichier par fiche + une ligne d'index
 
 - **`features/<slug>.md`** — une fiche par feature, frontmatter du canal `feature` en tête (voir
-  `GABARIT-ENTREE.md §Le frontmatter commun` pour le détail des clés) :
+  `ENTRY-TEMPLATE.md §Le frontmatter commun` pour le détail des clés) :
   ```
   ---
   id: <slug>
@@ -44,7 +44,7 @@ vérifie la concordance fichier↔index et le format — voir ses règles.)*
 
 Le frontmatter est commun à tous les canaux ; le **corps**, lui, reste propre au canal Feature —
 prose libre organisée par les clés suivantes (français ou langue de l'équipe, cf.
-`GABARIT-ENTREE.md §Note — vocabulaire anglais par conception`) :
+`ENTRY-TEMPLATE.md §Note — vocabulaire anglais par conception`) :
 
 | Clé | Sens | Statut |
 |---|---|---|
@@ -61,7 +61,7 @@ sans l'une de ces trois choses est **bloquante** : elle ne remplit pas son rôle
 
 ## Exemple complet
 
-<!-- gabarit -->
+<!-- template -->
 
 `features/null-check-unity.md` :
 
@@ -96,7 +96,7 @@ Ligne correspondante dans `FEATURE_MAP.md` :
 - [null-check-unity](features/null-check-unity.md) — garde anti-faux-négatif sur les null check Unity.
 ```
 
-<!-- /gabarit -->
+<!-- /template -->
 
 ## Fiches
 

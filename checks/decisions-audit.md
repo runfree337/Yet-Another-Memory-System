@@ -76,7 +76,7 @@ par l'utilisateur ; tout élagage retenu reste **journalisé** (successeur + rai
 ## Emballage par outil
 
 La recette est agnostique ; chaque outil la **package** à sa main (même logique que la table de
-`capitalisation.md`) :
+`knowledge-capture.md`) :
 
 | | Le flux (recette) | Le barème (étage 2) |
 |---|---|---|

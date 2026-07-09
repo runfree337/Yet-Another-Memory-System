@@ -16,16 +16,16 @@
 ## Détail par-fichier (Format A) — gros projets
 
 Quand la carte par-unité ne suffit pas, ajouter un index **par fichier** : un manifeste plat
-`index/manifest.tsv` (`chemin<TAB>intent`, une ligne par fichier, **généré**, pas maintenu à la <!-- gabarit -->
+`index/manifest.tsv` (`chemin<TAB>intent`, une ligne par fichier, **généré**, pas maintenu à la <!-- template -->
 main).
 
 - **Écriture** — `index/manifest.py` (`set` / `rm` / `get` / `stamp`) : seul moyen d'éditer le
-  manifeste. Ne code aucune extension ni racine en dur — il lit `index/index-config.json`, comme <!-- gabarit -->
+  manifeste. Ne code aucune extension ni racine en dur — il lit `index/index-config.json`, comme <!-- template -->
   `index-check.py` ci-dessous. Détail des commandes → `../SCRIPTS.md`.
 - **Intégrité** (chaque ligne ↔ un fichier réel ; chaque fichier indexable ↔ une ligne) — vérifiée
   en **lecture seule** par `../checks/index-check.py` (ne réécrit jamais l'index).
 
-**Le projet définit ce qu'il indexe** — racines + extensions — dans `index/index-config.json` <!-- gabarit -->
+**Le projet définit ce qu'il indexe** — racines + extensions — dans `index/index-config.json` <!-- template -->
 (schéma : `index/index-config.example.json`), typiquement **à l'installation du framework** : les
 extensions à indexer dépendent du langage du projet, le framework ne les présume pas. Sans config,
 `manifest.py` et `index-check.py` sont simplement **inactifs**. Ce format TSV est celui du projet

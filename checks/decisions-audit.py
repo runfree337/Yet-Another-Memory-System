@@ -50,7 +50,7 @@ CHECKS = os.path.dirname(os.path.abspath(__file__))
 INDEX_DEFAULT = os.path.join(ROOT, "decisions", "INDEX.md")
 
 ID_RE = re.compile(r"^(D-\d{4}-\d{2}-\d{2}-\d{2})\b")
-# Ligne d'INDEX.md, format uniforme du gabarit d'entrée (`GABARIT-ENTREE.md`) :
+# Ligne d'INDEX.md, format uniforme du gabarit d'entrée (`ENTRY-TEMPLATE.md`) :
 # "- [D-AAAA-MM-JJ-NN](D-AAAA-MM-JJ-NN.md) — <titre> · <invariant>". Distinct de `ID_RE`
 # ci-dessus, qui reste le format des lignes de REVUE (`decisions-audit.md`), inchangé.
 INDEX_LINE_RE = re.compile(r"^-\s*\[(D-\d{4}-\d{2}-\d{2}-\d{2})\]")
@@ -210,8 +210,8 @@ VOLUME_ALERTE = 285   # l'INDEX approche du seuil d'audit (~300) → recommander
 
 
 def _report_dir(arg):
-    """Dossier du rapport : argument > $UC_MEMORY_REPORT_DIR > défaut .memory-reports/ (à gitignorer)."""
-    d = arg or os.environ.get("UC_MEMORY_REPORT_DIR") or os.path.join(ROOT, ".memory-reports")
+    """Dossier du rapport : argument > $YAMS_MEMORY_REPORT_DIR > défaut .memory-reports/ (à gitignorer)."""
+    d = arg or os.environ.get("YAMS_MEMORY_REPORT_DIR") or os.path.join(ROOT, ".memory-reports")
     return d if os.path.isabs(d) else os.path.join(ROOT, d)
 
 
@@ -257,7 +257,7 @@ def main() -> int:
     ap.add_argument("--plan", action="store_true")
     ap.add_argument("--merge", nargs="+", metavar="FICHIER")
     ap.add_argument("--report", nargs="?", const="", metavar="DIR",
-                    help="rapport déterministe (cron OS) ; DIR ou $UC_MEMORY_REPORT_DIR ou défaut .memory-reports/")
+                    help="rapport déterministe (cron OS) ; DIR ou $YAMS_MEMORY_REPORT_DIR ou défaut .memory-reports/")
     ap.add_argument("--batch-size", type=int, default=33)
     ap.add_argument("--index", default=INDEX_DEFAULT)
     ap.add_argument("--json", action="store_true")

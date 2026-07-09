@@ -3,16 +3,16 @@
 
 Vérifie mécaniquement les invariants de `backlog/README.md` — NE corrige rien, **signale**.
 Premier étage du motif deux-niveaux (script → revue sémantique). Format : un chantier doc-backed
-= un **sous-dossier** `backlog/<id>/` dont l'`ETAT.md` ouvre par un **frontmatter** aux clés
-anglaises (`id/title/status/milestone/after/docs/updated`) — instance de `GABARIT-ENTREE.md`
+= un **sous-dossier** `backlog/<id>/` dont l'`STATE.md` ouvre par un **frontmatter** aux clés
+anglaises (`id/title/status/milestone/after/docs/updated`) — instance de `ENTRY-TEMPLATE.md`
 (canal « backlog »), généralisé via `entrylib.py` comme `feature-map-check.py`. La ligne
 d'`INDEX.md` d'un doc-backed ne porte que titre + cible + gist (sans badge) ; un item inline
 (pas de doc) garde son badge `[todo]`/`[in-progress]`. Deux paliers : inline / sous-dossier.
 
-Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
+Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
 
 Règles :
-  (R-*)          (voir entrylib) `entrylib.validate_entry(path, meta, "backlog")` par ETAT.md —
+  (R-*)          (voir entrylib) `entrylib.validate_entry(path, meta, "backlog")` par STATE.md —
                                   `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`,
                                   `R-EXT-NO-CONF`, `R-UNVERIFIED`, `R-VERIFIED-NOT-RATIFIED`,
                                   `R-BAD-DATE` ; `entrylib.check_links` pour les `links:` —
@@ -23,7 +23,7 @@ Règles :
   E-MILESTONE    (BLOQUANT)      `milestone` du frontmatter ≠ groupe `### Jalon N` de l'INDEX.
   E-AFTER        (BLOQUANT)      `after:` pointe un id de chantier qui n'existe pas.
   E-DOCS         (BLOQUANT)      `docs:` ≠ exactement les `.md` compagnons du dossier.
-  E-TASK-SECTION (BLOQUANT)      rubrique `## Tâches` absente de l'ETAT.md.
+  E-TASK-SECTION (BLOQUANT)      rubrique `## Tâches` absente de l'STATE.md.
   E-TASK-STATE   (BLOQUANT)      état de tâche hors `todo|in-progress|blocked|done`.
   E-TASK-LEN     (BLOQUANT)      libellé de tâche > 30 mots SANS document de travail référencé
                                   (comptage simple : le badge `[état]` et le `→ doc.md` exclus).
@@ -32,12 +32,12 @@ Règles :
   E-TASK-SYNC    (À-CONFIRMER)   incohérence chantier⟺tâches : toutes `done` mais chantier
                                   `todo`/`in-progress` (signal « prêt à clore ») — ou l'inverse,
                                   chantier `in-progress` sans aucune tâche entamée.
-  E-STATE-SIZE   (À-CONFIRMER)   ETAT.md > 80 lignes — candidat « du durable vit dans l'état »
+  E-STATE-SIZE   (À-CONFIRMER)   STATE.md > 80 lignes — candidat « du durable vit dans l'état »
                                   (garde anti-accumulation, soft — jamais bloquant).
   E-STATE-SECTION(À-CONFIRMER)   titre `## …` hors rubriques canoniques (`Tâches`/`Reste`) —
                                   soft, jamais bloquant.
   I-FLAT         (BLOQUANT)      fichier `.md` plat au premier niveau de `backlog/` (hors
-                                  `INDEX.md`/`README.md`/`ETAT.gabarit.md`) — palier abandonné.
+                                  `INDEX.md`/`README.md`/`STATE.template.md`) — palier abandonné.
   I-ORPHAN       (BLOQUANT)      dossier `backlog/<id>/` cité nulle part dans `INDEX.md`.
   I-DEAD-POINTER (BLOQUANT)      pointeur `` `<id>/` `` ou `` `<fichier>.md` `` de `INDEX.md`
                                   qui ne résout vers rien.
@@ -49,8 +49,8 @@ Vues : `--board` (chantiers par jalon, statut + compteurs de tâches par état) 
 gabarit de clôture (DoD, `backlog/README.md`).
 
 `--stamp [fichiers…]` / `--stamp --staged` : pose `updated: <aujourd'hui>` via
-`entrylib.stamp_updated` sur les `ETAT.md` cités (ou stagés avec `--staged`, scope strict
-`backlog/**/ETAT.md`, re-stage git après écriture) — même triple garde-fou que
+`entrylib.stamp_updated` sur les `STATE.md` cités (ou stagés avec `--staged`, scope strict
+`backlog/**/STATE.md`, re-stage git après écriture) — même triple garde-fou que
 `feature-map-check.py --stamp` : scope stagé strict, un seul champ mécanique, jamais bloquant.
 
 Usage :
@@ -83,7 +83,7 @@ BACKLOG = os.path.join(ROOT, "backlog")
 INDEX_PATH = os.path.join(BACKLOG, "INDEX.md")
 
 # Noms structurels au premier niveau du backlog — jamais des pointeurs de chantier.
-STRUCTURAL = {"ETAT.md", "INDEX.md", "README.md", "ETAT.gabarit.md"}
+STRUCTURAL = {"STATE.md", "INDEX.md", "README.md", "STATE.template.md"}
 
 KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -95,11 +95,11 @@ CANON_SECTIONS = {"Tâches", "Reste"}
 # DoD (cf. backlog/README.md). `{cible}` = le chantier à supprimer. Étape 1 = un CONTRÔLE
 # (la capitalisation s'est déjà faite tâche par tâche), pas un gros œuvre.
 CLOSURE_STEPS = [
-    ("Durable", "contrôler qu'il ne reste pas de durable non migré (l'ETAT.md n'en porte "
+    ("Durable", "contrôler qu'il ne reste pas de durable non migré (l'STATE.md n'en porte "
                 "jamais) — sinon le migrer maintenant vers son foyer + les mémoires touchées"),
     ("Décision", "enregistrer la décision si la clôture acte un choix structurel"),
     ("Backlog", "supprimer {cible} **+ sa ligne dans `INDEX.md`**"),
-    ("État", "mettre à jour `TABLEAU_DE_BORD.md` : avancement du jalon concerné, points chauds"),
+    ("État", "mettre à jour `DASHBOARD.md` : avancement du jalon concerné, points chauds"),
     ("Capitalisation", "poser la question « apprentissage de méthode réutilisable ? » et router si oui"),
 ]
 
@@ -116,7 +116,7 @@ def rel(path: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Parsing du corps de l'ETAT.md — titres H2 + tâches de la rubrique `Tâches`  #
+# Parsing du corps de l'STATE.md — titres H2 + tâches de la rubrique `Tâches`  #
 # --------------------------------------------------------------------------- #
 
 H2 = re.compile(r"^##\s+(.+?)\s*$")
@@ -209,11 +209,11 @@ def collect_chantiers():
 
 def check_chantier(cid, cdir, ids, jalon_map, seen_ids) -> list[Finding]:
     findings: list[Finding] = []
-    etat = os.path.join(cdir, "ETAT.md")
+    etat = os.path.join(cdir, "STATE.md")
     etat_rel = rel(etat)
     if not os.path.isfile(etat):
         findings.append(Finding(BLOQUANT, "E-ETAT-MISSING", rel(cdir), 1,
-                                 "sous-dossier chantier sans ETAT.md."))
+                                 "sous-dossier chantier sans STATE.md."))
         return findings
 
     with open(etat, encoding="utf-8") as f:
@@ -258,7 +258,7 @@ def check_chantier(cid, cdir, ids, jalon_map, seen_ids) -> list[Finding]:
 
     # E-DOCS
     declared = set(meta.get("docs") or [])
-    actual = {fn for fn in os.listdir(cdir) if fn.endswith(".md") and fn != "ETAT.md"}
+    actual = {fn for fn in os.listdir(cdir) if fn.endswith(".md") and fn != "STATE.md"}
     if declared != actual:
         det = []
         if actual - declared:
@@ -336,7 +336,7 @@ def check_index(chantiers, index_text) -> list[Finding]:
         if os.path.isfile(full) and name.endswith(".md"):
             findings.append(Finding(BLOQUANT, "I-FLAT", rel(full), 1,
                                      "fichier plat au premier niveau du backlog — un chantier = "
-                                     "un sous-dossier `<id>/` avec ETAT.md (palier abandonné)."))
+                                     "un sous-dossier `<id>/` avec STATE.md (palier abandonné)."))
 
     for cid, cdir in chantiers:
         if (cid + "/") not in index_text and cid not in index_text:
@@ -374,9 +374,9 @@ def check_index(chantiers, index_text) -> list[Finding]:
 # --------------------------------------------------------------------------- #
 
 def cmd_stamp(argv: list[str]) -> int:
-    """Pose `updated: aujourd'hui` sur les ETAT.md cités (ou stagés avec `--staged`) + re-stage.
+    """Pose `updated: aujourd'hui` sur les STATE.md cités (ou stagés avec `--staged`) + re-stage.
     Même triple garde-fou que `feature-map-check.py --stamp` : scope stagé strict
-    (`backlog/**/ETAT.md` uniquement), un seul champ mécanique (`entrylib.stamp_updated` ne
+    (`backlog/**/STATE.md` uniquement), un seul champ mécanique (`entrylib.stamp_updated` ne
     touche que `updated`), jamais bloquant (code retour toujours 0)."""
     today = datetime.date.today().isoformat()
     staged = "--staged" in argv
@@ -384,7 +384,7 @@ def cmd_stamp(argv: list[str]) -> int:
         r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
                             cwd=ROOT, capture_output=True, text=True)
         files = [f for f in r.stdout.splitlines()
-                 if f.replace("\\", "/").startswith("backlog/") and f.endswith("ETAT.md")]
+                 if f.replace("\\", "/").startswith("backlog/") and f.endswith("STATE.md")]
     else:
         files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
 
@@ -397,7 +397,7 @@ def cmd_stamp(argv: list[str]) -> int:
             changed.append(f)
             if staged:
                 subprocess.run(["git", "add", f], cwd=ROOT)
-    print(f"backlog-check : --stamp — {len(changed)} ETAT.md daté(s) à {today}.")
+    print(f"backlog-check : --stamp — {len(changed)} STATE.md daté(s) à {today}.")
     return 0
 
 
@@ -414,7 +414,7 @@ def chantier_ids():
 
 def chantier_state(cid):
     cdir = os.path.join(BACKLOG, cid)
-    etat = os.path.join(cdir, "ETAT.md")
+    etat = os.path.join(cdir, "STATE.md")
     if not os.path.isdir(cdir) or not os.path.isfile(etat):
         return None
     with open(etat, encoding="utf-8") as f:
@@ -445,7 +445,7 @@ def render_state(cid):
     st = chantier_state(cid)
     if st is None:
         dispo = ", ".join(chantier_ids()) or "(aucun)"
-        return f"[backlog-check] chantier « {cid} » introuvable (backlog/{cid}/ETAT.md).\nChantiers : {dispo}"
+        return f"[backlog-check] chantier « {cid} » introuvable (backlog/{cid}/STATE.md).\nChantiers : {dispo}"
     jalon = "Non planifié" if st["milestone"] is None else f"Jalon {st['milestone']}"
     lines = [f"Chantier {st['id']} — {st['title']}",
              f"  status : {st['status']}   ·   {jalon}   ·   updated {st['updated']}"]

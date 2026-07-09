@@ -31,11 +31,11 @@ résout la racine du dépôt via `$CLAUDE_PROJECT_DIR` (fourni par Claude Code) 
 
 ## Fragment `settings.json`
 
-<!-- gabarit -->
+<!-- template -->
 À fusionner dans `.claude/settings.json` (ou `.claude/settings.local.json`) du projet qui adopte
 le framework — chemins **côté projet adoptant**, pas dans ce dépôt (YAMS n'est pas lui-même
 consommateur de Claude Code).
-<!-- /gabarit -->
+<!-- /template -->
 
 Comme partout dans ce framework (`INSTALL.md §Principe directeur`) : ceci est une
 **proposition**, pas un câblage imposé — chaque bloc peut être adopté séparément.

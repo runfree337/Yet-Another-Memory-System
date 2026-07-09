@@ -2,10 +2,10 @@
 
 Le *pourquoi* des choix **structurels** : pivot d'organisation, abandon d'une piste, choix d'un outil, périmètre tranché, convention transverse.
 
-Ce canal est une **instance** de `../GABARIT-ENTREE.md` (le méta-schéma commun à toute entrée
+Ce canal est une **instance** de `../ENTRY-TEMPLATE.md` (le méta-schéma commun à toute entrée
 mémoire — un fichier + une ligne d'index, frontmatter commun). Ce qui suit ne redéfinit que ce
 qui est **propre au canal Décision** ; les clés communes (`id`, `source`, `confidence`, `created`,
-`updated`, `links`, `ratified`) et leur cycle de vie vivent dans `GABARIT-ENTREE.md`.
+`updated`, `links`, `ratified`) et leur cycle de vie vivent dans `ENTRY-TEMPLATE.md`.
 
 1. **Un fichier par décision** : `D-AAAA-MM-JJ-NN.md` + **sa ligne dans `INDEX.md`**, écrits **au même moment**.
 2. **On lit `INDEX.md` d'abord** (1 ligne par décision). Le détail ne s'ouvre qu'au besoin du *pourquoi*.
@@ -32,7 +32,7 @@ qui est **propre au canal Décision** ; les clés communes (`id`, `source`, `con
    **Invariant** : la règle qui survit (vérifiable).
    ```
 
-   Clés **communes** (`GABARIT-ENTREE.md`) : `id`, `source`, `confidence`, `created`, `updated`,
+   Clés **communes** (`ENTRY-TEMPLATE.md`) : `id`, `source`, `confidence`, `created`, `updated`,
    `links`, `ratified`. Clés **propres au canal** :
 
    | Clé | Sens |
@@ -69,7 +69,7 @@ qui est **propre au canal Décision** ; les clés communes (`id`, `source`, `con
    **Vérifier qu'une option déjà écartée ne ressort pas = consulter l'index actif ET les
    archivées.**
 6. **Provenance** : `source` / `confidence` / `ratified` suivent le **cycle de vie commun**
-   défini par `../GABARIT-ENTREE.md §Cycle de vie de la confiance` — une décision est
+   défini par `../ENTRY-TEMPLATE.md §Cycle de vie de la confiance` — une décision est
    **ratifiée par un humain** (`confidence: verified` + `ratified: <qui>, <AAAA-MM-JJ>`), pas une
    inférence non vérifiée laissée telle quelle. Si elle découle d'un contenu externe
    (`source: external:<réf>`, `confidence` alors obligatoire — sinon bloquant, `R-EXT-NO-CONF`),

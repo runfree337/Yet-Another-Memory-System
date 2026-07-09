@@ -71,14 +71,14 @@ flowchart TD
    *Installeur :* sonde et n'écrase rien (idempotent).
 
 2. **Échafauder la structure** — copier `decisions/`, `backlog/` (avec le gabarit
-   `backlog/ETAT.gabarit.md`, à copier tel quel dans `backlog/<id>/ETAT.md`), `features/`
+   `backlog/STATE.template.md`, à copier tel quel dans `backlog/<id>/STATE.md`), `features/`
    (canal Feature, `FEATURE_MAP.md` en index), `checks/`, `hooks/`, `adapters/` (adaptateur
-   Claude Code prêt à câbler — skills + hooks, voir étape 4), `GABARIT-ENTREE.md`, `MEMORY.md`,
-   `FEATURE_MAP.md`, `TABLEAU_DE_BORD.md`, `WORKFLOW.md` depuis ce framework vers le projet hôte,
+   Claude Code prêt à câbler — skills + hooks, voir étape 4), `ENTRY-TEMPLATE.md`, `MEMORY.md`,
+   `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md` depuis ce framework vers le projet hôte,
    **si absents**.
    *Installeur :* copie + ne touche pas l'existant ; `--force` explicite pour réécraser.
 
-3. **Configurer l'index** — remplir `index/index-config.json` (racines + extensions à indexer, <!-- gabarit -->
+3. **Configurer l'index** — remplir `index/index-config.json` (racines + extensions à indexer, <!-- template -->
    `hub` optionnel) pour `index-check.py` (lecture, vérifie la dérive) **et** `index/manifest.py`
    (écriture, `set`/`rm`/`get`/`stamp` — seul moyen d'éditer `manifest.tsv`). Sans config, les deux
    restent inactifs.
@@ -94,7 +94,7 @@ flowchart TD
    *Installeur :* pour Claude Code, des hooks **PRÊTS** existent déjà dans
    `adapters/claude-code/hooks/` (sweep `SessionStart`, rapport `Stop`, gardes de sécurité, et
    `pre-commit-stamp.sh` — le hook `PreToolUse(git commit)` **stampe désormais les trois canaux**
-   `backlog/<id>/ETAT.md`, `features/*.md`, `memory/*.md` avant que le commit ne parte) : l'installeur
+   `backlog/<id>/STATE.md`, `features/*.md`, `memory/*.md` avant que le commit ne parte) : l'installeur
    les **référence** dans `settings.json` au lieu de les régénérer de zéro. Pour `pre-commit` (git)
    ou CI, il génère le **fragment de glu propre à l'hôte détecté** — jamais un câblage imposé.
 
@@ -107,7 +107,7 @@ flowchart TD
      tourne (session éteinte → ne part pas). La parade découple **produire** (déterministe, sans LLM)
      de **agir** (sémantique, avec LLM) :
      1. un **cron OS** (Task Scheduler / `cron`) lance `checks/decisions-audit.py --report` →
-        écrit un **rapport déterministe** dans un dossier (`$UC_MEMORY_REPORT_DIR`, défaut
+        écrit un **rapport déterministe** dans un dossier (`$YAMS_MEMORY_REPORT_DIR`, défaut
         `.memory-reports/`, **à gitignorer**). Headless, **0 token**, tourne machine allumée même
         sans session ;
      2. le **hook `SessionStart`** détecte le rapport et **demande à l'utilisateur** s'il faut le

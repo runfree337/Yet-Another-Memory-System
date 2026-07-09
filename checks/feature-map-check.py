@@ -3,10 +3,10 @@
 
 Format : un fichier par fiche (`features/<slug>.md`, frontmatter du canal `feature`) +
 `FEATURE_MAP.md` = index (une ligne par fiche) — même motif que `memory-check.py` /
-`decisions-check.py`, généralisé via `entrylib.py` (`GABARIT-ENTREE.md`, canal « feature »).
+`decisions-check.py`, généralisé via `entrylib.py` (`ENTRY-TEMPLATE.md`, canal « feature »).
 NE corrige rien — signale.
 
-Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
+Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts, règles pures.
 
 Règles :
   FM-INDEX       (BLOQUANT)      concordance `features/*.md` <-> `FEATURE_MAP.md`, via
@@ -99,7 +99,7 @@ def _index_section_tempfile() -> str | None:
     précédentes sont remplacées par des lignes vides pour préserver la numérotation (les
     findings restent `path:line`-adressables sur l'original). Nécessaire car le reste du
     document (`§Le format`, `§Exemple complet`…) cite légitimement d'autres `.md`
-    (`GABARIT-ENTREE.md`, l'exemple `null-check-unity.md`…) sans rapport avec l'index — un
+    (`ENTRY-TEMPLATE.md`, l'exemple `null-check-unity.md`…) sans rapport avec l'index — un
     scan pleine-page produirait des `R-DEAD-INDEX` en faux positif sur ces mentions."""
     if not os.path.isfile(FMAP):
         return None

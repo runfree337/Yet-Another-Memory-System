@@ -28,24 +28,24 @@ NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a
        "placeholder", "→", "->", "n'est pas", "plus tard", "déplacé", "deplace", "futur")
 
 # Exemption GABARIT — marqueur HTML explicite, jamais une allowlist cachée dans le script.
-# (a) ligne  : "<!-- gabarit -->" sur une ligne exempte les chemins de CETTE ligne.
-# (b) bloc   : une paire "<!-- gabarit -->" / "<!-- /gabarit -->" exempte toutes les lignes
+# (a) ligne  : "<!-- template -->" sur une ligne exempte les chemins de CETTE ligne.
+# (b) bloc   : une paire "<!-- template -->" / "<!-- /template -->" exempte toutes les lignes
 #              (marqueurs inclus) entre les deux. Un marqueur ouvrant jamais refermé retombe
 #              sur le cas (a) — n'exempte que sa propre ligne.
-GABARIT_OPEN = "<!-- gabarit -->"
-GABARIT_CLOSE = "<!-- /gabarit -->"
+TEMPLATE_OPEN = "<!-- template -->"
+TEMPLATE_CLOSE = "<!-- /template -->"
 
 
-def gabarit_lines(lines):
-    """Numéros de ligne (1-indexés) exemptés par le marqueur <!-- gabarit -->."""
+def template_lines(lines):
+    """Numéros de ligne (1-indexés) exemptés par le marqueur <!-- template -->."""
     exempt = set()
     open_at = None
     for i, line in enumerate(lines, 1):
-        if GABARIT_CLOSE in line and open_at is not None:
+        if TEMPLATE_CLOSE in line and open_at is not None:
             exempt.update(range(open_at, i + 1))
             open_at = None
             continue
-        if GABARIT_OPEN in line:
+        if TEMPLATE_OPEN in line:
             if open_at is not None:
                 exempt.add(open_at)  # marqueur précédent jamais refermé -> cas (a) seul
             open_at = i
@@ -91,7 +91,7 @@ def scan_file(path):
         return findings
     fenced = False
     file_dir = os.path.dirname(os.path.abspath(path))
-    exempt = gabarit_lines(lines)
+    exempt = template_lines(lines)
     for i, line in enumerate(lines, 1):
         if line.lstrip().startswith("```"):
             fenced = not fenced

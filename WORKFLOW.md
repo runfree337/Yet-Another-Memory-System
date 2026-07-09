@@ -23,17 +23,17 @@ Le **travail ouvert** (le *todo*) vit dans `backlog/` — distinct des trois mé
 
 - `backlog/INDEX.md` : la liste du non-bâti, **lue en premier**. Statut par entrée (`todo` / `in-progress`) ; un chantier **fini est retiré**.
 - **La chaîne** : `spec` → `backlog` (décidé, pas bâti) → *en cours, découpé en tâches* → à la livraison, le contenu **migre vers le durable** et l'item quitte le backlog.
-- **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **état mis à jour** (`TABLEAU_DE_BORD.md`) → **capitalisation**.
+- **Clôturer** suit une procédure ordonnée (la DoD, `backlog/README.md`) : durable écrit → décision si structurel → retrait du backlog → **état mis à jour** (`DASHBOARD.md`) → **capitalisation**.
 
 ## Le pilotage — plan / état / todo
 
 Trois rôles, jamais confondus :
 
 - **Le plan** (l'ordre, le séquenceur) — les groupes **jalon** de `backlog/INDEX.md` (`### Jalon N — <nom>`). Pas de document séparé : le jalon *est* le plan, il ordonne les chantiers.
-- **L'état** (où on en est, pour reprendre) — `TABLEAU_DE_BORD.md` : avancement par jalon + points chauds, en 1 page, mis à jour **à la clôture** d'un chantier (`backlog/README.md §DoD`).
+- **L'état** (où on en est, pour reprendre) — `DASHBOARD.md` : avancement par jalon + points chauds, en 1 page, mis à jour **à la clôture** d'un chantier (`backlog/README.md §DoD`).
 - **Le todo** (le travail pas-encore-fait) — `backlog/INDEX.md` (§Le travail en cours, ci-dessus).
 
-La vue détaillée et **live** des statuts (`checks/backlog-check.py --board`) reste **générée** ; jamais dupliquée à la main dans `TABLEAU_DE_BORD.md`.
+La vue détaillée et **live** des statuts (`checks/backlog-check.py --board`) reste **générée** ; jamais dupliquée à la main dans `DASHBOARD.md`.
 
 ## Les trois mémoires (ce que l'IA persiste hors de son contexte)
 
@@ -112,7 +112,7 @@ Une info en main → **où va-t-elle ?** Ce tableau **consolide en une vue** une
 | une **règle/préférence** d'équipe, normative et courte | `MEMORY.md` | la norme partagée ; pas un fait sur ce qui existe |
 | un **fait sur ce qui existe** (comportement, structure) | la **doc d'archi durable** du projet | ce qui *est* ; pas le *pourquoi* (→ décision) |
 | « où se trouve X » | `index/INDEX.md` | la carte ; pas le contenu |
-| un apprentissage de **méthode** | la **capitalisation** (`capitalisation.md`) | skill/hook/règle/test… |
+| un apprentissage de **méthode** | la **capitalisation** (`knowledge-capture.md`) | skill/hook/règle/test… |
 | **rien de transversal** (détail local) | le **code / la spec** | surtout **pas** une mémoire — sinon ça pollue |
 
 **Règle d'or** : un détail local sans invariant transversal ne va **jamais** dans une mémoire. Cas durs (« est-ce vraiment décision-worthy ? ») → le test de la porte d'entrée dans `decisions/README.md`.
@@ -123,7 +123,7 @@ Séparer le **transitoire** (le travail en cours — il vit dans le `backlog`, v
 
 ## Capitalisation (l'auto-amélioration)
 
-À la fin d'un chantier, **poser la question** : *ce travail a-t-il révélé un apprentissage de **méthode** réutilisable ?* « Rien » est une réponse valide, mais la question est **posée**, jamais sautée par défaut. Si oui, le ranger au bon endroit. **Comment décider quoi en faire** — le gate « faut-il outiller ? » + le routage par fonction (agnostique) puis vers le mécanisme de l'outil : `capitalisation.md`. C'est ce qui fait que le process **grandit** au lieu de se figer.
+À la fin d'un chantier, **poser la question** : *ce travail a-t-il révélé un apprentissage de **méthode** réutilisable ?* « Rien » est une réponse valide, mais la question est **posée**, jamais sautée par défaut. Si oui, le ranger au bon endroit. **Comment décider quoi en faire** — le gate « faut-il outiller ? » + le routage par fonction (agnostique) puis vers le mécanisme de l'outil : `knowledge-capture.md`. C'est ce qui fait que le process **grandit** au lieu de se figer.
 
 ## Délégation (pour le gros travail)
 

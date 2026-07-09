@@ -2,15 +2,15 @@
 """Bibliothèque partagée « entrée mémoire » — PAS un check autonome, stdlib uniquement.
 
 Généralise le motif porté par `memory-check.py` (frontmatter + concordance fichier↔index) à
-tous les canaux mémoire (`GABARIT-ENTREE.md`) : Mémoire, Décision, Feature, Backlog. Les checks
+tous les canaux mémoire (`ENTRY-TEMPLATE.md`) : Mémoire, Décision, Feature, Backlog. Les checks
 de canal important cette lib au lieu de redéfinir leur propre parseur/regex — **un seul endroit**
 définit ce qu'est une entrée mémoire valide.
 
-Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts (`BLOQUANT-AUTO` /
+Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts (`BLOQUANT-AUTO` /
 `À-CONFIRMER`), règles pures, aucun effet de bord.
 
 Vocabulaire de frontmatter — clés/valeurs en ANGLAIS par conception (API machine, greppable ;
-la prose du corps reste dans la langue de l'équipe, cf. `GABARIT-ENTREE.md`) :
+la prose du corps reste dans la langue de l'équipe, cf. `ENTRY-TEMPLATE.md`) :
   id, status, source, confidence, created, updated, links, ratified
   source     : inferred | human | external:<réf>
   confidence : verified | unverified
@@ -28,7 +28,7 @@ import sys
 from collections import namedtuple
 
 # --------------------------------------------------------------------------- #
-# Le gabarit (checks/GABARIT.md) — Finding + deux verdicts.                   #
+# Le gabarit (checks/TEMPLATE.md) — Finding + deux verdicts.                   #
 # --------------------------------------------------------------------------- #
 
 BLOQUANT = "BLOQUANT-AUTO"

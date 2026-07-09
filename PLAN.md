@@ -1,6 +1,6 @@
 # PLAN — rendre YAMS autonome, puis formaliser la mémoire
 
-<!-- gabarit -->
+<!-- template -->
 
 > **Statut : plan, rien d'implémenté.** Deux étapes ordonnées — l'étape 1 (cohérence,
 > déplacement de fichiers) change des chemins cités partout, elle passe **avant** l'étape 2.
@@ -99,8 +99,8 @@ du dépôt hôte. Un adoptant ne peut pas suivre ces renvois.
 
 | Script | Amélioration |
 |---|---|
-| `checks/doc-refs-check.py` | Le check s'auto-applique au framework et remonte ~24 « à-confirmer » sur les chemins de **gabarit** (`<id>/`, `index-config.json` pas encore créé…). Ajouter un mécanisme d'exemption **explicite** : marqueur en ligne (ex. un chemin dans un bloc `<!-- gabarit -->…<!-- /gabarit -->` ou suffixe `*(gabarit)*` sur la ligne) ignoré par le scan. Jamais d'allowlist cachée dans le script. |
-<!-- gabarit -->
+| `checks/doc-refs-check.py` | Le check s'auto-applique au framework et remonte ~24 « à-confirmer » sur les chemins de **gabarit** (`<id>/`, `index-config.json` pas encore créé…). Ajouter un mécanisme d'exemption **explicite** : marqueur en ligne (ex. un chemin dans un bloc `<!-- template -->…<!-- /template -->` ou suffixe `*(gabarit)*` sur la ligne) ignoré par le scan. Jamais d'allowlist cachée dans le script. |
+<!-- template -->
 
 ---
 
@@ -249,4 +249,4 @@ réels du projet initial).
 (canaux, parallélisables) → 2.5 → 2.6 → **3 (anglais, en dernier)**. Chaque lot ≤ 5 fichiers,
 checks verts entre chaque lot.
 
-<!-- /gabarit -->
+<!-- /template -->

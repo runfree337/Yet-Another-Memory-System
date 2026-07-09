@@ -2,7 +2,7 @@
 
 > **Pour qui.** Ce fichier ne fournit **pas** une mémoire — c'est le **méta-schéma** que suit
 > chaque entrée des canaux mémoire de ce framework (`WORKFLOW.md §Les trois mémoires`), au même
-> titre que `checks/GABARIT.md` normalise la forme d'un **check**. Écrire une nouvelle entrée
+> titre que `checks/TEMPLATE.md` normalise la forme d'un **check**. Écrire une nouvelle entrée
 > sans repartir de ce gabarit, c'est redécouvrir à la main un choix déjà tranché de façon
 > identique dans chaque canal.
 >
@@ -57,16 +57,16 @@ Ces clés et leurs valeurs sont volontairement en **anglais** (voir §Note en ba
 Chaque canal **détaille ses propres règles** dans son README (`MEMORY.md`, `decisions/README.md`,
 `FEATURE_MAP.md`, `backlog/README.md`) — la table ci-dessous ne fait que situer l'instance :
 
-<!-- gabarit -->
+<!-- template -->
 
 | Canal | Fichier d'entrée | Index | Clés propres | Notes |
 |---|---|---|---|---|
 | **Mémoire** | `memory/<slug>.md` | `MEMORY.md` | *(aucune — le frontmatter commun suffit)* | Pas de `status` obligatoire. |
 | **Décision** | `decisions/D-AAAA-MM-JJ-NN.md` | `decisions/INDEX.md` | `status: active \| revoked \| archived`, `replaces: [ids]`, `replaced-by: <id>` | `status` obligatoire ; la révocation/l'archivage est une **transition de `status` + liens**, vérifiable — plus une pure discipline de prose. |
 | **Feature** | `features/<slug>.md` | `FEATURE_MAP.md` | *(aucune — le frontmatter commun suffit)* | Pas de `status` obligatoire ; le corps garde ses rubriques propres (Rôle/Code/Doc/Tests/Motif d'ajout). |
-| **Backlog** | `backlog/<id>/ETAT.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [chemins]` | **Transitoire** (le *todo*), pas une mémoire — mais suit le **même format d'entrée**. Les tâches de la rubrique `## Tasks` du corps portent leur propre sous-état `todo \| in-progress \| blocked \| done`, distinct du `status` du chantier lui-même. |
+| **Backlog** | `backlog/<id>/STATE.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [chemins]` | **Transitoire** (le *todo*), pas une mémoire — mais suit le **même format d'entrée**. Les tâches de la rubrique `## Tasks` du corps portent leur propre sous-état `todo \| in-progress \| blocked \| done`, distinct du `status` du chantier lui-même. |
 
-<!-- /gabarit -->
+<!-- /template -->
 
 ## Cycle de vie de la confiance
 

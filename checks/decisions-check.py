@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Contrôle déterministe du canal « Décision » (zéro faux positif).
 
-Le canal Décision est une instance de `GABARIT-ENTREE.md` (cf. `decisions/README.md`) : un
+Le canal Décision est une instance de `ENTRY-TEMPLATE.md` (cf. `decisions/README.md`) : un
 frontmatter commun (`entrylib.CHANNELS["decision"]`) au-dessus de trois rubriques en prose
 (Décision/Pourquoi/Invariant), une ligne d'`INDEX.md` par fichier, une révocation/archivage
 = transition de `status` + liens `replaces`/`replaced-by`. Ce script vérifie les SEPT
@@ -23,7 +23,7 @@ Règles (identifiants stables — API, ne pas renommer) :
   D7  Liens croisés inter-canaux (`links:`) résolus, via `entrylib.check_links` (règle
       remontée telle quelle : R-DEAD-LINK).
 
-Code retour (`checks/GABARIT.md`) : 2 si ≥1 bloquant, 1 si seulement des à-confirmer, 0 sinon.
+Code retour (`checks/TEMPLATE.md`) : 2 si ≥1 bloquant, 1 si seulement des à-confirmer, 0 sinon.
 
 Usage :
   python3 checks/decisions-check.py

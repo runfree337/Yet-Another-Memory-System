@@ -2,7 +2,7 @@
 # PreToolUse(Bash) — le cas MUTANT (checks/README.md §Câblage pré-commit).
 #
 # Seul câblage qui ÉCRIT plutôt que signaler : pose updated=aujourd'hui sur les entrées STAGÉES
-# des trois canaux stampables (backlog/ETAT.md, features/*.md, memory/*.md),
+# des trois canaux stampables (backlog/STATE.md, features/*.md, memory/*.md),
 # AVANT que `git commit` ne s'exécute, puis les re-stage — la date du frontmatter devient
 # mécaniquement la date du commit, sans bump manuel qui pourrit.
 #

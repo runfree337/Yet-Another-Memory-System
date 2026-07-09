@@ -2,13 +2,13 @@
 """Contrôle d'intégrité du canal « Mémoire » (préférences), agnostique.
 
 Format : un fait par fichier + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index (une ligne
-par fichier) — instance du méta-schéma `GABARIT-ENTREE.md`. Toute la logique de frontmatter/
+par fichier) — instance du méta-schéma `ENTRY-TEMPLATE.md`. Toute la logique de frontmatter/
 concordance/liens vit dans la bibliothèque partagée `checks/entrylib.py` (un seul endroit définit
 ce qu'est une entrée mémoire valide, réutilisé par `decisions-check.py` / `feature-map-check.py` /
 `backlog-check.py`) — ce script se contente d'appeler `entrylib` avec le canal `"memory"` et
 d'agréger.
 
-Suit `checks/GABARIT.md` : `Finding` namedtuple à 5 champs, deux verdicts, code retour 0/1/2.
+Suit `checks/TEMPLATE.md` : `Finding` namedtuple à 5 champs, deux verdicts, code retour 0/1/2.
 
 Table des règles (id → sévérité → ce qu'elle prouve) :
 
@@ -59,7 +59,7 @@ MEMORY_DIR = os.path.join(ROOT, "memory")
 
 # Une entrée mémoire n'a pas de grammaire d'id rigide (contrairement à `D-AAAA-MM-JJ-NN` côté
 # décisions) — un `.md` nu ne suffit pas à prouver une référence (`MEMORY.md` en parle sans arrêt
-# de `GABARIT-ENTREE.md`, `memory-audit.md`…). On ancre donc sur la FORME de lien du gabarit :
+# de `ENTRY-TEMPLATE.md`, `memory-audit.md`…). On ancre donc sur la FORME de lien du gabarit :
 # soit un nom de fichier nu (`entries_dir`, ex. `mem-slug.md`), soit `(memory/<slug>.md)` dans le
 # texte de l'index — jamais un `.md` flottant en prose.
 ID_RE = re.compile(r"(?<=\(memory/)[\w.-]+\.md(?=\))|^[\w.-]+\.md$")

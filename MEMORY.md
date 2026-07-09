@@ -14,14 +14,14 @@ fait par fichier + frontmatter ; `MEMORY.md` = index ») — appliqué ici à la
 Le frontmatter (et éventuellement le contenu) doit être **chargeable mécaniquement**, pas
 extrait d'une ligne de prose au regex.
 
-Ce canal est une **instance** du méta-schéma `GABARIT-ENTREE.md` — le frontmatter commun, la
+Ce canal est une **instance** du méta-schéma `ENTRY-TEMPLATE.md` — le frontmatter commun, la
 ligne d'index, la concordance fichier↔index et le cycle de vie de la confiance y sont définis
 **une fois pour toutes** ; ce paragraphe ne fait que situer l'instance Mémoire, il ne les
 reproduit pas. Le canal Mémoire n'a **aucune clé propre** : le frontmatter commun suffit (pas de
 `status`, à la différence des canaux Décision/Backlog).
 
 - **`memory/<slug>.md`** — un fichier par préférence, frontmatter en tête (schéma complet →
-  `GABARIT-ENTREE.md §Le frontmatter commun`) :
+  `ENTRY-TEMPLATE.md §Le frontmatter commun`) :
   ```
   ---
   id: mem-null-check-unity
@@ -35,7 +35,7 @@ reproduit pas. Le canal Mémoire n'a **aucune clé propre** : le frontmatter com
   <la règle elle-même, en prose libre>
   ```
 - **Cet index (`MEMORY.md`)** — une ligne par fichier, jamais le détail, format uniforme du
-  gabarit (`GABARIT-ENTREE.md §Le principe`) :
+  gabarit (`ENTRY-TEMPLATE.md §Le principe`) :
   ```
   - [<id>](memory/<slug>.md) — <résumé ≤ 1 ligne>
   ```
@@ -47,7 +47,7 @@ liens croisés `links:` — voir sa docstring pour la table des règles.)*
 ## Provenance & confiance (contre l'empoisonnement)
 
 Toute écriture en mémoire **partagée** (et toute note durable) porte **d'où elle vient** et **si
-elle est validée** — clés `source`/`confidence` du frontmatter commun (`GABARIT-ENTREE.md`) :
+elle est validée** — clés `source`/`confidence` du frontmatter commun (`ENTRY-TEMPLATE.md`) :
 - **`source`** — `inferred` (déduite par l'IA) · `human` (proposée par un humain) ·
   `external:<réf>` (reprise d'un **contenu externe** — doc tierce, issue, page web ; `<réf>` =
   url/id de la source).
@@ -64,7 +64,7 @@ simple persistance. **Rien n'est promu en partagé sans passer par le cycle de v
   **propose** la promotion (le diff de frontmatter), l'humain **ratifie** (pose `ratified`).
   Jamais d'auto-promotion : une entrée `confidence: verified` sans `ratified` associé est
   signalée (`R-VERIFIED-NOT-RATIFIED`, à-confirmer — pas bloquant, mais reste une créance non
-  soldée). Mécanique complète → `GABARIT-ENTREE.md §Cycle de vie de la confiance`.
+  soldée). Mécanique complète → `ENTRY-TEMPLATE.md §Cycle de vie de la confiance`.
 - **La sortie** de `verified` (retrait ou révision) passe par la **revue sémantique** (étage 2,
   `checks/memory-audit.md`) **+ décision utilisateur**, et est **journalisée** (raison + historique
   git) — jamais silencieuse.

@@ -39,7 +39,7 @@ lines=""
 
 [ -n "$lines" ] && printf "⚠️ dérive structurelle au démarrage :\n%b" "$lines"
 
-REPORT="${UC_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
+REPORT="${YAMS_MEMORY_REPORT_DIR:-.memory-reports}/memory-report.md"
 [ -f "$REPORT" ] && printf "📋 rapport mémoire en attente: %s — DEMANDER à l'utilisateur de le traiter, puis le supprimer.\n" "$REPORT"
 
 exit 0   # jamais bloquant ; MUET si ni dérive ni rapport → 0 token injecté
