@@ -99,6 +99,33 @@ python3 checks/index-check.py                                    # nécessite in
 python3 checks/index-check.py --config index/index-config.json --base .
 ```
 
+### `entrylib.py`
+**Intention :** **bibliothèque partagée**, PAS un check autonome — parseur de frontmatter minimal
+maison (pas de dépendance yaml) + validation du schéma commun d'une **entrée mémoire**
+(`GABARIT-ENTREE.md`), plus la concordance fichier↔index généralisée depuis `memory-check.py` /
+`decisions-check.py`. Importée par les checks de **canal** (`memory-check.py`, `decisions-check.py`,
+`feature-map-check.py`, `backlog-check.py`) — **un seul endroit définit ce qu'est une entrée
+valide**, plus de duplication de regex entre checks.
+
+API publique : `Finding`/`BLOQUANT`/`CONFIRMER` (le gabarit `checks/GABARIT.md`), `CHANNELS`
+(spec required/optional/enums par canal), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
+`check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`.
+
+| Paramètre | Effet | Défaut |
+|---|---|---|
+| `--selftest` | **seul mode exécutable** — jeu d'essais embarqué (fixtures en chaînes + tempfile), un par règle | — |
+
+**Aucun effet quand importé** — pas de `main()` déclenché à l'`import`, seulement des définitions.
+
+**Codes de sortie (`--selftest`) :** `0` tous les essais passent · `1` au moins un échec (détail
+imprimé, un par ligne). Hors `--selftest`, `main()` imprime l'usage et retourne `0` (rappel que
+ce n'est pas un check à câbler seul).
+
+```bash
+python3 checks/entrylib.py --selftest
+python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # sans effet de bord
+```
+
 ### `memory-check.py`
 **Intention :** intégrité du canal **Mémoire** — format « un fait par fichier + frontmatter »
 (`memory/<slug>.md`), `MEMORY.md` = index. Deux familles de règles : (1) **frontmatter** de
