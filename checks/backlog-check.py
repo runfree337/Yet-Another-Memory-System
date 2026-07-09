@@ -418,11 +418,11 @@ def cmd_stamp(argv: list[str]) -> int:
 TASK_STATE_DISPLAY_ORDER = ["done", "in-progress", "blocked", "todo"]
 
 
-def chantier_ids():
+def work_item_ids():
     return [cid for cid, _ in collect_work_items()]
 
 
-def chantier_state(cid):
+def work_item_state(cid):
     cdir = os.path.join(BACKLOG, cid)
     etat = os.path.join(cdir, "STATE.md")
     if not os.path.isdir(cdir) or not os.path.isfile(etat):
@@ -452,13 +452,13 @@ def _task_counts_suffix(counts):
 
 
 def render_state(cid):
-    st = chantier_state(cid)
+    st = work_item_state(cid)
     if st is None:
-        dispo = ", ".join(chantier_ids()) or "(none)"
+        dispo = ", ".join(work_item_ids()) or "(none)"
         return f"[backlog-check] work item « {cid} » not found (backlog/{cid}/STATE.md).\nWork items: {dispo}"
-    jalon = "Unplanned" if st["milestone"] is None else f"Milestone {st['milestone']}"
+    milestone_label = "Unplanned" if st["milestone"] is None else f"Milestone {st['milestone']}"
     lines = [f"Work item {st['id']} — {st['title']}",
-             f"  status : {st['status']}   ·   {jalon}   ·   updated {st['updated']}"]
+             f"  status : {st['status']}   ·   {milestone_label}   ·   updated {st['updated']}"]
     suffix = _task_counts_suffix(st["task_counts"])
     lines.append("  tasks  : " + (suffix if suffix else "—"))
     if st["docs"]:
@@ -474,7 +474,7 @@ def render_state(cid):
 
 
 def render_board():
-    rows = [chantier_state(cid) or {"id": cid} for cid in chantier_ids()]
+    rows = [work_item_state(cid) or {"id": cid} for cid in work_item_ids()]
     if not rows:
         return "[backlog-check] no doc-backed work item."
     rows.sort(key=lambda s: (s.get("milestone") is None,
@@ -539,15 +539,15 @@ def main(argv):
     if "--state" in argv:
         rest = [a for a in argv[argv.index("--state") + 1:] if not a.startswith("-")]
         if not rest:
-            print("usage: --state <id>   (work items: " + ", ".join(chantier_ids()) + ")")
+            print("usage: --state <id>   (work items: " + ", ".join(work_item_ids()) + ")")
             return 1
         cid = rest[0].strip("/")
-        st = chantier_state(cid)
+        st = work_item_state(cid)
         print(json.dumps(st, ensure_ascii=False, indent=2) if "--json" in argv else render_state(cid))
         return 0 if st else 1
     if "--board" in argv:
         if "--json" in argv:
-            print(json.dumps([chantier_state(c) for c in chantier_ids()], ensure_ascii=False, indent=2))
+            print(json.dumps([work_item_state(c) for c in work_item_ids()], ensure_ascii=False, indent=2))
         else:
             print(render_board())
         return 0
