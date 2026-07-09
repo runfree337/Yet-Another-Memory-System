@@ -36,6 +36,13 @@ Rules:
                                   `todo`/`in-progress` (a "ready to close" signal) — or the
                                   reverse, work item `in-progress` with no task started at
                                   all.
+  E-IMPACT       (BLOCKING)      `impacts:` entry that is neither a target path (contains `/`
+                                  or `.`, no existence requirement — it may be a doc to
+                                  CREATE at closure) nor one of the channel keywords
+                                  `decision | feature | memory` — closed vocabulary.
+  E-IMPACT-EMPTY (TO-CONFIRM)    every task `done` and `impacts` absent/empty — "ready to
+                                  close with no declared durable impact — really nothing to
+                                  migrate?". Never fires while tasks remain open.
   E-STATE-SIZE   (TO-CONFIRM)    STATE.md > 80 lines — candidate for "durable content living
                                   in the state file" (soft anti-accumulation guard, never
                                   blocking).
@@ -52,8 +59,9 @@ Rules:
                                   for the others).
 
 Views: `--board` (work items by milestone, status + task counts by state) · `--state <id>`
-(one work item, tasks unrolled). Both accept `--json`. `--checklist [<id>]` emits the
-closure template (DoD, `backlog/README.md`).
+(one work item, tasks unrolled, `impacts:` listed). Both accept `--json`. `--checklist [<id>]`
+emits the closure template (DoD, `backlog/README.md`) — when `<id>` declares `impacts:`, the
+**Durable** step enumerates them instead of the generic wording.
 
 `--stamp [files…]` / `--stamp --staged`: sets `updated: <today>` via
 `entrylib.stamp_updated` on the cited `STATE.md` files (or staged ones with `--staged`,
@@ -100,6 +108,9 @@ TASK_LABEL_MAX_WORDS = 30
 STATE_SIZE_MAX_LINES = 80
 CANON_SECTIONS = {"Tasks", "Remaining"}
 
+# `impacts:` closed vocabulary — a channel keyword or a target path (see check_impacts).
+IMPACT_KEYWORDS = {"decision", "feature", "memory"}
+
 # DoD (cf. backlog/README.md). `{target}` = the work item to remove. Step 1 is a CHECK
 # (capitalization already happened task by task), not heavy lifting.
 CLOSURE_STEPS = [
@@ -112,10 +123,30 @@ CLOSURE_STEPS = [
 ]
 
 
-def closure_checklist(target="the work item's folder"):
+def _durable_step_wording(impacts):
+    """Enumerates a work item's declared `impacts:` for the closure checklist's Durable
+    step — paths to update/migrate, channel keywords to record. `None`/empty -> `None`
+    (caller falls back to the generic wording)."""
+    if not impacts:
+        return None
+    paths = [x for x in impacts if x not in IMPACT_KEYWORDS]
+    keywords = [x for x in impacts if x in IMPACT_KEYWORDS]
+    parts = []
+    if paths:
+        parts.append("update/migrate: " + ", ".join(paths))
+    if keywords:
+        parts.append("record: " + ", ".join(keywords))
+    return " ; ".join(parts) if parts else None
+
+
+def closure_checklist(target="the work item's folder", impacts=None):
     head = "Closure checklist (DoD — `backlog/README.md`):"
-    rows = [f"  [ ] {i}. **{t}** — {d.format(target=target)}"
-            for i, (t, d) in enumerate(CLOSURE_STEPS, 1)]
+    rows = []
+    for i, (t, d) in enumerate(CLOSURE_STEPS, 1):
+        desc = d.format(target=target)
+        if t == "Durable":
+            desc = _durable_step_wording(impacts) or desc
+        rows.append(f"  [ ] {i}. **{t}** — {desc}")
     return "\n".join([head, *rows])
 
 
@@ -206,6 +237,30 @@ def _norm_milestone(v):
 
 
 # --------------------------------------------------------------------------- #
+# `impacts:` — the impact ledger (filled during work, consumed at closure)     #
+# --------------------------------------------------------------------------- #
+
+def check_impacts(path: str, meta: dict) -> list[Finding]:
+    """Validates the `impacts:` frontmatter entries of a work item.
+
+    Each entry is either a **target path** (contains `/` or `.` — no existence
+    requirement, it may be a doc to CREATE at closure) or a **channel keyword** in
+    `IMPACT_KEYWORDS`. Anything else is `E-IMPACT` (closed vocabulary, zero-FP)."""
+    findings = []
+    impacts = meta.get("impacts") or []
+    if isinstance(impacts, str):
+        impacts = [impacts]
+    for imp in impacts:
+        imp = str(imp).strip()
+        if not imp or "/" in imp or "." in imp or imp in IMPACT_KEYWORDS:
+            continue
+        findings.append(Finding(BLOCKING, "E-IMPACT", path, 1,
+                                 f"unknown impact « {imp} » — a path or one of: "
+                                 f"{', '.join(sorted(IMPACT_KEYWORDS))}."))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
 # A work item — frontmatter (entrylib) + tasks + safeguards                   #
 # --------------------------------------------------------------------------- #
 
@@ -231,6 +286,7 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
     meta, body, err = entrylib.parse_frontmatter(text)
     findings += entrylib.validate_entry(state_rel, meta, "backlog")
     findings += entrylib.check_links(state_rel, meta, ROOT)
+    findings += check_impacts(state_rel, meta)
 
     headings, sections = parse_state(text)
 
@@ -328,6 +384,10 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
         if status == "in-progress" and not started:
             findings.append(Finding(TO_CONFIRM, "E-TASK-SYNC", state_rel, 1,
                                      "work item `status: in-progress` with no task started at all."))
+        if all_done and not (meta.get("impacts") or []):
+            findings.append(Finding(TO_CONFIRM, "E-IMPACT-EMPTY", state_rel, 1,
+                                     "ready to close with no declared durable impact — really "
+                                     "nothing to migrate?"))
 
     return findings
 
@@ -446,7 +506,8 @@ def work_item_state(cid):
     return {
         "id": meta.get("id", cid), "title": meta.get("title"), "status": meta.get("status"),
         "milestone": _norm_milestone(meta.get("milestone")), "updated": meta.get("updated"),
-        "docs": meta.get("docs") or [], "tasks": tasks, "task_counts": counts,
+        "docs": meta.get("docs") or [], "impacts": meta.get("impacts") or [],
+        "tasks": tasks, "task_counts": counts,
         "remaining": [content for _, content in sections.get("Remaining", [])],
     }
 
@@ -468,6 +529,8 @@ def render_state(cid):
     lines.append("  tasks  : " + (suffix if suffix else "—"))
     if st["docs"]:
         lines.append("  docs   : " + ", ".join(st["docs"]))
+    if st["impacts"]:
+        lines.append("  impacts: " + ", ".join(st["impacts"]))
     lines.append(f"\n## Tasks ({len(st['tasks'])})")
     for t in st["tasks"]:
         tail = f" → {t['doc']}" if t["doc"] else ""
@@ -538,8 +601,15 @@ def main(argv):
         return cmd_stamp(argv)
     if "--checklist" in argv:
         rest = [a for a in argv[argv.index("--checklist") + 1:] if not a.startswith("-")]
-        target = ("`backlog/" + rest[0].strip("/") + "/`") if rest else "the work item's folder"
-        print(closure_checklist(target))
+        impacts = None
+        if rest:
+            cid = rest[0].strip("/")
+            target = "`backlog/" + cid + "/`"
+            st = work_item_state(cid)
+            impacts = st.get("impacts") if st else None
+        else:
+            target = "the work item's folder"
+        print(closure_checklist(target, impacts))
         return 0
     if "--state" in argv:
         rest = [a for a in argv[argv.index("--state") + 1:] if not a.startswith("-")]

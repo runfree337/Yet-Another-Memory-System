@@ -24,7 +24,7 @@ backlog.
 - Key semantics (unchanged, only the vocabulary changes): `after` = dependency (formerly
   `apres`); `docs` = the folder's companion docs; `updated` = last-touched date (formerly `maj`),
   **mechanically stamped** at pre-commit; `milestone` = milestone (formerly `jalon`), an integer or
-  `null` (Unplanned).
+  `null` (Unplanned); `impacts` = the **impact ledger** (see below).
 - `status: todo | in-progress` (in the frontmatter for a doc-backed item, the badge for an inline
   one). Done → **removed** (no accumulating "done" status — a work item never turns
   `status: done`, it leaves the backlog). The `INDEX.md` line for a doc-backed item carries only
@@ -72,6 +72,22 @@ reference to that home. A `STATE.md` that bloats (content > state + references) 
 that this rule was bypassed — see `checks/backlog-check.py §E-STATE-SIZE / §E-STATE-SECTION`
 (soft, to-confirm).
 
+## The impact ledger — `impacts:`
+
+The `impacts:` frontmatter key is a **checklist, not a summary**: fill it in **during work**, as
+soon as you learn a durable doc/memory will need updating — not reconstructed from memory at
+closure. Two kinds of entry:
+- a **target path** (e.g. `WORKFLOW.md`, `features/x.md`) — no existence requirement, it may name
+  a doc that will only be **created** at closure;
+- a **channel keyword** — `decision | feature | memory` — when the impact is "log a decision" or
+  "touch that channel" rather than a specific file.
+
+`checks/backlog-check.py` enforces the closed vocabulary (`E-IMPACT`, blocking) and nudges when a
+work item looks ready to close with an empty ledger (`E-IMPACT-EMPTY`, to-confirm — never fires
+while tasks remain open). `--checklist <id>` reads the ledger back: its **Durable** step (DoD 1
+below) enumerates the declared impacts instead of the generic wording, so closure stops relying on
+recall.
+
 ## Milestones — ordered grouping
 
 `INDEX.md` **groups** work items by **milestone**: a subheading `### Milestone N — <name>` (N
@@ -88,7 +104,8 @@ in its frontmatter.
    is no longer heavy lifting but a **verification**: is there any durable content left
    unmigrated (in `STATE.md`, a forgotten working doc…)? If so, migrate it now to its durable home
    + the memory channels it touches (`FEATURE_MAP`…) — the durable *carries the content*, not a
-   promise.
+   promise. Run `backlog-check.py --checklist <id>`: it enumerates the work item's `impacts:`
+   ledger (see above) as a **nominative checklist** for this step, instead of relying on recall.
 2. **Decision** recorded if the closure settles a structural choice.
 3. **Backlog cleared** — the work item + its `INDEX.md` line are **removed** (or status updated if
    partial).

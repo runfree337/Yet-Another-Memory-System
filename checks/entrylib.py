@@ -69,7 +69,7 @@ CHANNELS = {
     },
     "backlog": {
         "required": ("id", "status", "title", "milestone", "updated"),
-        "optional": ("links", "source", "confidence", "ratified", "after", "docs", "created"),
+        "optional": ("links", "source", "confidence", "ratified", "after", "docs", "created", "impacts"),
         "enums": {"status": {"todo", "in-progress"}},
         "nullable": ("milestone",),
     },
