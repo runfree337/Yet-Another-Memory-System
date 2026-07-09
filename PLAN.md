@@ -2,8 +2,9 @@
 
 > **Statut : plan, rien d'implémenté.** Deux étapes ordonnées — l'étape 1 (cohérence,
 > déplacement de fichiers) change des chemins cités partout, elle passe **avant** l'étape 2.
-> Chaque item référence les documents à modifier et les scripts à améliorer. Les choix encore
-> ouverts sont marqués **[à trancher]** avec une recommandation.
+> Chaque item référence les documents à modifier et les scripts à améliorer. Les choix
+> structurels sont marqués **[tranché]** (ratifiés le 2026-07-09) ; le reste-à-trancher vit au
+> récapitulatif.
 >
 > Origine : audit de cohérence du portage depuis le projet initial (TheUndeathCurse), session
 > du 2026-07-09. Trois écarts relevés (emballage, statut du backlog, triptyque de pilotage)
@@ -24,7 +25,7 @@ il est le dépôt entier.
 
 | Fichier | Action |
 |---|---|
-| `_meta/ai-workflow/**` | **[à trancher]** — recommandé : **promouvoir tout le contenu à la racine** du dépôt (`WORKFLOW.md`, `backlog/`, `decisions/`, `memory/`, `checks/`, `hooks/`, `index/`, etc.). Alternative : garder `_meta/ai-workflow/` et se contenter de READMEs corrects — plus simple mais l'emballage « méta » reste un vestige. |
+| `_meta/ai-workflow/**` | **[tranché]** : **promouvoir tout le contenu à la racine** du dépôt (`WORKFLOW.md`, `backlog/`, `decisions/`, `memory/`, `checks/`, `hooks/`, `index/`, etc.) et supprimer l'emballage `_meta/`. |
 | `_meta/README.md` | **Supprimer** (vestige de l'hôte). Rien de son contenu ne s'applique à YAMS. |
 | `README.md` (racine) | **Réécrire** : présenter YAMS (l'orchestrateur méthodologique : boucle de travail + mémoire temporaire/long terme + contrôles), pointer `WORKFLOW.md` (le cœur), `INSTALL.md` (adopter), `SCRIPTS.md` (référence). Absorber l'actuel `_meta/ai-workflow/README.md` (placement par outil) ou le garder comme doc de déploiement séparée. |
 | tous les `.md` du framework | après le déplacement : **repasser tous les chemins relatifs** cités (`../checks/`, `_meta/ai-workflow/…`) — vérification mécanique par `checks/doc-refs-check.py` une fois lancé depuis la nouvelle racine. |
@@ -138,14 +139,10 @@ Il existe un gabarit pour la forme des **checks** (`checks/GABARIT.md`) — pas 
 
 ### 2.3 Canal Feature — uniformiser
 
-**[à trancher]** — deux options :
-
-- **Recommandé : aligner sur le motif commun** — un fichier par fiche (`features/<slug>.md`,
-  frontmatter du gabarit + corps Rôle/Code/Doc/Tests/Motif d'ajout), `FEATURE_MAP.md` devient
-  l'index (une ligne par fiche). Uniformité totale des 4 canaux, `maj` stampable par fiche,
-  granularité naturelle (« une fiche trop longue → deux fichiers »).
-- **Alternative légère** : garder le fichier unique, ajouter une ligne `maj:` par fiche et durcir
-  le check. Moins de churn, mais le canal reste l'exception du motif.
+**[tranché]** : **aligner sur le motif commun** — un fichier par fiche (`features/<slug>.md`,
+frontmatter du gabarit + corps Rôle/Code/Doc/Tests/Motif d'ajout), `FEATURE_MAP.md` devient
+l'index (une ligne par fiche). Uniformité totale des 4 canaux, `maj` stampable par fiche,
+granularité naturelle (« une fiche trop longue → deux fichiers »).
 
 | Fichier | Action |
 |---|---|
@@ -166,7 +163,7 @@ courte bornée**. Aujourd'hui le suivi « par tâche » vit en rubriques libres 
 
 | Fichier | Action |
 |---|---|
-| `backlog/README.md` | Définir le **format canonique de ligne de tâche** dans une rubrique `## Tâches` obligatoire : `- [<état>] <libellé ≤ 15 mots>` ou `- [<état>] <libellé court> → <doc-de-travail.md>`. Sous-états : `à faire` / `en cours` / `bloqué` / `fait`. Règles : une tâche simple tient dans le libellé (plafond de mots) ; au-delà → doc de travail **dans le dossier du chantier**, référencé, et le libellé reste court. Cohérence chantier⟺tâches : chantier `en cours` ⇒ ≥ 1 tâche entamée ; toutes `fait` ⇒ chantier prêt à clore. |
+| `backlog/README.md` | Définir le **format canonique de ligne de tâche** dans une rubrique `## Tâches` obligatoire : `- [<état>] <libellé ≤ 30 mots>` ou `- [<état>] <libellé court> → <doc-de-travail.md>`. Sous-états : `à faire` / `en cours` / `bloqué` / `fait`. Règles : une tâche simple tient dans le libellé (plafond de mots) ; au-delà → doc de travail **dans le dossier du chantier**, référencé, et le libellé reste court. Cohérence chantier⟺tâches : chantier `en cours` ⇒ ≥ 1 tâche entamée ; toutes `fait` ⇒ chantier prêt à clore. |
 | `backlog/ETAT.gabarit.md` (nouveau, ou intégré au README) | Le gabarit concret d'un `ETAT.md` : frontmatter + `## Tâches` + rubriques restantes réduites au minimum (voir 2.5). |
 
 **Scripts :**
@@ -237,10 +234,13 @@ projet initial francophone.
 (exemption gabarit), `checks/memory-audit.py` / `checks/decisions-audit.py` (exploitation du
 frontmatter). Créé : `checks/entrylib.py` (lib frontmatter partagée).
 
-**À trancher avant d'implémenter :**
-1. Promotion du contenu à la racine du dépôt vs conserver `_meta/ai-workflow/` (1.1 — recommandé : racine).
-2. Canal Feature : un fichier par fiche + index vs fichier unique enrichi (2.3 — recommandé : un fichier par fiche).
-3. Plafond de mots d'un libellé de tâche (2.4 — proposé : 15) et plafond de lignes d'un `ETAT.md` (2.5 — à calibrer sur les chantiers réels du projet initial).
+**Tranché (2026-07-09) :**
+1. Promotion du contenu à la racine du dépôt, suppression de `_meta/` (1.1).
+2. Canal Feature : un fichier par fiche + `FEATURE_MAP.md` en index (2.3).
+3. Plafond d'un libellé de tâche : **30 mots** (2.4).
+
+**Reste à trancher :** plafond de lignes d'un `ETAT.md` (2.5 — à calibrer sur les chantiers
+réels du projet initial).
 
 **Ordre d'exécution** : 1.1 (déménagement) → 1.2–1.4 → 2.1 (gabarit + `entrylib`) → 2.2/2.3/2.4
 (canaux, parallélisables) → 2.5 → 2.6 → **3 (anglais, en dernier)**. Chaque lot ≤ 5 fichiers,
