@@ -16,6 +16,15 @@ Modes:
                                   INCOMING content (tool_input.content / new_string) —
                                   the injection vector — never the stale on-disk file.
 
+The no-args mode ("usual instruction files") seeds its file list from DEFAULT_NAMES (plus
+a walk of the framework's own .md/.txt). DEFAULT_NAMES can be EXTENDED (never replaced)
+with repo-relative paths from an optional `checks-config.json` at the repo root, key
+`guards.extra-watched-files` — see `checks-config.example.json`. Extension-only,
+fail-closed: a missing/unreadable/malformed config, or a malformed key (not a list of
+strings), means DEFAULT_NAMES alone — today's behavior, byte-identical. A guard must
+never crash or block because of a bad config. (`--staged` and explicit `paths…` do not
+consume DEFAULT_NAMES at all, so the extension is a no-op there.)
+
 Exit 2 = suspect chars detected (BLOCK); 0 otherwise. Read-only.
 """
 import argparse
@@ -33,6 +42,60 @@ SUSPECT = {cp for lo, hi in _RANGES for cp in range(lo, hi + 1)}
 
 DEFAULT_NAMES = ["CLAUDE.md", "AGENTS.md", ".cursorrules",
                  os.path.join(".github", "copilot-instructions.md")]
+
+CONFIG_NAME = "checks-config.json"
+
+_config_cache = None  # lazy, loaded at most once per process
+
+
+def _candidate_roots():
+    # Mirrors normative-write-guard.py's resolution: $CLAUDE_PROJECT_DIR (set by Claude
+    # Code for every hook invocation) -> cwd -> this repo's own root (hooks/../..), for
+    # direct/manual invocation from within a checkout of this framework.
+    env_root = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env_root:
+        yield env_root
+    yield os.getcwd()
+    yield os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+
+def _load_config():
+    """Return the parsed `checks-config.json` dict, or {} if missing/unreadable/broken —
+    fail-closed: extension features are then treated as absent, DEFAULT_NAMES alone.
+    First candidate root where the file exists AND parses wins; no merging."""
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+    data = {}
+    for root in _candidate_roots():
+        try:
+            with open(os.path.join(root, CONFIG_NAME), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            break
+        except Exception:
+            continue
+    if not isinstance(data, dict):
+        data = {}
+    _config_cache = data
+    return data
+
+
+def extra_watched_files():
+    """Repo-relative paths from `guards.extra-watched-files`, or [] if the file/key is
+    absent, unreadable, or malformed (not a list of strings) — never removes/replaces
+    DEFAULT_NAMES, only appends."""
+    guards = _load_config().get("guards")
+    if not isinstance(guards, dict):
+        return []
+    extra = guards.get("extra-watched-files")
+    if not isinstance(extra, list) or not all(isinstance(p, str) for p in extra):
+        return []
+    return extra
+
+
+def watched_names():
+    """DEFAULT_NAMES, extended with the (validated) config extension."""
+    return DEFAULT_NAMES + extra_watched_files()
 
 
 def scan_text(text, label):
@@ -71,7 +134,7 @@ def gather(args):
         return [f for f in staged_text_files() if os.path.isfile(f)]
     if args.paths:
         return args.paths
-    files = [n for n in DEFAULT_NAMES if os.path.isfile(n)]
+    files = [n for n in watched_names() if os.path.isfile(n)]
     framework = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ai-workflow/
     for root, _, names in os.walk(framework):
         files += [os.path.join(root, n) for n in names if n.endswith((".md", ".txt"))]

@@ -16,6 +16,14 @@ Modes:
   secret-scan.py --stdin-json      Claude Code adapter (Bash->staged if git commit;
                                    Write/Edit->content)
 
+ALLOWLIST (path regexes where a match is tolerated) can be EXTENDED (never replaced) with
+regex strings from an optional `checks-config.json` at the repo root, key
+`guards.extra-secret-allowlist-paths` — see `checks-config.example.json`. Extension-only,
+fail-closed: a missing/unreadable/malformed config, or a malformed key (not a list of
+strings), means ALLOWLIST alone — today's behavior, byte-identical. An individual entry
+that fails `re.compile` is skipped (noted on stderr) — the rest still apply; the guard
+never crashes or blocks because of a bad config.
+
 Exit 2 = secret detected (BLOCK); 0 otherwise. Values masked in the report. Read-only.
 """
 import argparse
@@ -59,9 +67,69 @@ _ENV_REF = (re.compile(r"os\.(?:getenv|environ)\s*[\[(]"), re.compile(r"process\
 _QUOTED_LIT = re.compile(r"[\"'][A-Za-z0-9]{20,}[\"']")
 _ENV_VAR = re.compile(r"\$\{?\w+_(?:KEY|TOKEN|SECRET)\}?")
 
+CONFIG_NAME = "checks-config.json"
+
+_config_cache = None    # lazy, loaded at most once per process
+_extra_allowlist_cache = None
+
+
+def _candidate_roots():
+    # Mirrors normative-write-guard.py's resolution: $CLAUDE_PROJECT_DIR (set by Claude
+    # Code for every hook invocation) -> cwd -> this repo's own root (hooks/../..), for
+    # direct/manual invocation from within a checkout of this framework.
+    env_root = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env_root:
+        yield env_root
+    yield os.getcwd()
+    yield os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+
+def _load_config():
+    """Return the parsed `checks-config.json` dict, or {} if missing/unreadable/broken —
+    fail-closed: extension features are then treated as absent, ALLOWLIST alone. First
+    candidate root where the file exists AND parses wins; no merging."""
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+    data = {}
+    for root in _candidate_roots():
+        try:
+            with open(os.path.join(root, CONFIG_NAME), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            break
+        except Exception:
+            continue
+    if not isinstance(data, dict):
+        data = {}
+    _config_cache = data
+    return data
+
+
+def extra_allowlist():
+    """Compiled regexes from `guards.extra-secret-allowlist-paths`, or [] if the
+    file/key is absent, unreadable, or malformed (not a list of strings) — never
+    removes/replaces ALLOWLIST, only appends. An entry that fails `re.compile` is
+    skipped (noted on stderr) so the rest keep applying; memoized after first call."""
+    global _extra_allowlist_cache
+    if _extra_allowlist_cache is not None:
+        return _extra_allowlist_cache
+    guards = _load_config().get("guards")
+    raw = guards.get("extra-secret-allowlist-paths") if isinstance(guards, dict) else None
+    compiled = []
+    if isinstance(raw, list) and all(isinstance(p, str) for p in raw):
+        for pattern in raw:
+            try:
+                compiled.append(re.compile(pattern))
+            except re.error as e:
+                print(f"secret-scan: skipping invalid extra-secret-allowlist-paths "
+                      f"entry {pattern!r}: {e}", file=sys.stderr)
+    _extra_allowlist_cache = compiled
+    return compiled
+
 
 def allowlisted(path):
-    return any(rx.search(path) for rx in ALLOWLIST)
+    return (any(rx.search(path) for rx in ALLOWLIST)
+            or any(rx.search(path) for rx in extra_allowlist()))
 
 
 def skip_ext(path):
