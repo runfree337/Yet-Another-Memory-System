@@ -27,7 +27,7 @@ item is **removed**, not marked). `milestone` = integer (milestone) or `null` (U
 `after` = list of work-item `id`s this one depends on. `docs` = list of the folder's companion
 `.md` files (excluding `STATE.md` itself). `impacts` = the **impact ledger**: fill it in **as you
 learn**, during work, as soon as you know a durable doc/memory will need updating — each entry is
-either a target path (e.g. `WORKFLOW.md`, `features/x.md` — no existence requirement, it may be a
+either a target path (e.g. `WORKFLOW.md`, `features/x.md` — no existence requirement, it may be a <!-- template -->
 doc to create at closure) or a channel keyword (`decision | feature | memory`). Consumed at
 closure — DoD step 1 (`README.md`) enumerates it instead of relying on recall. `updated` =
 mechanically stamped by `backlog-check.py --stamp`, never by hand.

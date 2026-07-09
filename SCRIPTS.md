@@ -15,15 +15,23 @@ consistent frontmatter (`id/title/status/milestone/after/docs/updated`, validate
 and a mandatory `## Tasks` section (one line per task, state `todo/in-progress/blocked/done`,
 label ≤ 30 words or a `→ working-doc.md` pointer).
 
+`impacts:` is an optional frontmatter key — the **impact ledger**: filled in during work as
+soon as a durable doc/memory is known to need updating, consumed at closure instead of relying
+on recall. Each entry is either a target path (`WORKFLOW.md`, `features/x.md` — no existence <!-- template -->
+check, it may name a doc to create at closure) or one of the channel keywords
+`decision | feature | memory`. `E-IMPACT` (blocking) rejects anything outside that closed
+vocabulary; `E-IMPACT-EMPTY` (to-confirm) fires only once every task is `done` and the ledger
+is still empty ("ready to close with no declared durable impact?") — silent while work is open.
+
 | Parameter | Effect | Default |
 |---|---|---|
 | *(none)* | runs the full check, prints the text report | — |
 | `--json` | same check, JSON output of findings | disabled |
 | `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
-| `--state <id>` | expands one specific work item (tasks + counts); without `<id>` lists the valid ids | — |
+| `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
 | `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | acts on the files passed as arguments |
 | `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit |
-| `--checklist [id]` | prints the closure checklist (Definition of Done, 5 steps) for a work item | — |
+| `--checklist [id]` | prints the closure checklist (Definition of Done, 5 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording | — |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.
 **Write (`--stamp` mode):** mutates the `updated` field and nothing else — bounded, mechanical, never blocking (see `checks/README.md §Pre-commit wiring`). Same mode on `feature-map-check.py` and `memory-check.py`.
@@ -61,7 +69,7 @@ python3 checks/feature-map-check.py --stamp --staged   # pre-commit only
 
 ### `decisions-check.py`
 **Intent:** integrity of the **Decision** channel (instance of `ENTRY-TEMPLATE.md`, see
-`decisions/README.md`) — seven rules, from file↔INDEX concordance to the revocation graph.
+`decisions/README.md`) — eight rules, from file↔INDEX concordance to the revocation graph.
 Imports `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
 
 | Rule | Severity | What it proves |
@@ -73,6 +81,7 @@ Imports `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `c
 | `D5` | blocking | `status` ⟺ `INDEX.md` section (`archived` under `## Active`, or `active` under `## Archived`, is blocking; `revoked` unconstrained) |
 | `D6` | blocking | sound revocation graph: `replaced-by`/`replaces` resolved, reciprocal, no cycle |
 | `D7` (`R-DEAD-LINK`) | blocking/to-confirm | cross-channel `links:` resolved (`entrylib.check_links`) |
+| `D8` | to-confirm | `archived`/`revoked` decision **still referenced** by a living entry — `links:` in `memory/`, `features/`, `backlog/<id>/STATE.md`, or a `D-id` mention in a feature body. One finding per (decision, referencing file) pair; the decisions' own `replaces`/`replaced-by` graph and `INDEX.md` are excluded by construction (archival record, not stale references). Never blocking: a living historical citation can be legitimate — the finding asks a human to update the reference or reconsider the archival. |
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -267,13 +276,16 @@ in one single pass (small by construction).
 | Parameter | Effect | Default |
 |---|---|---|
 | `--tier1` | chains the 3 channels, prints one verdict per channel | — |
-| `--json` | JSON output | disabled |
+| `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Files with no frontmatter/`confidence` are skipped, never errored on. | — |
+| `--json` | JSON output (with `--pending`: flat list of `channel/path/updated/source/kind`) | disabled |
 | *(none)* | equivalent to `--tier1` | — |
 
-**Exit codes:** the worst exit code among the 3 underlying channels (`0`/`1`/`2`).
+**Exit codes:** `--tier1` → the worst exit code among the 3 underlying channels (`0`/`1`/`2`) ·
+`--pending` → `0` inbox empty, `1` otherwise (informational, never `2`).
 
 ```bash
 python3 checks/memory-audit.py                              # tier1 on the 3 channels
+python3 checks/memory-audit.py --pending                     # what awaits my ratification?
 python3 checks/memory-audit.py --json
 ```
 

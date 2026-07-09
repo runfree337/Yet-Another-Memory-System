@@ -39,7 +39,7 @@ For every task, the AI:
 
 - `backlog/INDEX.md`: the list of not-yet-built work, **read first**. Status per entry (`todo` / `in-progress`); a **finished** work item is **removed**.
 - **The chain**: `spec` → `backlog` (decided, not built) → *in progress, broken into tasks* → on delivery, the content **migrates to the durable record** and the item leaves the backlog.
-- **Closing** follows an ordered procedure (the Definition of Done, `backlog/README.md`): durable record written → decision if structural → removed from backlog → **status updated** (`DASHBOARD.md`) → **knowledge capture**.
+- **Closing** follows an ordered procedure (the Definition of Done, `backlog/README.md`): durable record written (the work item's `impacts:` ledger, filled during the work, enumerates exactly what to update — no recall involved) → decision if structural → removed from backlog → **status updated** (`DASHBOARD.md`) → **knowledge capture**.
 
 ## Steering — plan / status / todo
 

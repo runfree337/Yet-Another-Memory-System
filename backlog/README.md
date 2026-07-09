@@ -77,7 +77,7 @@ that this rule was bypassed — see `checks/backlog-check.py §E-STATE-SIZE / §
 The `impacts:` frontmatter key is a **checklist, not a summary**: fill it in **during work**, as
 soon as you learn a durable doc/memory will need updating — not reconstructed from memory at
 closure. Two kinds of entry:
-- a **target path** (e.g. `WORKFLOW.md`, `features/x.md`) — no existence requirement, it may name
+- a **target path** (e.g. `WORKFLOW.md`, `features/x.md`) — no existence requirement, it may name <!-- template -->
   a doc that will only be **created** at closure;
 - a **channel keyword** — `decision | feature | memory` — when the impact is "log a decision" or
   "touch that channel" rather than a specific file.

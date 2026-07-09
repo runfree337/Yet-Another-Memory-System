@@ -11,6 +11,13 @@ summarizes, without duplicating their logic — same two-tier pattern as the res
     --tier1   runs feature-map-check + decisions-audit --tier1 (which already covers
               decisions/doc/index/backlog itself) + memory-check, summarizes per
               channel. Replaces NONE of the three — delegates to them.
+    --pending scans all four channels (memory/, features/, decisions/, backlog/)
+              directly via `entrylib.parse_frontmatter` and lists the RATIFICATION
+              INBOX: every entry awaiting a human decision — `confidence: unverified`
+              (PENDING RATIFICATION) or `confidence: verified` with no `ratified`
+              field (RATIFICATION NOT TRACKED). Today this exists only as scattered
+              per-file `R-UNVERIFIED`/`R-VERIFIED-NOT-RATIFIED` findings inside each
+              channel check — `--pending` is the single "what awaits me?" view.
     (default) --tier1 then tier 2 instructions.
 
   The Feature/Memory per-channel summary is enriched, when it's simple, with fine
@@ -28,7 +35,8 @@ summarizes, without duplicating their logic — same two-tier pattern as the res
       the cited code?
     - Memory — every `to-confirm` entry of MEMORY.md (flagged by memory-check.py) is
       cross-checked against the code/a reliable source, or ratified as is.
-    Detailed scale for all three: see `memory-audit.md`.
+    Detailed scale for all three: see `memory-audit.md`. Before diving into tier 2,
+    `--pending` is the fastest way to see everything that's waiting on a human first.
 
 The project brings its own CODE checks and its review. Here: the method, agnostic.
 
@@ -37,16 +45,22 @@ Read-only. Fixes/deletes/archives NOTHING. Ratification stays human.
 Usage:
   python3 checks/memory-audit.py            # --tier1 + instructions
   python3 checks/memory-audit.py --tier1 [--json]
+  python3 checks/memory-audit.py --pending [--json]   # ratification inbox, all channels
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import subprocess
 import sys
 
 CHECKS = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(CHECKS)  # framework root
 PY = sys.executable or "python3"
+
+sys.path.insert(0, CHECKS)
+import entrylib  # noqa: E402
 
 TIER1 = [
     ("feature",   [PY, os.path.join(CHECKS, "feature-map-check.py")]),
@@ -128,8 +142,97 @@ def run_tier1(as_json: bool) -> int:
     return worst
 
 
+# --------------------------------------------------------------------------- #
+# --pending — the ratification inbox: every entry awaiting a human decision,  #
+# across all four channels, in one view. Scans directly via entrylib — no     #
+# subprocess, no dependency on the per-channel checks' output format.         #
+# --------------------------------------------------------------------------- #
+
+# (channel label, glob pattern from ROOT) — glob rather than os.listdir so the backlog
+# channel's `backlog/<id>/STATE.md` layout (one level deeper) is expressed the same way
+# as the flat `memory/*.md` / `features/*.md` / `decisions/D-*.md` channels.
+PENDING_GLOBS = [
+    ("memory",   os.path.join(ROOT, "memory", "*.md")),
+    ("feature",  os.path.join(ROOT, "features", "*.md")),
+    ("decision", os.path.join(ROOT, "decisions", "D-*.md")),
+    ("backlog",  os.path.join(ROOT, "backlog", "*", "STATE.md")),
+]
+
+
+def _pending_entries():
+    """Yields `(channel, relpath, meta)` for every entry file across the four channels
+    that has a parseable frontmatter AND a `confidence` key. Files with no frontmatter
+    block, or with a frontmatter that carries no `confidence` at all, are silently
+    skipped — that's the other checks' business (R-NO-FRONTMATTER, R-MISSING-KEY...),
+    this view never errors on them."""
+    for channel, pattern in PENDING_GLOBS:
+        for path in sorted(glob.glob(pattern)):
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            meta, _body, err = entrylib.parse_frontmatter(text)
+            if err or "confidence" not in meta:
+                continue
+            yield channel, os.path.relpath(path, ROOT), meta
+
+
+def _pending_sort_key(row: dict):
+    """Oldest `updated` first, missing date last."""
+    updated = row.get("updated")
+    return (updated is None, updated or "")
+
+
+def collect_pending():
+    """Returns `(unverified, not_tracked)` — two lists of `{channel, path, updated,
+    source, kind}` dicts, each sorted oldest `updated` first (missing date last)."""
+    unverified, not_tracked = [], []
+    for channel, path, meta in _pending_entries():
+        confidence = meta.get("confidence")
+        row = {"channel": channel, "path": path, "updated": meta.get("updated"),
+               "source": meta.get("source")}
+        if confidence == "unverified":
+            unverified.append({**row, "kind": "unverified"})
+        elif confidence == "verified" and not meta.get("ratified"):
+            not_tracked.append({**row, "kind": "not-tracked"})
+    unverified.sort(key=_pending_sort_key)
+    not_tracked.sort(key=_pending_sort_key)
+    return unverified, not_tracked
+
+
+def _print_pending_section(title: str, rows: list) -> None:
+    print(f"{title}\n")
+    if not rows:
+        print("  (none)")
+    else:
+        for r in rows:
+            print(f"  {r['channel']:8} {r['path']:40} "
+                  f"updated={r['updated'] or '?':10} source={r['source'] or '?'}")
+    print()
+
+
+def run_pending(as_json: bool) -> int:
+    unverified, not_tracked = collect_pending()
+
+    if as_json:
+        print(json.dumps(unverified + not_tracked, ensure_ascii=False, indent=2))
+        return 0 if not (unverified or not_tracked) else 1
+
+    _print_pending_section("PENDING RATIFICATION — confidence: unverified", unverified)
+    _print_pending_section("RATIFICATION NOT TRACKED — confidence: verified, no ratified field",
+                            not_tracked)
+
+    total = len(unverified) + len(not_tracked)
+    if total == 0:
+        print("Ratification inbox empty — nothing awaiting a human decision.")
+    else:
+        print(f"{total} entrie(s) awaiting ratification — {len(unverified)} unverified, "
+              f"{len(not_tracked)} verified-but-untracked.")
+    return 0 if total == 0 else 1
+
+
 def main(argv) -> int:
     as_json = "--json" in argv
+    if "--pending" in argv:
+        return run_pending(as_json)
     return run_tier1(as_json)
 
 
