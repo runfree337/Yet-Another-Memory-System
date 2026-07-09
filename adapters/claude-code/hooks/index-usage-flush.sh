@@ -15,15 +15,23 @@
 # Schema: date,session_id,duration_min,index_reads,covered_zone_reads,
 #         covered_zone_searches,bypass
 #   index_reads = cartography *consultations* this session — a Read or Grep/Glob
-#            targeting the configured manifest path or its directory (index/
-#            manifest.tsv, index/INDEX.md by default — WORKFLOW.md's navigation
-#            channel), OR one of the other channels' index files/dirs
-#            (FEATURE_MAP.md/features/, MEMORY.md/memory/, decisions/): routing that
-#            happened via the Feature/Memory/Decision channel is a consultation too,
-#            not a bypass.
+#            whose logged VALUE is a path (tracker KIND=path, see
+#            index-usage-tracker.sh's header) targeting the configured manifest
+#            path or its directory (index/manifest.tsv, index/INDEX.md by
+#            default — WORKFLOW.md's navigation channel), OR one of the other
+#            channels' index files/dirs (FEATURE_MAP.md/features/,
+#            MEMORY.md/memory/, decisions/): routing that happened via the
+#            Feature/Memory/Decision channel is a consultation too, not a
+#            bypass. A KIND=glob or KIND=pattern line is never a consultation,
+#            however it happens to read (a Grep for the literal word "memory"
+#            is not a visit to memory/).
 #   covered_zone_reads/searches = Read / Grep+Glob calls landing under one of the
 #            configured `roots` — the zones the navigation index is supposed to
-#            spare a blind sweep of.
+#            spare a blind sweep of. For KIND=path lines this is a direct
+#            containment check on the (repo-relative) value; for KIND=glob
+#            lines only the glob's literal (non-wildcard) prefix is tested;
+#            KIND=pattern (a bare Grep regex) never counts — no substring
+#            matching against roots anywhere.
 #   bypass = the BROAD covered searches when index_reads == 0 this session (= swept
 #            a covered zone without ever consulting the cartography first). A
 #            TARGETED search — its logged path resolves to an existing single file —
@@ -51,7 +59,12 @@ LOG="${TMPDIR:-/tmp}/yams-index-usage-${SESSION_ID}.log"
 # stdout on success: "index_reads covered_reads covered_searches bypass". Exits 3
 # if the config has no usable `roots` (same graceful no-op as checks/index-check.py
 # when roots/extensions are empty). Done in python rather than grep -c because the
-# broad-vs-targeted distinction needs a file-existence test per logged search.
+# broad-vs-targeted distinction needs a file-existence test per logged search, and
+# because the log's KIND field (see index-usage-tracker.sh's header) needs
+# kind-specific handling: only kind=path lines are locations directly comparable to
+# `roots`/consult paths; kind=glob lines only contribute their glob's literal
+# (non-wildcard) prefix; kind=pattern (a bare Grep regex) is never a location and
+# never counts toward index_reads or coverage — no substring matching anywhere.
 COUNTS=$("$PY" - "$ROOT" "$CONFIG" "$LOG" <<'PYEOF'
 import json
 import os
@@ -80,40 +93,81 @@ consult = CHANNEL_PATHS + (index_dir + "/",)
 
 
 def norm(p):
-    """Repo-relative form of a logged path (Claude Code often passes absolute)."""
+    """Repo-relative form of a logged path (Claude Code often passes absolute).
+    Resolves symlinks on both sides (root always; the value only when it's
+    absolute — a relative value is already repo-relative and must not be
+    resolved against this script's cwd)."""
+    root_r = os.path.realpath(root_abs).replace("\\", "/").rstrip("/")
     p = p.replace("\\", "/").rstrip("/")
-    if p == root_abs:
+    if p.startswith("/"):
+        p = os.path.realpath(p).replace("\\", "/").rstrip("/")
+    if p == root_r:
         return "."
-    if p.startswith(root_abs + "/"):
-        return p[len(root_abs) + 1:]
+    if p.startswith(root_r + "/"):
+        return p[len(root_r) + 1:]
     return p
+
+
+def glob_literal_prefix(pattern):
+    """Literal (non-wildcard) prefix of a glob pattern, up to the first `*`,
+    `?`, `[` or `{` — the only part of a glob that's a location."""
+    for i, ch in enumerate(pattern or ""):
+        if ch in "*?[{":
+            return pattern[:i]
+    return pattern or ""
+
+
+def parse_line(line):
+    """Parse one tracker log line into (tool, kind, value), or None for a
+    comment/blank/malformed line. Tolerates legacy 2-field 'TOOL|value' lines
+    (kind defaults to 'path') from a log started before the 3-field format
+    landed — a mixed log mid-session should still degrade gracefully."""
+    if not line or line.startswith("#") or "|" not in line:
+        return None
+    parts = line.split("|", 2)
+    if len(parts) == 2:
+        return parts[0], "path", parts[1]
+    return parts[0], parts[1], parts[2]
 
 
 index_reads = covered_reads = covered_searches = broad_searches = 0
 try:
-    lines = open(log_path, encoding="utf-8").read().splitlines()
+    lines = open(log_path, encoding="utf-8", errors="replace").read().splitlines()
 except OSError:
     sys.exit(3)
 
 for line in lines:
-    if line.startswith("#") or "|" not in line:
+    parsed = parse_line(line)
+    if not parsed:
         continue
-    tool, raw = line.split("|", 1)
-    p = norm(raw)
-    if any(p == c.rstrip("/") or p.startswith(c) for c in consult):
-        index_reads += 1
-        continue
-    # Covered? Same containment as before: a root at the start of the normalized
-    # path, or appearing anywhere in the raw string (glob/pattern fallbacks).
-    covered = any(p == r or p.startswith(r + "/") or (r + "/") in raw for r in roots)
+    tool, kind, value = parsed
+
+    if kind == "path":
+        p = norm(value)
+        if any(p == c.rstrip("/") or p.startswith(c) for c in consult):
+            index_reads += 1
+            continue
+        covered = any(p == r or p.startswith(r + "/") for r in roots)
+        # Targeted (logged path = an existing single file) never feeds bypass.
+        targeted = os.path.isfile(os.path.join(root, p))
+    elif kind == "glob":
+        # The log carries no separate directory for a glob line (the tracker
+        # logs path OR glob OR pattern, never a combination) — only the glob's
+        # own literal prefix is tested for containment.
+        p = norm(glob_literal_prefix(value))
+        covered = any(p == r or p.startswith(r + "/") for r in roots)
+        targeted = False  # a glob sweep is never a single targeted file
+    else:  # kind == "pattern": a bare regex is never a location
+        covered = False
+        targeted = False
+
     if not covered:
         continue
     if tool == "Read":
         covered_reads += 1
     elif tool in ("Grep", "Glob"):
         covered_searches += 1
-        # Targeted (logged path = an existing single file) never feeds bypass.
-        if not os.path.isfile(os.path.join(root, p)):
+        if not targeted:
             broad_searches += 1
 
 bypass = broad_searches if index_reads == 0 else 0
@@ -139,7 +193,7 @@ TOTAL=$((INDEX_READS + COVERED_READS + COVERED_SEARCHES))
 [[ "$TOTAL" -eq 0 ]] && exit 0
 
 HEADER='date,session_id,duration_min,index_reads,covered_zone_reads,covered_zone_searches,bypass'
-[[ ! -f "$CSV" ]] && printf '%s\n' "$HEADER" > "$CSV"
+[[ ! -s "$CSV" ]] && printf '%s\n' "$HEADER" > "$CSV"
 
 ROW="$DATE,$SESSION_ID,$DURATION,$INDEX_READS,$COVERED_READS,$COVERED_SEARCHES,$BYPASS"
 TMP=$(mktemp)

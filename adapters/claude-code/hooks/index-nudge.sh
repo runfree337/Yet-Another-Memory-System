@@ -13,6 +13,7 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 PY=$(command -v python3 || command -v python)
 [ -z "$PY" ] && exit 0
+[ -f "$ROOT/hooks/index-nudge.py" ] || exit 0  # adopting project didn't copy the hook
 
 SESSION_ID="${CLAUDE_CODE_SESSION_ID:-unknown}"
 "$PY" "$ROOT/hooks/index-nudge.py" --stdin-json --root "$ROOT" \
