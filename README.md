@@ -84,6 +84,8 @@ project's standards", and wiring closure into the existing ritual (e.g. the revi
   parameters + exit codes.
 - `knowledge-capture.md` — agnostic routing for a method-level learning (the "is it worth
   tooling?" gate + function → per-tool mechanism).
+- `ROADMAP.md` — the framework's **own improvement tracks** (objectives, not plans) — distinct
+  from `backlog/`, which is a template for host projects.
 
 ## Amend it
 
