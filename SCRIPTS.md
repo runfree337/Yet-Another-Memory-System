@@ -6,6 +6,20 @@
 > **how**, `INSTALL.md §Wiring overview` for the decision tree. Here: only the
 > script itself, independent of its wiring.
 
+## The global settings file
+
+Optional, at the repo root: `checks-config.json` (canonical schema + defaults: <!-- template -->
+[`checks-config.example.json`](checks-config.example.json)). One file, one section per concern:
+`audit` (when the deterministic report recommends a tier-2 audit), `sizes` (granularity
+signals), `guards` (extension-only surveillance lists). Absent file or key = the built-in
+defaults, i.e. the historical behavior. Present but broken, the two families diverge **by
+design**: the **checks** surface a blocking `CFG-INVALID` finding (a config the user believes
+active is never silently ignored), while the **hooks** fall back to their built-ins without
+crashing (a guard in the write path must always answer). Loader:
+`entrylib.load_checks_config()` + `cfg_get()`. Method-calibration constants
+(`checks/index-eval` scorer/sufficiency thresholds) are deliberately **not** here — they define
+what the metric means, not per-project taste.
+
 ## `checks/` — method checks (Tier 1, deterministic)
 
 ### `backlog-check.py`
@@ -13,7 +27,9 @@
 memory entry template) — every doc-backed work item has a `STATE.md` with a complete and
 consistent frontmatter (`id/title/status/milestone/after/docs/updated`, validated via `entrylib.validate_entry`)
 and a mandatory `## Tasks` section (one line per task, state `todo/in-progress/blocked/done`,
-label ≤ 30 words or a `→ working-doc.md` pointer).
+label ≤ 30 words or a `→ working-doc.md` pointer). The size thresholds read the global
+settings file: `sizes.backlog-state-max-lines` (default 80) and
+`sizes.backlog-task-label-max-words` (default 30).
 
 `impacts:` is an optional frontmatter key — the **impact ledger**: filled in during work as
 soon as a durable doc/memory is known to need updating, consumed at closure instead of relying
@@ -47,7 +63,8 @@ python3 checks/backlog-check.py --stamp --staged # pre-commit only
 entry (`features/<slug>.md`) + `FEATURE_MAP.md` as index. File↔index concordance,
 frontmatter of the `feature` channel (`entrylib.validate_entry`), core body keys (Role/Code/durable
 reference), existence of cited `D-*` ids, absence of transient references, freshness and
-granularity as a *soft* signal.
+granularity as a *soft* signal. The `FM-GRAN` threshold reads the global settings file:
+`sizes.feature-entry-max-lines` (default 60).
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -187,7 +204,9 @@ entry is**, no more regex duplication between checks.
 
 Public API: `Finding`/`BLOCKING`/`CONFIRM` (the `checks/TEMPLATE.md` template), `CHANNELS`
 (required/optional/enum spec per channel), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
-`check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`.
+`check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`,
+`load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global settings file loader —
+absent file = defaults, broken file = an error the caller surfaces as `CFG-INVALID`).
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -208,8 +227,11 @@ python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # no si
 **Intent:** integrity of the **Memory** channel — "one fact per file + frontmatter" format
 (`memory/<slug>.md`), `MEMORY.md` = index. Instance of `ENTRY-TEMPLATE.md`: all the logic
 (frontmatter, file↔index concordance, cross-links) lives in `checks/entrylib.py` — this
-script just calls `entrylib` with the `"memory"` channel and aggregates, it doesn't redefine
-any rule locally.
+script calls `entrylib` with the `"memory"` channel and aggregates; its only local rule is
+`M-GRAN` (to-confirm, never blocking): an entry whose body exceeds
+`sizes.memory-entry-max-lines` useful lines (default 40, global settings file) is flagged as
+detail to move into the durable doc, keeping the entry as a pointer — the Memory-channel
+mirror of `FM-GRAN`, closing the gap where `memory/*.md` had no size signal at all.
 
 Rules surfaced as-is from `entrylib.validate_entry(..., "memory")`:
 `R-NO-FRONTMATTER`, `R-MISSING-KEY`, `R-BAD-VALUE`, `R-EXT-NO-CONF`, `R-BAD-DATE`,
@@ -273,13 +295,13 @@ for the multi-channel orchestrator. Four mutually exclusive modes (priority orde
 | `--plan` | splits `decisions/INDEX.md` into balanced batches (offset/limit), one batch per reviewer | — |
 | `--stale-first` | (`--plan` only) prioritizes batch ORDER by oldest frontmatter `updated` — each batch's offset/limit stays a contiguous range of lines | disabled |
 | `--merge <files…>` | aggregates Tier 2 agent outputs, **coverage check** (each decision audited exactly 1×) | — |
-| `--report [dir]` | writes a **deterministic report** (no LLM) — tier 1 + INDEX volume + a probe of the **ratification inbox** (`memory-audit.py --pending`); recommends a semantic audit on blocking drift, INDEX volume, or an inbox too large (`PENDING_ALERT_COUNT=5`) or too stale (`PENDING_ALERT_DAYS=30`). Meant for a headless OS cron | folder: `$YAMS_MEMORY_REPORT_DIR` or `.memory-reports/` |
-| `--batch-size <n>` | batch size for `--plan` | `33` |
+| `--report [dir]` | writes a **deterministic report** (no LLM) — tier 1 + **per-channel volume** (decision INDEX count, `features/` and `memory/` entry counts) + a probe of the **ratification inbox** (`memory-audit.py --pending`); recommends a semantic audit on blocking drift, a channel past its `audit.volume-alert` threshold (defaults 285/150/150), or an inbox too large (`audit.pending-alert-count`, 5) or too stale (`audit.pending-alert-days`, 30d). Meant for a headless OS cron | folder: `$YAMS_MEMORY_REPORT_DIR` or `.memory-reports/` |
+| `--batch-size <n>` | batch size for `--plan`; an explicit flag wins over the settings file | `audit.batch-size` (33) |
 | `--index <path>` | path to the decisions journal | `decisions/INDEX.md` |
 | `--json` | JSON output (`--plan` only) | disabled |
 | *(none)* | equivalent to `--tier1` then `--plan` | — |
 
-**Exit codes:** `--tier1` → the worst exit code among the 4 underlying scripts (`0`/`1`/`2`) · `--plan`/`--report` → `0` (never blocking, they produce an artifact) · `--merge` → `0` full coverage, `1` a decision unaudited or audited twice.
+**Exit codes:** `--tier1` → the worst exit code among the 4 underlying scripts (`0`/`1`/`2`) · `--plan`/`--report` → `0` (never blocking, they produce an artifact — except a broken global settings file: blocking `CFG-INVALID`, exit 2) · `--merge` → `0` full coverage, `1` a decision unaudited or audited twice.
 
 ```bash
 python3 checks/decisions-audit.py                              # tier1 + plan, common usage
@@ -300,7 +322,7 @@ in one single pass (small by construction).
 | Parameter | Effect | Default |
 |---|---|---|
 | `--tier1` | chains the 4 tier-1 lines (feature, decisions, memory, capture-policy), prints one verdict each | — |
-| `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Entries pending longer than `PENDING_STALE_DAYS` (30d) get a `⚠ stale Nd` marker and are counted in the summary. Files with no frontmatter/`confidence` are skipped, never errored on. | — |
+| `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Entries pending longer than `audit.pending-stale-days` (30d, global settings file) get a `⚠ stale Nd` marker and are counted in the summary. Files with no frontmatter/`confidence` are skipped, never errored on. | — |
 | `--json` | JSON output (with `--pending`: flat list of `channel/path/updated/source/kind/age_days/stale`) | disabled |
 | *(none)* | equivalent to `--tier1` | — |
 
@@ -356,6 +378,10 @@ for git or manual use) and a **Claude Code adapter entry** (`--stdin-json`, read
 ### `poisoning-scan.py`
 **Intent:** detects invisible/bidi Unicode in instruction and memory files
 (poisoning vector — hidden text that fools the AI without being visible to the eye).
+The default no-args watch list (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`,
+`.github/copilot-instructions.md`) can be **extended — never reduced** — via <!-- template -->
+`guards.extra-watched-files` (global settings file); any config problem (missing, broken,
+wrong types) means built-ins only: a guard never crashes or blocks on a bad config.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -372,7 +398,10 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"
 
 ### `secret-scan.py`
 **Intent:** detects committed or written keys/tokens (18 patterns — cloud providers, VCS,
-messaging, payment…).
+messaging, payment…). The path allowlist can be **extended — never reduced** — via
+`guards.extra-secret-allowlist-paths` (global settings file, one regex per entry); an entry
+that fails to compile is skipped with a stderr note, and any config problem means built-ins
+only — same fail-closed discipline as `poisoning-scan.py`.
 
 | Parameter | Effect | Default |
 |---|---|---|

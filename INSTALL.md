@@ -85,7 +85,7 @@ flowchart TD
    > the framework in a subfolder instead, adjust the paths inside
    > `adapters/claude-code/hooks/*.sh` (and `$YAMS_MEMORY_REPORT_DIR`) accordingly.
 
-3. **Configure the index, and choose the capture policy.**
+3. **Configure the index, the capture policy, and the global settings.**
    - **The index** — fill in `index/index-config.json` (roots + extensions to index, <!-- template -->
      optional `hub`) for `index-check.py` (read, checks for drift) **and** `index/manifest.py`
      (write, `set`/`rm`/`get`/`stamp` — the only way to edit `manifest.tsv`). Without config, both
@@ -110,6 +110,17 @@ flowchart TD
      `hooks/normative-write-guard.py` <!-- template --> is a **security guard** (an "ask"
      decision, like `destructive-guard.py`), so it joins the security guards referenced in step
      4's `adapters/claude-code/hooks/` bundle.
+   - **The global settings** — optionally copy `checks-config.example.json` to
+     `checks-config.json` <!-- template --> (root) to tune the thresholds every check and guard
+     reads (`SCRIPTS.md §The global settings file`): the `audit` section (when the deterministic
+     report recommends a tier-2 audit — per-channel volume alerts, ratification-inbox nudges,
+     batch size), the `sizes` section (entry-granularity signals per channel), and the `guards`
+     section (**extension-only** surveillance lists — extra watched instruction files for the
+     poisoning scan, extra path-regex allowlist entries for the secret scan; no key can disable
+     a guard). Skipping the copy is a valid choice: absent file = the built-in defaults, today's
+     behavior. A present-but-broken file is a blocking `CFG-INVALID` on the checks side and a
+     silent fallback to built-ins on the guards side — deliberate asymmetry, a guard in the
+     write path must always answer.
 
 4. **Wire the checks — the user chooses WHERE.** Plug the **structural**
    (deterministic) checks in wherever the user wants, with the **silent-on-success
@@ -131,8 +142,10 @@ flowchart TD
 5. **Semantic audit trigger — the user chooses WHEN.** The `memory-audit` audit (tier 2,
    all 3 channels — Feature/Decision/Memory, memory↔code) **is not a hook** (it costs an agent,
    doesn't run silently). Available regimes:
-   - **Volume** — when the decisions `INDEX` swells (guided manual trigger — the only channel
-     that accumulates enough for this; Feature and Memory are reread in full, no volume trigger needed);
+   - **Volume** — when a channel swells past its `audit.volume-alert` threshold
+     (`checks-config.json`, defaults 285/150/150 for decision/feature/memory): the decisions <!-- template -->
+     `INDEX` is the one that accumulates fastest, but the `--report` loop below now counts all
+     three channels and folds any overflow into its recommendation;
    - **Scheduled — the report loop (recommended).** ⚠️ An **in-app** cron only runs if the tool
      is running (session off → doesn't fire). The workaround decouples **producing** (deterministic, no LLM)
      from **acting** (semantic, with LLM):

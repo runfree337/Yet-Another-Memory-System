@@ -77,6 +77,9 @@ project's standards", and wiring closure into the existing ritual (e.g. the revi
 - `capture-policy.example.json` — the **capture policy** template: who may write knowledge to
   each memory channel and in what state (`off`/`propose`/`draft` + confirmation-gated normative
   paths), enforced by a check and a write-time guard (`knowledge-capture.md §Capture policy`).
+- `checks-config.example.json` — the **global settings** template: audit-recommendation
+  thresholds, size/granularity signals, extension-only guard lists — one optional file every
+  check and guard reads (absent = the built-in defaults; `SCRIPTS.md §The global settings file`).
 - `SCRIPTS.md` — **reference** for every script under `checks/`, `hooks/` and `index/`: intent +
   parameters + exit codes.
 - `knowledge-capture.md` — agnostic routing for a method-level learning (the "is it worth
