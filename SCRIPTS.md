@@ -67,6 +67,14 @@ n'existe pas/plus. Heuristique git (a existé puis disparu = bloquant ; jamais c
 
 **Codes de sortie :** `0` aucune référence morte · `1` uniquement des « à-confirmer » · `2` au moins un « BLOQUANT ».
 
+**Exemption gabarit :** un chemin d'exemple (jamais destiné à exister — gabarit de nommage,
+config pas encore créée par le projet…) échappe au scan via un marqueur **HTML explicite dans
+le texte**, jamais une allowlist cachée dans le script. Deux formes, gérées par `gabarit_span()` :
+ligne — un chemin sur une ligne qui contient `<!-- gabarit -->` est ignoré ; bloc — les chemins
+des lignes **entre** `<!-- gabarit -->` et `<!-- /gabarit -->` sont ignorés. Le marqueur reste lisible
+en clair dans le `.md` (commentaire HTML — invisible au rendu, visible à l'édition) : pas de liste
+séparée à maintenir en synchronisation avec la doc.
+
 ```bash
 python3 checks/doc-refs-check.py                 # corpus par défaut du script
 python3 checks/doc-refs-check.py --staged         # pré-commit
@@ -74,6 +82,7 @@ python3 checks/doc-refs-check.py Docs/architecture/  # un sous-dossier
 ```
 
 ### `index-check.py`
+<!-- gabarit -->
 **Intention :** intégrité de l'index par-fichier (`index/manifest.tsv` ↔ fichiers réels du dépôt).
 **Inactif sans configuration** — le projet hôte doit fournir `index/index-config.json`.
 
@@ -81,6 +90,7 @@ python3 checks/doc-refs-check.py Docs/architecture/  # un sous-dossier
 |---|---|---|
 | `--config <chemin>` | chemin du fichier de config (`roots`, `extensions`, `ignore`, `base`, `manifest`) | `index/index-config.json` |
 | `--base <chemin>` | racine du dépôt à scanner | `config.base`, sinon `cwd` |
+<!-- /gabarit -->
 
 **Codes de sortie :** `0` propre **ou** config absente/incomplète (inactif, pas une erreur) · `2` manifeste introuvable, config illisible, ou dérive détectée (`I1` entrée morte, `I2` fichier non indexé).
 
@@ -91,15 +101,15 @@ python3 checks/index-check.py --config index/index-config.json --base .
 
 ### `memory-check.py`
 **Intention :** intégrité du canal **Mémoire** — format « un fait par fichier + frontmatter »
-(`../memory/<slug>.md`), `../MEMORY.md` = index. Deux familles de règles : (1) **frontmatter** de
+(`memory/<slug>.md`), `MEMORY.md` = index. Deux familles de règles : (1) **frontmatter** de
 chaque fichier — un `source: externe:...` DOIT porter un `confiance:` (sinon bloquant,
 `MEMORY.md §Provenance`), un `confiance: à vérifier` est signalé comme candidate à l'audit
 sémantique ; (2) **concordance fichier↔index** — tout `memory/<slug>.md` doit être référencé
 par une ligne de `MEMORY.md` (sinon orphelin, bloquant) et réciproquement (sinon lien mort,
 bloquant), même motif que `decisions-check.py`. Suit `GABARIT.md` à la lettre.
 
-Pas de paramètre de ciblage (comme `decisions-check.py`, compare toujours `../MEMORY.md` et
-`../memory/` en entier — une concordance fichier↔index ne se scope pas à un sous-ensemble).
+Pas de paramètre de ciblage (comme `decisions-check.py`, compare toujours `MEMORY.md` et
+`memory/` en entier — une concordance fichier↔index ne se scope pas à un sous-ensemble).
 
 | Paramètre | Effet | Défaut |
 |---|---|---|
@@ -115,10 +125,10 @@ python3 checks/memory-check.py --json
 
 ### `decisions-audit.py`
 **Intention :** orchestrateur du **journal de décisions** — ne contrôle rien lui-même, enchaîne/agrège
-les 4 scripts ci-dessus et pilote le cycle Tier 1 → Tier 2. Renommé depuis `memory-audit.py`
-(D-2026-07-01-04, projet hôte) : son scope réel est le journal de décisions, pas toute la mémoire — voir
-`memory-audit.py` ci-dessous pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs
-(priorité dans l'ordre : `--report` > `--merge` > `--plan` > `--tier1` > *défaut = les deux*).
+les 4 scripts ci-dessus et pilote le cycle Tier 1 → Tier 2. Renommé depuis `memory-audit.py` : son
+scope réel est le journal de décisions, pas toute la mémoire — voir `memory-audit.py` ci-dessous
+pour l'orchestrateur multi-canal. Quatre modes mutuellement exclusifs (priorité dans l'ordre :
+`--report` > `--merge` > `--plan` > `--tier1` > *défaut = les deux*).
 
 | Paramètre | Effet | Défaut |
 |---|---|---|
@@ -165,12 +175,14 @@ python3 checks/memory-audit.py --json
 
 ## `index/` — maintenance du manifeste (écriture)
 
+<!-- gabarit -->
 Pendant en écriture de `index-check.py` ci-dessus (qui reste lecture seule). Même config
 agnostique (`index/index-config.json`), pas de logique de vérification dupliquée entre les deux.
 
 ### `manifest.py`
 **Intention :** seul moyen d'éditer `index/manifest.tsv` — ajoute/retire une entrée, garde le
 fichier trié et dédupliqué. **Inactif sans configuration**, comme `index-check.py`.
+<!-- /gabarit -->
 
 | Commande | Effet |
 |---|---|
@@ -257,10 +269,9 @@ framework — ils restent documentés par le projet lui-même. Ce fichier ne ré
 **YAMS** fournit. Pour en écrire un côté projet (comme `audit.py` du projet hôte de
 référence) : `checks/GABARIT.md` donne la forme commune, pas le contenu tech-spécifique.
 
-> **Attention à l'homonymie** : le projet hôte de référence a son **propre** `manifest.py`
-> (`.claude/skills/project-index/manifest.py`) et son **propre** `doc-audit.py`
-> (`.claude/skills/doc-audit/doc-audit.py`) — plus riches, câblés sur son arborescence réelle
-> (`Assets/Project/`, `decisions/` avec le préfixe `Docs/`, `index-filter.txt`…). Le
-> `index/manifest.py` **de ce framework** est un script distinct, généralisé sur
-> `index-config.json` — il n'a pas de commande `check` (déléguée à `checks/index-check.py`) ni de
-> filtre `index-filter.txt` dédié (couvert par `roots`/`extensions`/`ignore` de la config).
+> **Attention à l'homonymie** : un projet qui adopte YAMS peut déjà avoir ses propres scripts
+> `manifest.py` / `doc-audit.py` (ou équivalents), plus riches et câblés sur son arborescence
+> réelle — ne pas les confondre avec ceux fournis ici. Le `index/manifest.py` **de ce framework**
+> est un script distinct, généralisé sur `index-config.json` — il n'a pas de commande `check`
+> (déléguée à `checks/index-check.py`) ni de filtre dédié (couvert par `roots`/`extensions`/
+> `ignore` de la config).

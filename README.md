@@ -31,7 +31,7 @@ c'est le cœur du framework.
 | Outil | Où l'accrocher |
 |---|---|
 | **Claude Code** | `CLAUDE.md` (ou une skill `.claude/skills/…`) qui inclut/pointe `WORKFLOW.md` |
-| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` qui pointent `WORKFLOW.md` |
+| **GitHub Copilot** | `.github/copilot-instructions.md` + `AGENTS.md` qui pointent `WORKFLOW.md` | <!-- gabarit -->
 | **Autre agent** | system prompt / fichier de contexte qui inclut `WORKFLOW.md` |
 
 **Adapter** = renvoyer vers la doc et les outils **du projet** partout où le process dit « les

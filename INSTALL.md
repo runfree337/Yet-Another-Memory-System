@@ -75,7 +75,7 @@ flowchart TD
    **si absents**.
    *Installeur :* copie + ne touche pas l'existant ; `--force` explicite pour réécraser.
 
-3. **Configurer l'index** — remplir `index/index-config.json` (racines + extensions à indexer,
+3. **Configurer l'index** — remplir `index/index-config.json` (racines + extensions à indexer, <!-- gabarit -->
    `hub` optionnel) pour `index-check.py` (lecture, vérifie la dérive) **et** `index/manifest.py`
    (écriture, `set`/`rm`/`get`/`stamp` — seul moyen d'éditer `manifest.tsv`). Sans config, les deux
    restent inactifs.

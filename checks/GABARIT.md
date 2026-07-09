@@ -6,11 +6,12 @@
 > périmètre du framework, cf. `checks/README.md §Le projet apporte les SIENS`), ou quand ce
 > framework lui-même gagne un nouveau check agnostique.
 >
-> **Provenance :** extrait par observation du code réel de deux linters du projet hôte de
-> référence — `.claude/skills/code-standards-csharp/audit.py` (règles C#/Unity) et
-> `.claude/skills/doc-audit/doc-audit.py` (fraîcheur de doc) — qui convergent indépendamment
-> vers la même forme. Déduit par l'IA, pas encore ratifié humainement comme règle d'équipe ; à
-> recouper avec le code source cité avant de le traiter comme un fait acquis.
+> **Provenance :** extrait par observation du code réel de deux linters du projet initial dont
+> YAMS a été extrait — un linter de standards de code C#/Unity (nommé `audit.py` côté projet) et
+> un linter de fraîcheur de doc (nommé `doc-audit.py` côté projet) — qui convergent
+> indépendamment vers la même forme. Déduit par l'IA, pas encore ratifié humainement comme règle
+> d'équipe ; à recouper avant de le traiter comme un fait acquis (le projet d'origine n'est pas
+> embarqué dans ce dépôt — ces deux scripts n'y sont pas consultables).
 
 ## Pourquoi un gabarit
 
@@ -108,10 +109,11 @@ quel check sur son seul code retour, sans connaître sa sémantique interne.
 
 ## Ce que ce framework applique déjà, ou pas
 
+*(Les deux linters cités en provenance ci-dessus ne sont pas embarqués dans ce dépôt — ils ont
+servi de référence de départ pour dégager le gabarit, pas de base de comparaison ligne à ligne.)*
+
 | Script | Finding (namedtuple) | `collect` git-aware (`--diff`+`--staged`) | `--json` | Conforme au gabarit |
 |---|---|---|---|---|
-| `audit.py` (projet hôte, référence) | ✅ | ✅ | ✅ | référence |
-| `doc-audit.py` (projet hôte) | ✅ | ✅ (+ `--all`) | ✅ | référence |
 | `checks/doc-refs-check.py` (ce framework) | tuple simple | `--staged` seul, pas `--diff` | non | **dilué** — à réaligner si l'occasion se présente |
 | `hooks/poisoning-scan.py`, `hooks/secret-scan.py` | tuple simple | `--staged` seul | non | dilué — mais gardes courtes, la simplicité prime ici |
 | `checks/memory-check.py` (ce framework) | ✅ | n/a (compare toujours l'index au dossier en entier, même motif que `decisions-check.py` — pas de sous-ensemble à cibler) | ✅ | **conforme** — premier check écrit à partir de ce gabarit, pas redécouvert |

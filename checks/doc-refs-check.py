@@ -20,12 +20,38 @@ import re
 import subprocess
 import sys
 
-FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ai-workflow/
+FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # racine du framework
 PATH_RE = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
 TEMPLATE = re.compile(r"[<>{}*…]|YYYY|AAAA|XXXX|MM-|/\.\.\.")
 NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a porter",
        "renomm", "à venir", "a venir", "exemple", "example", "template", "gabarit",
        "placeholder", "→", "->", "n'est pas", "plus tard", "déplacé", "deplace", "futur")
+
+# Exemption GABARIT — marqueur HTML explicite, jamais une allowlist cachée dans le script.
+# (a) ligne  : "<!-- gabarit -->" sur une ligne exempte les chemins de CETTE ligne.
+# (b) bloc   : une paire "<!-- gabarit -->" / "<!-- /gabarit -->" exempte toutes les lignes
+#              (marqueurs inclus) entre les deux. Un marqueur ouvrant jamais refermé retombe
+#              sur le cas (a) — n'exempte que sa propre ligne.
+GABARIT_OPEN = "<!-- gabarit -->"
+GABARIT_CLOSE = "<!-- /gabarit -->"
+
+
+def gabarit_lines(lines):
+    """Numéros de ligne (1-indexés) exemptés par le marqueur <!-- gabarit -->."""
+    exempt = set()
+    open_at = None
+    for i, line in enumerate(lines, 1):
+        if GABARIT_CLOSE in line and open_at is not None:
+            exempt.update(range(open_at, i + 1))
+            open_at = None
+            continue
+        if GABARIT_OPEN in line:
+            if open_at is not None:
+                exempt.add(open_at)  # marqueur précédent jamais refermé -> cas (a) seul
+            open_at = i
+    if open_at is not None:
+        exempt.add(open_at)  # jamais refermé -> cas (a) seul
+    return exempt
 
 
 def repo_root():
@@ -65,11 +91,14 @@ def scan_file(path):
         return findings
     fenced = False
     file_dir = os.path.dirname(os.path.abspath(path))
+    exempt = gabarit_lines(lines)
     for i, line in enumerate(lines, 1):
         if line.lstrip().startswith("```"):
             fenced = not fenced
             continue
         if fenced:
+            continue
+        if i in exempt:
             continue
         if any(m in line.lower() for m in NEG):
             continue

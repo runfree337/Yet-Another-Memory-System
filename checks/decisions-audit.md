@@ -72,5 +72,4 @@ La recette est agnostique ; chaque outil la **package** à sa main (même logiqu
 
 Cette recette est la **définition canonique** ; des **installeurs par outil** (Claude Code, Copilot —
 à venir) la matérialiseront en artefacts concrets (skill, subagent, hook) sans la réécrire.
-Implémentation de référence Claude Code dans le projet hôte : `.claude/skills/decisions-audit/` +
-`.claude/agents/decisions-auditor.md`.
+Gabarit embarqué Claude Code : `adapters/claude-code/skills/decisions-audit.md`.

@@ -15,7 +15,7 @@
 - **`decisions-audit.py`** — orchestrateur d'**audit du journal de décisions** (déclencheur « Volume » quand l'INDEX gonfle — le seul canal qui accumule assez pour le justifier). `--tier1` enchaîne `decisions-check`/`backlog-check`/`doc-refs-check`/`index-check` ; `--plan` découpe `decisions/INDEX.md` en lots équilibrés (offset/limit) pour confier une tranche par reviewer ; `--merge` agrège les sorties de revue **avec contrôle de couverture** (chaque décision auditée exactement 1×). Étage 1 (mécanique) ; l'étage 2 (jugement : drift mémoire↔code, redondance, conflit) suit le **barème** de revue `decisions-audit.md`.
 - **`memory-audit.py`** — orchestrateur **multi-canal** (Feature + Décision + Mémoire) : `--tier1` enchaîne `feature-map-check` + `decisions-audit --tier1` + `memory-check`, résume par canal. Pas de `--plan`/`--merge` propres — délégués à `decisions-audit.py` pour son seul canal qui en a besoin. Étage 2 (jugement, les 3 canaux) : barème `memory-audit.md`.
 - **`doc-refs-check.py`** — **références mortes** dans la doc : un chemin de fichier cité dans un `.md` qui n'existe pas / plus. Tier ferme zéro-FP (heuristique git : a existé puis disparu → bloquant ; jamais créé → à-confirmer). La dérive *sémantique* reste à la revue.
-- **`index-check.py`** — **intégrité de l'index par-fichier** (`manifest.tsv` ↔ fichiers réels). Le **projet** définit racines + extensions dans `index/index-config.json` (à l'installation) ; sans config, inactif. Cf. `../index/INDEX.md`.
+- **`index-check.py`** — **intégrité de l'index par-fichier** (`manifest.tsv` ↔ fichiers réels). Le **projet** définit racines + extensions dans `index/index-config.json` (à l'installation) ; sans config, inactif. Cf. `../index/INDEX.md`. <!-- gabarit -->
 
 Code retour ≠ 0 si dérive → exploitables en gate. Lancer à la main :
 
@@ -74,11 +74,10 @@ python3 checks/memory-audit.py            # tier1 multi-canal (feature + décisi
 > exit 0   # jamais bloquant — informe seulement
 > ```
 >
-> Implémentations de référence Claude Code dans le projet hôte : `.claude/hooks/project-index-check.sh`
-> (sur `index-check`) et `.claude/hooks/backlog-check.sh` (sur `backlog-check`) — même patron,
-> deux checks. Généralisable à tout check de ce dossier : un hook `Stop` de plus par check
-> qu'on veut voir rappelé en détail avant la fin de session, au-delà de la ligne globale du
-> sweep `SessionStart`.
+> Implémentation embarquée : `adapters/claude-code/hooks/stop-check.sh` — même patron, paramétré
+> par le nom du check en argument (ex. `stop-check.sh index-check`, `stop-check.sh backlog-check`).
+> Généralisable à tout check de ce dossier : un hook `Stop` de plus par check qu'on veut voir
+> rappelé en détail avant la fin de session, au-delà de la ligne globale du sweep `SessionStart`.
 
 > **Câblage pré-commit — le cas MUTANT (`--stamp`).** Un seul check de ce dossier ne se
 > contente pas de signaler : `backlog-check.py --stamp --staged` **écrit** (date de
@@ -97,7 +96,7 @@ python3 checks/memory-audit.py            # tier1 multi-canal (feature + décisi
 > exit 0   # ne bloque jamais — la correction est silencieuse, git commit voit le stamp
 > ```
 >
-> Implémentation de référence Claude Code dans le projet hôte : `.claude/hooks/backlog-maj-stamp.sh`.
+> Implémentation embarquée : `adapters/claude-code/hooks/pre-commit-stamp.sh`.
 > Généralisable à tout check qui gagnerait un mode `--stamp` sur un champ mécanique
 > similaire (ex. une date de fraîcheur équivalente ailleurs) — même triple garde-fou.
 
@@ -113,7 +112,10 @@ Les contrôles de **code** (lint, tests, analyzers, standards de style) sont **t
 invisible/bidi), `secret-scan` (clés/jetons), `destructive-guard` (commandes larges). À câbler au
 bon déclencheur — table par outil dans `../hooks/README.md`.
 
+<!-- gabarit -->
 **Navigation / fraîcheur doc — FOURNIE** ici : `doc-refs-check.py` (références mortes) et
 `index-check.py` (intégrité de l'index par-fichier — le projet définit racines+extensions dans
-`index/index-config.json`). Le framework n'a plus de pointeur sortant vers `.claude/` pour ses
-contrôles ; l'hôte garde son `manifest.py` / `doc-audit.py` comme implémentations de référence.
+`index/index-config.json`).
+<!-- /gabarit -->
+Un projet adoptant garde la liberté d'avoir ses propres `manifest.py` / `doc-audit.py`, plus
+riches et câblés sur son arborescence réelle — voir `SCRIPTS.md §Attention à l'homonymie`.

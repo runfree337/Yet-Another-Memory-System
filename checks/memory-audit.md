@@ -82,7 +82,6 @@ l'utilisateur — l'IA n'aligne jamais silencieusement la mémoire sur le code n
 | **Tout outil** | le **script** `memory-audit.py` est portable tel quel (Python, sans dépendance) | ce barème, inchangé |
 
 Cette recette est la **définition canonique** ; des **installeurs par outil** la
-matérialiseront en artefacts concrets sans la réécrire. Implémentation de référence
-Claude Code dans le projet hôte : `.claude/skills/memory-audit/` +
-`.claude/agents/memory-auditor.md` (délègue son volet décisions à
-`.claude/skills/decisions-audit/` + `.claude/agents/decisions-auditor.md`).
+matérialiseront en artefacts concrets sans la réécrire. Gabarit embarqué Claude Code :
+`adapters/claude-code/skills/memory-audit.md` (délègue son volet décisions au gabarit
+`adapters/claude-code/skills/decisions-audit.md`).

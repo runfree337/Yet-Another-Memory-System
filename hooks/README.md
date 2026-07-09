@@ -49,4 +49,5 @@ Un installeur par outil (Claude Code, Copilot…) lira ce dossier + `../checks/`
 les artefacts concrets — fichiers de hook, entrées de config (`settings.json`,
 `.pre-commit-config.yaml`, workflow CI…) — en pointant chaque garde sur son déclencheur via la
 table ci-dessus. La logique n'est **jamais** réécrite : seule la glue de câblage diffère.
-Implémentations de référence Claude Code dans le projet hôte : `.claude/hooks/`.
+Implémentation embarquée Claude Code : `adapters/claude-code/hooks/security-guards.sh` +
+`adapters/claude-code/README.md` (fragment `settings.json` qui câble le tout).
