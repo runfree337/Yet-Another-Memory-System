@@ -45,6 +45,14 @@ The project brings its own CODE checks and its review. Here: the method, agnosti
 
 Read-only. Fixes/deletes/archives NOTHING. Ratification stays human.
 
+Global settings — `checks-config.json` at the repo root (optional, cf. `entrylib.py`):
+  ("audit", "pending-stale-days")  <- DEFAULT_PENDING_STALE_DAYS (30) — same key drives
+                                      `decisions-audit.py`'s `pending-alert-days`, kept
+                                      intentionally shared (one "how stale is too stale"
+                                      knob across both scripts).
+A present-but-broken `checks-config.json` is surfaced as a BLOCKING `CFG-INVALID` line in
+`--tier1` (config falls back to the default either way).
+
 Usage:
   python3 checks/memory-audit.py            # --tier1 + instructions
   python3 checks/memory-audit.py --tier1 [--json]
@@ -63,13 +71,17 @@ CHECKS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(CHECKS)  # framework root
 PY = sys.executable or "python3"
 
-# Soft age threshold for --pending — an entry pending longer than this many days gets
-# flagged stale in the inbox (never blocking: age alone is a nudge, not a rule). Keep
-# consistent with decisions-audit.py's PENDING_ALERT_DAYS.
-PENDING_STALE_DAYS = 30
-
 sys.path.insert(0, CHECKS)
 import entrylib  # noqa: E402
+
+# Soft age threshold for --pending — an entry pending longer than this many days gets
+# flagged stale in the inbox (never blocking: age alone is a nudge, not a rule). Keep
+# consistent with decisions-audit.py's `pending-alert-days` (same config key,
+# `("audit", "pending-stale-days")` here — cf. module docstring).
+DEFAULT_PENDING_STALE_DAYS = 30
+_CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
+PENDING_STALE_DAYS = entrylib.cfg_get(_CFG, ("audit", "pending-stale-days"),
+                                       DEFAULT_PENDING_STALE_DAYS)
 
 TIER1 = [
     ("feature",         [PY, os.path.join(CHECKS, "feature-map-check.py")]),
@@ -120,6 +132,9 @@ def _channel_counts(label: str, cmd: list[str]) -> dict:
 def run_tier1(as_json: bool) -> int:
     results = []
     worst = 0
+    if _CFG_ERR:
+        results.append({"channel": "config", "code": 2, "summary": f"CFG-INVALID: {_CFG_ERR}"})
+        worst = 2
     for label, cmd in TIER1:
         proc = subprocess.run(cmd, capture_output=True, text=True)
         code = proc.returncode

@@ -31,11 +31,24 @@ The project brings its own CODE checks and its review. Here: the method, agnosti
 Read-only. Fixes/deletes/archives NOTHING. Ratification stays human — nothing is pruned
 silently (cf. `MEMORY.md §Provenance`, `decisions/README.md §pruning`).
 
---report  writes a deterministic report (OS cron, no LLM): tier 1 + INDEX volume +
-          a probe of the RATIFICATION INBOX (entries awaiting a human decision across
-          all channels -- `memory-audit.py --pending`). Recommends a semantic audit on
-          blocking drift, INDEX volume, inbox size, or inbox staleness -- see
-          `PENDING_ALERT_COUNT` / `PENDING_ALERT_DAYS`.
+--report  writes a deterministic report (OS cron, no LLM): tier 1 + per-channel volume
+          (decision INDEX + `features/` + `memory/` entry counts) + a probe of the
+          RATIFICATION INBOX (entries awaiting a human decision across all channels --
+          `memory-audit.py --pending`). Recommends a semantic audit on blocking drift,
+          any channel's volume, inbox size, or inbox staleness -- see
+          `DEFAULT_PENDING_ALERT_COUNT` / `DEFAULT_PENDING_ALERT_DAYS`.
+
+Global settings — `checks-config.json` at the repo root (optional, cf. `entrylib.py`).
+Thresholds below are the DEFAULTS, overridable per project:
+  ("audit", "volume-alert", "decision")     <- DEFAULT_VOLUME_ALERT_DECISION (285)
+  ("audit", "volume-alert", "feature")      <- DEFAULT_VOLUME_ALERT_FEATURE (150)
+  ("audit", "volume-alert", "memory")       <- DEFAULT_VOLUME_ALERT_MEMORY (150)
+  ("audit", "pending-alert-count")          <- DEFAULT_PENDING_ALERT_COUNT (5)
+  ("audit", "pending-alert-days")           <- DEFAULT_PENDING_ALERT_DAYS (30)
+  ("audit", "batch-size")                   <- DEFAULT_BATCH_SIZE (33) — an explicit
+                                                `--batch-size` on the command line wins.
+A present-but-broken `checks-config.json` is surfaced as a BLOCKING `CFG-INVALID` line in
+`--tier1`/`--report`, never silently ignored (config falls back to defaults either way).
 
 Usage:
   python3 checks/decisions-audit.py                       # tier1 + plan
@@ -47,6 +60,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -56,6 +70,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # …/ai-workflow
 CHECKS = os.path.dirname(os.path.abspath(__file__))
 INDEX_DEFAULT = os.path.join(ROOT, "decisions", "INDEX.md")
+
+sys.path.insert(0, CHECKS)
+import entrylib  # noqa: E402 — load_checks_config / cfg_get, cf. module docstring above.
 
 ID_RE = re.compile(r"^(D-\d{4}-\d{2}-\d{2}-\d{2})\b")
 # INDEX.md line, uniform entry-template format (`ENTRY-TEMPLATE.md`):
@@ -140,9 +157,12 @@ def cmd_plan(index_path, batch_size, as_json, stale_first=False) -> int:
     return 0
 
 
-def cmd_tier1() -> int:
+def cmd_tier1(cfg_err: str | None = None) -> int:
     print("TIER 1 — MEMORY INTEGRITY (mechanical, zero-FP)\n")
     worst = 0
+    if cfg_err:
+        print(f"  [!!] CFG-INVALID: {cfg_err}")
+        worst = 2
     for label, script in TIER1:
         path = os.path.join(CHECKS, script)
         if not os.path.isfile(path):
@@ -216,12 +236,31 @@ def cmd_merge(files, index_path) -> int:
     return rc
 
 
-VOLUME_ALERTE = 285   # the INDEX is approaching the audit threshold (~300) -> recommend tier 2
+# Defaults — overridable via `checks-config.json` (`("audit", …)`, cf. module docstring).
+DEFAULT_VOLUME_ALERT_DECISION = 285   # decision INDEX approaching the audit threshold (~300)
+DEFAULT_VOLUME_ALERT_FEATURE = 150    # `features/` entry count -> recommend tier 2
+DEFAULT_VOLUME_ALERT_MEMORY = 150     # `memory/` entry count -> recommend tier 2
+DEFAULT_BATCH_SIZE = 33               # --plan batch size, unless --batch-size overrides it
 
 # Ratification inbox (`memory-audit.py --pending`) — recommendation thresholds: an inbox
 # this large, or this stale, alone justifies a semantic audit even with a clean tier 1.
-PENDING_ALERT_COUNT = 5    # >= this many entries awaiting ratification -> recommend tier 2
-PENDING_ALERT_DAYS = 30    # oldest pending entry's age (days) >= this -> recommend tier 2
+DEFAULT_PENDING_ALERT_COUNT = 5    # >= this many entries awaiting ratification -> recommend tier 2
+DEFAULT_PENDING_ALERT_DAYS = 30    # oldest pending entry's age (days) >= this -> recommend tier 2
+
+# Filenames a flat channel dir (`features/`, `memory/`) might carry besides entries —
+# never counted as entries even if one strays in (channel dirs are entries-only today,
+# cf. README.md, but this stays defensive).
+_NON_ENTRY_FILENAMES = {"readme.md", "index.md", "template.md"}
+
+
+def _count_entries(entries_dir: str) -> int:
+    """Entry-file count for a flat channel dir — same `*.md` glob convention as
+    `memory-audit.py`'s `PENDING_GLOBS` (`memory/*.md`, `features/*.md`), README/INDEX/
+    template files excluded (see `_NON_ENTRY_FILENAMES`)."""
+    if not os.path.isdir(entries_dir):
+        return 0
+    return sum(1 for p in glob.glob(os.path.join(entries_dir, "*.md"))
+               if os.path.basename(p).lower() not in _NON_ENTRY_FILENAMES)
 
 
 def _report_dir(arg):
@@ -268,8 +307,8 @@ def _pending_oldest_age_days(rows, today):
     return max(ages) if ages else None
 
 
-def cmd_report(report_dir) -> int:
-    """Writes a deterministic report (tier 1 + INDEX volume + ratification inbox).
+def cmd_report(report_dir, cfg: dict, cfg_err: str | None) -> int:
+    """Writes a deterministic report (tier 1 + per-channel volume + ratification inbox).
     Designed for an OS cron job (headless, NO LLM): the host surfaces it at session
     start, the user decides whether to act on it (tier 2)."""
     import datetime
@@ -284,7 +323,21 @@ def cmd_report(report_dir) -> int:
                            text=True, encoding="utf-8", errors="replace")
         worst = max(worst, r.returncode)
         results.append((label, r.returncode, (r.stdout.strip().splitlines() or [""])[-1]))
+
+    vol_decision = entrylib.cfg_get(cfg, ("audit", "volume-alert", "decision"),
+                                     DEFAULT_VOLUME_ALERT_DECISION)
+    vol_feature = entrylib.cfg_get(cfg, ("audit", "volume-alert", "feature"),
+                                    DEFAULT_VOLUME_ALERT_FEATURE)
+    vol_memory = entrylib.cfg_get(cfg, ("audit", "volume-alert", "memory"),
+                                   DEFAULT_VOLUME_ALERT_MEMORY)
+    pending_alert_count = entrylib.cfg_get(cfg, ("audit", "pending-alert-count"),
+                                            DEFAULT_PENDING_ALERT_COUNT)
+    pending_alert_days = entrylib.cfg_get(cfg, ("audit", "pending-alert-days"),
+                                           DEFAULT_PENDING_ALERT_DAYS)
+
     n_dec = len(parse_entries(INDEX_DEFAULT)[0])
+    n_feat = _count_entries(os.path.join(ROOT, "features"))
+    n_mem = _count_entries(os.path.join(ROOT, "memory"))
 
     pending_rows = _pending_inbox()
     n_pending = len(pending_rows) if pending_rows is not None else 0
@@ -292,14 +345,20 @@ def cmd_report(report_dir) -> int:
                        if pending_rows else None)
 
     reasons = []
+    if cfg_err:
+        reasons.append(f"invalid config ({cfg_err})")
     if worst >= 2:
         reasons.append("blocking drift")
-    if n_dec >= VOLUME_ALERTE:
-        reasons.append(f"INDEX volume ({n_dec} >= {VOLUME_ALERTE})")
-    if n_pending >= PENDING_ALERT_COUNT:
-        reasons.append(f"ratification backlog ({n_pending} >= {PENDING_ALERT_COUNT})")
-    if oldest_age_days is not None and oldest_age_days >= PENDING_ALERT_DAYS:
-        reasons.append(f"stale ratification (oldest {oldest_age_days}d >= {PENDING_ALERT_DAYS}d)")
+    if n_dec >= vol_decision:
+        reasons.append(f"decision volume ({n_dec} >= {vol_decision})")
+    if n_feat >= vol_feature:
+        reasons.append(f"feature volume ({n_feat} >= {vol_feature})")
+    if n_mem >= vol_memory:
+        reasons.append(f"memory volume ({n_mem} >= {vol_memory})")
+    if n_pending >= pending_alert_count:
+        reasons.append(f"ratification backlog ({n_pending} >= {pending_alert_count})")
+    if oldest_age_days is not None and oldest_age_days >= pending_alert_days:
+        reasons.append(f"stale ratification (oldest {oldest_age_days}d >= {pending_alert_days}d)")
     recommend = bool(reasons)
 
     rdir = _report_dir(report_dir); os.makedirs(rdir, exist_ok=True)
@@ -308,11 +367,16 @@ def cmd_report(report_dir) -> int:
            "> Produced by the OS cron job (deterministic tier 1, **no LLM**). Handle it in",
            "> session: the agent asks, **the user decides**. Delete once handled.", "",
            "## Tier 1 — integrity", ""]
+    if cfg_err:
+        out.append(f"- [BLOCKING] CFG-INVALID: {cfg_err}")
     for label, code, tail in results:
         mark = "[OK]" if code == 0 else ("[BLOCKING]" if (code or 0) >= 2
                else ("[to confirm]" if code == 1 else "[missing]"))
         out.append(f"- {mark} {label} — {tail}")
-    out += ["", "## Decisions", "", f"- {n_dec} in the INDEX (alert >= {VOLUME_ALERTE}).", "",
+    out += ["", "## Channel volume", "",
+            f"- decision: {n_dec} in the INDEX (alert >= {vol_decision}).",
+            f"- feature: {n_feat} entrie(s) in `features/` (alert >= {vol_feature}).",
+            f"- memory: {n_mem} entrie(s) in `memory/` (alert >= {vol_memory}).", "",
             "## Ratification", ""]
     if pending_rows is None:
         out.append("- (ratification inbox unavailable — `memory-audit.py --pending` "
@@ -322,7 +386,7 @@ def cmd_report(report_dir) -> int:
     else:
         age_txt = f"{oldest_age_days} day(s)" if oldest_age_days is not None else "unknown"
         out.append(f"- {n_pending} entrie(s) awaiting ratification (oldest: {age_txt}; "
-                    f"alert >= {PENDING_ALERT_COUNT} entries or >= {PENDING_ALERT_DAYS}d).")
+                    f"alert >= {pending_alert_count} entries or >= {pending_alert_days}d).")
         out.append("- Run: `python3 checks/memory-audit.py --pending`")
     out += ["", "## Verdict", "",
             (f"**Semantic audit recommended** ({', '.join(reasons)}) — run tier 2 "
@@ -331,7 +395,7 @@ def cmd_report(report_dir) -> int:
     with open(rpath, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(out))
     print(f"report written: {rpath} (semantic audit {'recommended' if recommend else 'not required'})")
-    return 0
+    return 2 if cfg_err else 0
 
 
 def main() -> int:
@@ -341,21 +405,28 @@ def main() -> int:
     ap.add_argument("--merge", nargs="+", metavar="FILE")
     ap.add_argument("--report", nargs="?", const="", metavar="DIR",
                     help="deterministic report (OS cron); DIR or $YAMS_MEMORY_REPORT_DIR or default .memory-reports/")
-    ap.add_argument("--batch-size", type=int, default=33)
+    ap.add_argument("--batch-size", type=int, default=None,
+                    help="entries per audit batch (default: config `audit.batch-size`, "
+                         f"else {DEFAULT_BATCH_SIZE}) — an explicit flag always wins")
     ap.add_argument("--index", default=INDEX_DEFAULT)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--stale-first", action="store_true",
                     help="--plan: prioritizes the batches containing the oldest `updated`")
     a = ap.parse_args()
+
+    cfg, cfg_err = entrylib.load_checks_config(ROOT)
+    batch_size = (a.batch_size if a.batch_size is not None
+                  else entrylib.cfg_get(cfg, ("audit", "batch-size"), DEFAULT_BATCH_SIZE))
+
     if a.report is not None:
-        return cmd_report(a.report or None)
+        return cmd_report(a.report or None, cfg, cfg_err)
     if a.merge:
         return cmd_merge(a.merge, a.index)
     if a.plan and not a.tier1:
-        return cmd_plan(a.index, a.batch_size, a.json, a.stale_first)
+        return cmd_plan(a.index, batch_size, a.json, a.stale_first)
     if a.tier1 and not a.plan:
-        return cmd_tier1()
-    rc = cmd_tier1(); print(); cmd_plan(a.index, a.batch_size, False, a.stale_first)
+        return cmd_tier1(cfg_err)
+    rc = cmd_tier1(cfg_err); print(); cmd_plan(a.index, batch_size, False, a.stale_first)
     return rc
 
 
