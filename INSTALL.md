@@ -135,7 +135,12 @@ flowchart TD
    `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook **now stamps all three channels**
    `backlog/<id>/STATE.md`, `features/*.md`, `memory/*.md` before the commit goes out — and the
    **index-usage metrics pair** `index-usage-tracker.sh`/`index-usage-flush.sh`, which measures
-   per session whether the navigation index is consulted before sweeping a covered zone): the
+   per session whether the cartography is consulted before sweeping a covered zone — a
+   *targeted* single-file search never counts as a bypass, and consulting any channel index
+   counts as consultation — plus its active half `index-nudge.sh`, a `PostToolUse(Grep|Glob)`
+   hook that, on the first broad sweep of a covered zone in an unconsulted session, injects a
+   note *next to* the raw results pointing to the index and the matching entries with their
+   `updated` dates — never instead of them): the
    installer **references** them in `settings.json` instead of regenerating them from scratch. For `pre-commit` (git)
    or CI, it generates the **glue fragment specific to the detected host** — never wiring imposed.
 

@@ -23,6 +23,21 @@ python3 hooks/secret-scan.py --staged
 python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 ```
 
+## Router aid — `index-nudge.py` (same packaging, opposite direction)
+
+Not a guard: it never blocks, never asks — it **adds**. On a **broad** search sweeping a zone
+the navigation index covers, in a session that hasn't consulted the cartography (neither
+`index/` nor a channel index — `FEATURE_MAP.md`, `MEMORY.md`, `decisions/`…), it emits ONE note
+pointing to the index and the entries matching the search terms, each with its `updated` date.
+Always **next to** the raw results, never instead (nudge, not rail — the map is derived, a
+targeted search is often pre-edit verification); once per zone per session; silent no-op
+everywhere else. Same dual entry points as the guards:
+
+```bash
+python3 hooks/index-nudge.py --tool Grep --pattern "damage tick" --path src   # universal: plain text
+python3 hooks/index-nudge.py --stdin-json                                     # Claude Code adapter
+```
+
 ## Wiring per tool — what the installer materializes
 
 The **trigger** is tool-specific; the guard is not. Materialization table:
@@ -32,6 +47,7 @@ The **trigger** is tool-specific; the guard is not. Materialization table:
 | poisoning-scan | session start · before writing an instruction file | `SessionStart` / `PreToolUse(Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
 | secret-scan | before a commit · before writing | `PreToolUse(Bash\|Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
 | destructive-guard | before a shell command | `PreToolUse(Bash)` hook → `--stdin-json` ("ask" decision) | `pre-commit` (exit 2 = block) |
+| index-nudge | after a search sweeping a covered zone | `PostToolUse(Grep\|Glob)` hook → `--stdin-json` (`additionalContext`) | — session-scoped by nature; other agent hosts the day they expose a post-search injection point (only the envelope changes, the logic is this file) |
 
 > The `checks/` **method controls** (`backlog-check`, `decisions-check`, `memory-audit`)
 > also get wired as hooks — typically `Stop` (end of task) / `SessionStart` (post-merge
