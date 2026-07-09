@@ -1,0 +1,133 @@
+# Installing the memory framework — adoption guide
+
+> **Status: notes + manual guide.** The artifacts (checks, hooks, decision/backlog templates) already
+> exist; a human can adopt them by hand today by following the steps below. The **interactive
+> `install.py`** that automates all this is still **to be built** — this file lists what it will
+> need to offer.
+
+## Guiding principle
+
+**Detect + report; the user decides.** The framework never imposes itself — autonomy is
+*offered*, not *forced*. In particular: **the user decides where and when the checks
+run** (every session? at end of turn? on commit? in CI? by hand?). The installer
+*proposes* sane defaults and *generates* the glue; it wires nothing without agreement.
+
+## Prerequisites
+
+- a **git** repo (the framework relies on git as a permanent record);
+- **python 3** (`python` or `python3` — the scripts detect either).
+
+## Wiring overview (steps 4 and 5)
+
+Two natures of control, two distinct decision trees — **never the same wiring** for the
+two (see `checks/README.md §To wire` for the detail of each pattern):
+
+```mermaid
+flowchart TD
+
+    START["A check to wire"] --> TYPE{"Structural (deterministic,<br/>checks/*.py — step 4)<br/>or<br/>Semantic (memory-audit tier 2,<br/>agent — step 5)?"}
+
+    TYPE -->|Structural| WHERE{"Where does the user want<br/>it to run?"}
+    TYPE -->|Semantic| WHEN{"When does the user want<br/>to trigger it?"}
+
+    WHERE -->|"every session"| SS["SessionStart — SILENT sweep<br/>several checks aggregated → 1 line if drift,<br/>0 tokens if clean"]
+    WHERE -->|"end of turn"| STOP["Stop — 1 hook PER check<br/>detailed report + fix to run,<br/>gated on exit code"]
+    WHERE -->|"on commit"| PRE["pre-commit / PreToolUse(git commit)<br/>only wiring that MUTATES (stamp) or BLOCKS (secrets)"]
+    WHERE -->|"in CI"| CI["CI — a job fails<br/>if a check exits ≠ 0"]
+    WHERE -->|"nothing automatic"| MANUAL["by hand,<br/>before closing a work item"]
+
+    WHEN -->|"the decisions INDEX swells"| VOL["Volume<br/>guided manual trigger"]
+    WHEN -->|"while away (recommended)"| PLAN["Scheduled — report loop,<br/>3 stages ⬇"]
+    WHEN -->|"whenever wanted"| DEM["On demand<br/>skill run manually"]
+
+    PLAN --> P1["① OS cron runs decisions-audit.py --report<br/>deterministic, 0 tokens, outside the session"]
+    P1 --> P2["② SessionStart detects the report<br/>and ASKS — silent if there isn't one"]
+    P2 --> P3["③ if yes: tier 2 agent (LLM, on demand)<br/>then deletes the report"]
+
+    SS --> G1["The installer PROPOSES a sane default —<br/>wires NOTHING without explicit agreement"]
+    STOP --> G1
+    PRE --> G1
+    CI --> G1
+    MANUAL --> G1
+
+    VOL --> G2["Always reports — pruning stays<br/>RATIFIED BY A HUMAN, never automatic"]
+    P3 --> G2
+    DEM --> G2
+
+    classDef det fill:#20304a,stroke:#2980b9,color:#fff
+    classDef mutant fill:#4a2020,stroke:#c0392b,color:#fff
+    classDef sem fill:#4a3a20,stroke:#e67e22,color:#fff
+    classDef gate fill:#2a4a2a,stroke:#27ae60,color:#fff
+    class SS,STOP,CI,MANUAL det
+    class PRE mutant
+    class VOL,PLAN,DEM,P1,P2,P3 sem
+    class G1,G2 gate
+```
+
+## Steps (manual today · what the installer will do tomorrow)
+
+1. **Detect the context** — a git repo? which host (Claude Code? CI? git alone?)? is a
+   memory already in place (`decisions/`, `backlog/`)?
+   *Installer:* probes and overwrites nothing (idempotent).
+
+2. **Scaffold the structure** — copy `decisions/`, `backlog/` (with the `backlog/STATE.template.md`
+   template, to be copied as-is into `backlog/<id>/STATE.md`), `features/`
+   (Feature channel, `FEATURE_MAP.md` as index), `checks/`, `hooks/`, `adapters/` (Claude Code
+   adapter ready to wire — skills + hooks, see step 4), `ENTRY-TEMPLATE.md`, `MEMORY.md`,
+   `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md` from this framework into the host project,
+   **only if missing**.
+   *Installer:* copies + leaves existing files untouched; explicit `--force` to overwrite.
+
+3. **Configure the index** — fill in `index/index-config.json` (roots + extensions to index, <!-- template -->
+   optional `hub`) for `index-check.py` (read, checks for drift) **and** `index/manifest.py`
+   (write, `set`/`rm`/`get`/`stamp` — the only way to edit `manifest.tsv`). Without config, both
+   stay inactive.
+
+4. **Wire the checks — the user chooses WHERE.** Plug the **structural**
+   (deterministic) checks in wherever the user wants, with the **silent-on-success
+   wrapper** (output = tokens injected → nothing on a clean state, one terse line per drift;
+   see `checks/README.md §To wire`, skeleton included). Possible targets, pick any:
+   - **Claude Code**: `SessionStart` (post-merge drift — start clean) · `Stop` (end of turn);
+   - **git**: `pre-commit`;
+   - **CI**: a job that fails if a check exits ≠ 0;
+   - **manual**: nothing wired, run by hand before closing a work item.
+   *Installer:* for Claude Code, **ready-made** hooks already exist in
+   `adapters/claude-code/hooks/` (`SessionStart` sweep, `Stop` report, security guards, and
+   `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook **now stamps all three channels**
+   `backlog/<id>/STATE.md`, `features/*.md`, `memory/*.md` before the commit goes out): the installer
+   **references** them in `settings.json` instead of regenerating them from scratch. For `pre-commit` (git)
+   or CI, it generates the **glue fragment specific to the detected host** — never wiring imposed.
+
+5. **Semantic audit trigger — the user chooses WHEN.** The `memory-audit` audit (tier 2,
+   all 3 channels — Feature/Decision/Memory, memory↔code) **is not a hook** (it costs an agent,
+   doesn't run silently). Available regimes:
+   - **Volume** — when the decisions `INDEX` swells (guided manual trigger — the only channel
+     that accumulates enough for this; Feature and Memory are reread in full, no volume trigger needed);
+   - **Scheduled — the report loop (recommended).** ⚠️ An **in-app** cron only runs if the tool
+     is running (session off → doesn't fire). The workaround decouples **producing** (deterministic, no LLM)
+     from **acting** (semantic, with LLM):
+     1. an **OS cron** (Task Scheduler / `cron`) runs `checks/decisions-audit.py --report` →
+        writes a **deterministic report** to a folder (`$YAMS_MEMORY_REPORT_DIR`, default
+        `.memory-reports/`, **to be gitignored**). Headless, **0 tokens**, runs whenever the machine is on
+        even without a session;
+     2. the **`SessionStart` hook** detects the report and **asks the user**
+        whether to process it (it only surfaces it — silent if there's no report);
+     3. if the user says **yes**, the agent runs tier 2 (semantic, **LLM on demand**)
+        only if the report recommends it, then **deletes** the report.
+     → the audit "runs while you're away" (deterministic) **and** the LLM spend stays under
+     **human control**. *(CI-only variant: a scheduled job with an API key can do tier 2 itself
+     — more setup, real API cost.)*
+   - **On demand** — the user runs the skill whenever they want.
+   In every case it **reports**; pruning stays **ratified by a human** (never automatic
+   pruning — `decisions/README.md §pruning`, `MEMORY.md §Provenance`).
+
+6. **Verify** — run the checks once (`checks/*.py`), confirm they're green, summarize what was
+   set up and where.
+   *Installer:* runs them and prints a summary.
+
+## Target shape of `install.py`
+
+Interactive **but idempotent**: *detects → asks → generates the glue → writes its choices to an
+`install-config`* (replayable, CI-friendly). Neither a pure wizard (fragile depending on host) nor a
+passive checklist (not an "installer"). Still **to be built** — this file holds its spec; the framework's
+`backlog/` is a **template** (to be copied into a host project), not the framework's own dev todo list.
