@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# PreToolUse — wiring for the three universal guards of ../../../hooks/ (hooks/README.md
+# PreToolUse — wiring for the four universal guards of ../../../hooks/ (hooks/README.md
 # §Wiring by tool), a single entry point dispatched by tool_name:
-#   poisoning-scan    on Write|Edit
-#   secret-scan       on Bash|Write|Edit
-#   destructive-guard on Bash ("ask" decision, never a hard block)
+#   poisoning-scan         on Write|Edit
+#   secret-scan            on Bash|Write|Edit
+#   destructive-guard      on Bash ("ask" decision, never a hard block)
+#   normative-write-guard  on Write|Edit ("ask" decision, never a hard block)
 #
 # Each guard is called with --stdin-json (it reads tool_name/tool_input itself). The
 # BLOCKING guards (poisoning-scan, secret-scan) short-circuit on exit 2; destructive-guard
-# never blocks itself — it emits its own "ask" JSON decision on stdout, which is passed
-# through untouched here.
+# and normative-write-guard never block themselves — each emits its own "ask" JSON decision
+# on stdout, which is passed through untouched here.
 set -u
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
@@ -32,6 +33,9 @@ case "$TOOL" in
 
     printf '%s' "$INPUT" | "$PY" hooks/secret-scan.py --stdin-json
     [ "$?" -eq 2 ] && exit 2
+
+    printf '%s' "$INPUT" | "$PY" hooks/normative-write-guard.py --stdin-json
+    exit "$?"   # always 0 — the "ask" decision is carried by the already-printed JSON
     ;;
   Bash)
     printf '%s' "$INPUT" | "$PY" hooks/secret-scan.py --stdin-json

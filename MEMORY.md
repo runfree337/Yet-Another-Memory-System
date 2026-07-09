@@ -64,6 +64,11 @@ An `unverified` memory, or one with `external:` source, is **not used as a fact*
 persistence. **Nothing gets promoted to shared without going through the tracked lifecycle
 below.**
 
+The **capture policy** (`knowledge-capture.md §Capture policy`) parameterizes *where* the AI may
+write drafts at all (per-channel `off` / `propose` / `draft`, plus confirmation-gated
+`normative-paths`); this provenance lifecycle stays the gate for *what becomes team truth*
+regardless of that setting.
+
 ### Confidence lifecycle
 
 - **`unverified → verified`** requires `ratified: <who>, <YYYY-MM-DD>` in the frontmatter — the

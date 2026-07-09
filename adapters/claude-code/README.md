@@ -19,7 +19,7 @@
 | `hooks/session-start-sweep.sh` | `checks/*.py` (6 structural checks), aggregated | `SessionStart` |
 | `hooks/stop-check.sh <check-name>` | one `checks/<check-name>.py`, in detail | `Stop` (one hook per desired check) |
 | `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, before `git commit` |
-| `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
+| `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py`, `hooks/normative-write-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
 | `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
 | `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` | <!-- template -->
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
@@ -127,6 +127,10 @@ imposed wiring — each block can be adopted separately.
   unless the config (`index/index-config.json`) is missing or the session log is empty, in
   <!-- /template -->
   which case it's a silent no-op too.
+- `PreToolUse(Write|Edit)` runs `normative-write-guard.py` last, after poisoning-scan and
+  secret-scan — it stays silent (no config found or no `normative-paths` match) unless the
+  adopting project has a root `capture-policy.json`, in which case a write to a listed path
+  turns into an "ask" confirmation instead of a silent auto-approval.
 - `PreToolUse(Bash)` carries **two** hooks: `security-guards.sh` (secret-scan + destructive-guard,
   each reading `tool_name`/`tool_input` from its own `--stdin-json`) and `pre-commit-stamp.sh`
   (only acts if the command contains `git commit`, otherwise an immediate no-op). Both receive the

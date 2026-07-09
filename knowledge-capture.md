@@ -46,3 +46,41 @@ Classify the learning by what it should *become* — a **function**, not a tool:
 | personal memory | auto-memory | personal custom instructions | your tool's memory |
 
 > The logic (**1 + 2**) does **not** change from one tool to another. Only the table's **column** in step **3** changes. Filling in/adapting that column for your tool is the same operation as choosing where to drop the framework.
+
+## Capture policy — who may write what, and what enforces it
+
+Steps 1–3 above answer *what kind of learning is this, and which function/mechanism does it
+become*. A separate question sits underneath: **is the AI even allowed to write the resulting
+entry to that channel, and in what state?** That's the **capture policy** — configured per
+project in `capture-policy.json` <!-- template --> (root, copied from `capture-policy.example.json`
+at adoption). Three levels, set per channel (`memory` / `feature` / `decision`):
+
+| Level | Behavior at closure | Who ratifies, when | What enforces it |
+|---|---|---|---|
+| `off` | No capture to this channel — only entries already `confidence: verified` + `ratified` may exist; nothing new is expected. | N/A — the channel is closed to new writes. | `checks/capture-policy-check.py` <!-- template --> flags any entry that isn't already ratified. |
+| `propose` (default) | The AI may draft the entry, but only a `confidence: verified` + `ratified` entry is allowed to persist — an `unverified` one is a standing finding until a human ratifies it. | A human, at (or shortly after) closure — same lifecycle as `ENTRY-TEMPLATE.md §Confidence lifecycle`. | `checks/capture-policy-check.py` <!-- template --> — post-hoc, deterministic: `confidence: unverified` (or `verified` without `ratified`) in an `off`/`propose` channel is a **BLOCKING** finding. |
+| `draft` | The AI may write `confidence: unverified` entries freely — they land in the ratification inbox instead of failing the check. | A human, whenever they sweep the inbox — no closure-time gate. | `memory-audit --pending` (the ratification inbox) + the `SessionStart` sweep + the scheduled cron report (`INSTALL.md` step 5) all relay unratified entries forward until someone acts. |
+
+**The safety asymmetry — why `memory`/`feature` default looser than `decision`.** A `memory` or
+`feature` entry left `unverified` is safe to leave in `draft`: the provenance rule
+(`MEMORY.md §Provenance & confidence`) already forbids treating an unverified entry as fact — it
+sits inert until cross-checked, and the ratification inbox, the `SessionStart` sweep, and the
+scheduled cron report all keep surfacing it, so it can't silently rot into "team truth" by mere
+persistence. **Normative homes are different in kind, not degree.** An instruction file, a
+`.claude/rules/*.md` rule, or a hook config **acts on the agent starting the very next session**
+— even while `unverified` — because nothing reads a rule's `confidence` key before obeying it.
+There is no inert state for a written rule. That's why `normative-paths` in `capture-policy.json` <!-- template --> (defaulting to the host project's instruction files, e.g. `CLAUDE.md`,
+`.claude/rules/`) stays **confirmation-gated regardless of the channel level**: any Write/Edit
+under one of those prefixes trips `hooks/normative-write-guard.py` <!-- template -->, an explicit
+human "ask" decision at the harness level — independent of whether the model meant to draft
+responsibly.
+
+**Three enforcement depths, deliberately different in strength:**
+- **Prose** (this document, `WORKFLOW.md`, the skill routing) = **trust** — the model reads the
+  rule and follows it in good faith; nothing stops it from being wrong or careless.
+- **Check** (`checks/capture-policy-check.py` <!-- template -->) = **certain post-hoc
+  detection** — deterministic, zero-false-positive, runs after the fact; it cannot prevent a bad
+  write, only guarantee it gets flagged.
+- **Guard** (`hooks/normative-write-guard.py` <!-- template -->) = **prevention by the harness** —
+  the write is intercepted *before* it lands, gated on human confirmation, independent of the
+  model's goodwill or the check's next run.

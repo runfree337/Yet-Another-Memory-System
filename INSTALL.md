@@ -85,10 +85,31 @@ flowchart TD
    > the framework in a subfolder instead, adjust the paths inside
    > `adapters/claude-code/hooks/*.sh` (and `$YAMS_MEMORY_REPORT_DIR`) accordingly.
 
-3. **Configure the index** — fill in `index/index-config.json` (roots + extensions to index, <!-- template -->
-   optional `hub`) for `index-check.py` (read, checks for drift) **and** `index/manifest.py`
-   (write, `set`/`rm`/`get`/`stamp` — the only way to edit `manifest.tsv`). Without config, both
-   stay inactive.
+3. **Configure the index, and choose the capture policy.**
+   - **The index** — fill in `index/index-config.json` (roots + extensions to index, <!-- template -->
+     optional `hub`) for `index-check.py` (read, checks for drift) **and** `index/manifest.py`
+     (write, `set`/`rm`/`get`/`stamp` — the only way to edit `manifest.tsv`). Without config, both
+     stay inactive.
+   - **The capture policy** — copy `capture-policy.example.json` to `capture-policy.json` <!-- template -->
+     (root) and pick a level per channel (`off` / `propose` / `draft`, see
+     `knowledge-capture.md §Capture policy` for the full table). **Defaults:** `memory: draft`,
+     `feature: propose`, `decision: propose`. Why the split — a `memory` entry left `unverified`
+     is inert until cross-checked (provenance rule, `MEMORY.md §Provenance & confidence`), so
+     `draft` is safe for it; `feature` and `decision` default to `propose` because they carry more
+     structural weight (a feature entry routes future navigation, a decision records a structural
+     choice) and a human ratifying at closure time is cheap relative to that weight — raise
+     `memory` to `propose` too, or drop `feature`/`decision` to `draft`, if the project prefers a
+     different balance. Then set `normative-paths` to the host project's own instruction files
+     (e.g. `CLAUDE.md`, `.claude/rules/`) — these stay confirmation-gated no matter what level any
+     channel gets, since a written rule acts on the agent from the very next session even
+     unverified. As with every step here: the installer **proposes** the copy and the defaults, it
+     **wires nothing without agreement** — same guiding principle as above. Once
+     `capture-policy.json` <!-- template --> exists, its two enforcement pieces wire the same way
+     as everything else here: `checks/capture-policy-check.py` <!-- template --> is a
+     **structural** check, so it joins the other targets picked in step 4 below;
+     `hooks/normative-write-guard.py` <!-- template --> is a **security guard** (an "ask"
+     decision, like `destructive-guard.py`), so it joins the security guards referenced in step
+     4's `adapters/claude-code/hooks/` bundle.
 
 4. **Wire the checks — the user chooses WHERE.** Plug the **structural**
    (deterministic) checks in wherever the user wants, with the **silent-on-success

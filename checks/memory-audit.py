@@ -72,9 +72,10 @@ sys.path.insert(0, CHECKS)
 import entrylib  # noqa: E402
 
 TIER1 = [
-    ("feature",   [PY, os.path.join(CHECKS, "feature-map-check.py")]),
-    ("decisions", [PY, os.path.join(CHECKS, "decisions-audit.py"), "--tier1"]),
-    ("memory",    [PY, os.path.join(CHECKS, "memory-check.py")]),
+    ("feature",         [PY, os.path.join(CHECKS, "feature-map-check.py")]),
+    ("decisions",       [PY, os.path.join(CHECKS, "decisions-audit.py"), "--tier1"]),
+    ("memory",          [PY, os.path.join(CHECKS, "memory-check.py")]),
+    ("capture-policy",  [PY, os.path.join(CHECKS, "capture-policy-check.py")]),
 ]
 
 # Optional fine counters per channel — a channel absent from this table (e.g.

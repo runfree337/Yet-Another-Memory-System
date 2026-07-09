@@ -1,0 +1,7 @@
+{
+  "_README": "Copy to capture-policy.json and adjust. Per-channel capture policy — who may write to each memory channel and in what state. Checked by checks/capture-policy-check.py; the normative-paths are enforced by hooks/normative-write-guard.py (ask-confirmation on write).",
+  "channels": { "memory": "draft", "feature": "propose", "decision": "propose" },
+  "_levels": "off = no capture to this channel (only ratified entries may exist, and nothing new is expected) | propose = only ratified entries may exist (confidence: verified + ratified trace) | draft = unverified entries allowed — they land in the ratification inbox (memory-audit --pending)",
+  "normative-paths": ["CLAUDE.md", ".claude/rules/"],
+  "_normative-paths": "paths whose writes always require explicit human confirmation (ask guard) — implicitly propose; adjust to the host project's instruction files"
+}

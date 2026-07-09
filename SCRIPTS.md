@@ -237,6 +237,29 @@ python3 checks/memory-check.py --json
 python3 checks/memory-check.py --stamp --staged   # pre-commit only
 ```
 
+### `capture-policy-check.py`
+**Intent:** deterministic half of the **capture policy** (`knowledge-capture.md §Capture
+policy`) — turns the per-channel policy declared in `capture-policy.json` <!-- template -->
+(schema: `capture-policy.example.json`; absent = the project has not opted in, exit 0) into
+verifiable state invariants. In a channel whose level is `off` or `propose`, **only ratified
+entries may exist**: any `confidence: unverified` entry, or `verified` one with no `ratified`
+trace, is a BLOCKING `CP-UNRATIFIED` (surfaced by the SessionStart sweep at the next session).
+A `draft` channel produces no findings — visibility there is the ratification inbox's job
+(`memory-audit --pending`), no double signal. `CP-BAD-LEVEL` / `CP-BAD-CHANNEL` (blocking)
+reject typos in the policy file itself. The write-time half is `hooks/normative-write-guard.py`
+(below).
+
+| Parameter | Effect | Default |
+|---|---|---|
+| *(none)* | text report | — |
+| `--json` | JSON output | disabled |
+
+**Exit codes:** `0` clean or not opted in · `1` only to-confirm · `2` at least one blocking (or unreadable policy JSON).
+
+```bash
+python3 checks/capture-policy-check.py
+```
+
 ### `decisions-audit.py`
 **Intent:** orchestrator for the **decisions journal** — checks nothing itself, chains/aggregates
 the 4 scripts above and drives the Tier 1 → Tier 2 cycle. Renamed from `memory-audit.py`: its
@@ -267,15 +290,16 @@ python3 checks/decisions-audit.py --report                      # OS cron, headl
 
 ### `memory-audit.py`
 **Intent:** **multi-channel** orchestrator (Feature + Decision + Memory, `WORKFLOW.md §The
-three memories`) — chains `feature-map-check.py` and `decisions-audit.py --tier1` (which
-already covers decisions/doc/index/backlog) and `memory-check.py`, summarizes per channel. No
+three memories`) — chains `feature-map-check.py`, `decisions-audit.py --tier1` (which
+already covers decisions/doc/index/backlog), `memory-check.py` and `capture-policy-check.py`,
+summarizes per channel. No
 `--plan`/`--merge`/`--report` of its own: only the Decision channel accumulates enough to
 justify splitting into batches — delegated to `decisions-audit.py`. Feature and Memory are reread
 in one single pass (small by construction).
 
 | Parameter | Effect | Default |
 |---|---|---|
-| `--tier1` | chains the 3 channels, prints one verdict per channel | — |
+| `--tier1` | chains the 4 tier-1 lines (feature, decisions, memory, capture-policy), prints one verdict each | — |
 | `--pending` | the **ratification inbox**: scans `memory/`, `features/`, `decisions/`, `backlog/<id>/STATE.md` directly (`entrylib.parse_frontmatter`) and lists every entry awaiting a human in one view — **PENDING RATIFICATION** (`confidence: unverified`, oldest `updated` first) and **RATIFICATION NOT TRACKED** (`verified` with no `ratified` field). Entries pending longer than `PENDING_STALE_DAYS` (30d) get a `⚠ stale Nd` marker and are counted in the summary. Files with no frontmatter/`confidence` are skipped, never errored on. | — |
 | `--json` | JSON output (with `--pending`: flat list of `channel/path/updated/source/kind/age_days/stale`) | disabled |
 | *(none)* | equivalent to `--tier1` | — |
@@ -379,6 +403,29 @@ python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 ```
 
 ---
+
+### `normative-write-guard.py`
+**Intent:** harness-level half of the **capture policy** — turns an AI write to a NORMATIVE
+path (`capture-policy.json`'s `normative-paths` — instruction files, rules) into an explicit <!-- template -->
+human confirmation instead of a silent auto-approval. Complements the deterministic check
+(state, post-hoc) with **prevention at write time**; same "ask, never hard-block" philosophy
+as `destructive-guard.py`. Portable (stdlib only).
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `--stdin-json` | Claude Code adapter: on `Write`/`Edit` whose `file_path` matches a normative prefix → emits a `permissionDecision: "ask"` JSON on stdout, exit 0 | disabled |
+| `--path <p>` | non-interactive test: exit `2` if `<p>` is normative (git/CI), `0` otherwise | — |
+
+**Exit codes:** `--stdin-json` → always `0` (the "ask" JSON is the decision carrier) ·
+`--path` → `2` normative, `0` otherwise. Without a readable `capture-policy.json` carrying <!-- template -->
+a non-empty `normative-paths`, the guard is INACTIVE — silent `0` in every mode. Wired into
+`adapters/claude-code/hooks/security-guards.sh` on `PreToolUse(Write|Edit)`, after
+poisoning-scan and secret-scan.
+
+```bash
+python3 hooks/normative-write-guard.py --path CLAUDE.md      # exit 2 if normative
+echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"}}' | python3 hooks/normative-write-guard.py --stdin-json
+```
 
 ## What does NOT belong here
 
