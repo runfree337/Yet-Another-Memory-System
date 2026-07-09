@@ -254,7 +254,7 @@ python3 hooks/destructive-guard.py --command "find . -name '*.tmp' -delete"
 
 Les scripts **tech-spécifiques** du projet hôte (lint, tests, analyzers…) ne sont pas dans ce
 framework — ils restent documentés par le projet lui-même. Ce fichier ne référence que ce que
-`_meta/ai-workflow/` fournit. Pour en écrire un côté projet (comme `audit.py` du projet hôte de
+**YAMS** fournit. Pour en écrire un côté projet (comme `audit.py` du projet hôte de
 référence) : `checks/GABARIT.md` donne la forme commune, pas le contenu tech-spécifique.
 
 > **Attention à l'homonymie** : le projet hôte de référence a son **propre** `manifest.py`
