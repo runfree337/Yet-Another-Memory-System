@@ -20,6 +20,8 @@
 | `hooks/stop-check.sh <check-name>` | one `checks/<check-name>.py`, in detail | `Stop` (one hook per desired check) |
 | `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, before `git commit` |
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
+| `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
+| `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` |
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
 | `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
 
@@ -67,6 +69,10 @@ imposed wiring — each block can be adopted separately.
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/stop-check.sh\" decisions-check"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/index-usage-flush.sh\""
           }
         ]
       }
@@ -93,6 +99,15 @@ imposed wiring — each block can be adopted separately.
             "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/pre-commit-stamp.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/index-usage-tracker.sh\""
+          }
+        ]
       }
     ]
   }
@@ -103,11 +118,18 @@ imposed wiring — each block can be adopted separately.
 - `Stop` lists 3 checks as an example (`index-check`, `backlog-check`, `decisions-check`) — one
   more hook per check you want recalled in detail before end of session; the `SessionStart` sweep
   already covers all 6 in aggregate. Add `memory-check`/`feature-map-check`/`doc-refs-check` the
-  same way if wanted.
+  same way if wanted. `index-usage-flush.sh` is listed alongside them — same trigger, but it
+  aggregates a metric (`.memory-reports/index-usage.csv`) instead of flagging a drift; silent
+  unless the config (`index/index-config.json`) is missing or the session log is empty, in
+  which case it's a silent no-op too.
 - `PreToolUse(Bash)` carries **two** hooks: `security-guards.sh` (secret-scan + destructive-guard,
   each reading `tool_name`/`tool_input` from its own `--stdin-json`) and `pre-commit-stamp.sh`
   (only acts if the command contains `git commit`, otherwise an immediate no-op). Both receive the
   same JSON on stdin, independently.
+- `PreToolUse(Read|Grep|Glob)` carries `index-usage-tracker.sh` — the counterpart of
+  `index-usage-flush.sh` above: it only appends a line to a session-scoped tmp file, it doesn't
+  read `index-config.json` itself (no per-call config parsing, kept fast and dependency-free);
+  the zone classification happens once, at flush time.
 - The semantic audit (`skills/decisions-audit.md`, `skills/memory-audit.md`) **never** appears in
   `settings.json` — it's not a hook, cf. `checks/README.md §Semantic — agent,
   memory<->code`. It triggers via skill (on demand) or the OS cron job's report loop
