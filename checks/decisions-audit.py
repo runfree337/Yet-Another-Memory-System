@@ -57,7 +57,8 @@ ID_RE = re.compile(r"^(D-\d{4}-\d{2}-\d{2}-\d{2})\b")
 INDEX_LINE_RE = re.compile(r"^-\s*\[(D-\d{4}-\d{2}-\d{2}-\d{2})\]")
 ANY_ID_RE = re.compile(r"D-\d{4}-\d{2}-\d{2}-\d{2}")
 UPDATED_RE = re.compile(r"(?m)^updated:\s*(\d{4}-\d{2}-\d{2})")
-VERDICTS = {"ARCHIVE-1", "ARCHIVE-4", "REDUNDANT", "CODE-DRIFT", "CONFLICT", "DOUBT"}
+VERDICTS = {"ARCHIVE-1", "ARCHIVE-4", "REDUNDANT", "CODE-DRIFT", "CONFLICT",
+            "NOT-A-DECISION", "DOUBT"}
 
 TIER1 = [
     ("decisions (file<->INDEX)",    "decisions-check.py"),
@@ -182,7 +183,8 @@ def cmd_merge(files, index_path) -> int:
     by_v = {}
     for fid, v, rest in flagged:
         by_v.setdefault(v, []).append((fid, rest))
-    for v in ["CODE-DRIFT", "CONFLICT", "ARCHIVE-1", "ARCHIVE-4", "REDUNDANT", "DOUBT"]:
+    for v in ["CODE-DRIFT", "CONFLICT", "NOT-A-DECISION", "ARCHIVE-1", "ARCHIVE-4",
+              "REDUNDANT", "DOUBT"]:
         if by_v.get(v):
             print(f"## {v}  ({len(by_v[v])})")
             for fid, rest in by_v[v]:

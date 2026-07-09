@@ -38,6 +38,7 @@ classify — emit **only** the problem entries:
 | `REDUNDANT` | invariant **already carried** by a living authority (test, architecture doc, feature entry) | the reference |
 | `CODE-DRIFT` | the decision says X, the **code does Y** — **the user decides**, no fix proposed | the divergence |
 | `CONFLICT` | contradicts another decision **without** a revocation link | the other id |
+| `NOT-A-DECISION` | fails the **entry gate** (`decisions/README.md §The entry gate`): no nameable rejected alternative, or fully re-derivable from the code — misfiled functional fact | which gate question fails + where the content belongs (feature entry / architecture doc) |
 | `DOUBT` | suspect, inconclusive | the reason |
 
 **`ARCHIVE-4` is now mechanically pre-filtered.** From the frontmatter (`decisions/README.md
@@ -72,7 +73,10 @@ then, as the last line (used by the coverage check): `KEPT: <n> — <ids with no
 
 The mechanism **reports**. No pruning (deletion, archiving, tombstone) nor
 **code↔doc** alignment is applied without **human ratification**; a `CODE-DRIFT` / `CONFLICT` is
-settled by the user; any retained pruning stays **logged** (successor + reason + history).
+settled by the user; any retained pruning stays **logged** (successor + reason + history). A
+ratified `NOT-A-DECISION` is **reclassified**, not archived: its content migrates to its real
+home (feature entry / architecture doc), the entry is deleted — a misfiled fact leaves no
+tombstone.
 
 ## Packaging per tool
 

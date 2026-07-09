@@ -3,6 +3,29 @@
 The *why* behind **structural** choices: an organizational pivot, an abandoned path, a tool
 choice, a settled scope, a cross-cutting convention.
 
+## The entry gate — is this a decision?
+
+The channel's failure mode is **misfiled architecture**: recording a *functional fact* — how
+something works — as a decision. The fact is the **result** of a choice and belongs to the
+Feature channel or the architecture doc; only the **choice itself** — what was ruled out, and
+why — belongs here. Three questions, **all three required**:
+
+1. **The alternative can be named.** One sentence saying what viable option was *rejected*.
+   If nothing fits after "rather than…", it's a fact, not a decision.
+2. **The why is unrecoverable from the code.** Reading the code yields the *how*, never the
+   *why this over that*. If everything can be re-derived from the code → architecture doc.
+3. **It binds the future.** Revisiting it means reopening a trade-off (cost, risk, a broken
+   invariant) — not just editing code. Reversible without a debate → not decision-worthy.
+
+| Candidate | Verdict | Where it goes |
+|---|---|---|
+| "Postgres rather than MongoDB for the order store — relational integrity beats schema flexibility here" | ✅ decision | named alternative, binding stack choice |
+| "API errors use RFC 7807 `problem+json` rather than ad-hoc bodies" | ✅ decision | cross-cutting convention every future endpoint inherits |
+| "background jobs are idempotent under at-least-once delivery, rather than relying on an exactly-once broker" | ✅ decision | architectural trade-off, invisible in any single file |
+| "`UserRepository` resolves users by id through the ORM" | ❌ functional fact | Feature channel / architecture doc |
+| "the API page size is 50" | ❌ parameter | the code/config, with its calibration comment |
+| "added a dead-link rule to the doc checker" | ❌ ordinary feature | the commit + `SCRIPTS.md` — *unless* it settled a contested trade-off |
+
 This channel is an **instance** of `../ENTRY-TEMPLATE.md` (the common meta-schema shared by every
 memory entry — one file + one index line, common frontmatter). What follows only redefines what's
 **specific to the Decision channel**; the common keys (`id`, `source`, `confidence`, `created`,
@@ -30,7 +53,8 @@ memory entry — one file + one index line, common frontmatter). What follows on
 
    **Decision**: what was settled.
 
-   **Why**: the reason + the alternatives ruled out.
+   **Why**: the reason + the **named** alternative(s) ruled out — a "decision" where nothing
+   fits after "rather than…" is not one (see the entry gate above).
 
    **Invariant**: the rule that survives (verifiable).
    ```
@@ -57,7 +81,11 @@ memory entry — one file + one index line, common frontmatter). What follows on
    if the old decision **was implemented**, it stays a **tombstone** — file kept
    (`status: revoked`), line kept in `INDEX.md` ("don't reintroduce X" stays alive). If it was
    **never implemented**, it's **deleted** (file + INDEX line) and the successor absorbs the
-   rejected alternative — no tombstone for something never built. When in doubt, keep it.
+   rejected alternative — no tombstone for something never built. **Same-work-item zigzag**: a
+   decision taken and then reversed **before its work item closes** never lived outside that
+   work item — **delete it** (the successor's *Why* absorbs the alternative), even if code
+   briefly followed it before closure. The log records choices that *lived*, not drafting
+   back-and-forth. When in doubt, keep it.
 5. **Archiving**: a stale decision moves to `status: archived` **and** its line migrates under
    `## Archived` in `INDEX.md` — both **at once**. This is now a **`status` + index-section
    transition, mechanically verifiable** (`checks/decisions-check.py`, rule `D5`: an `archived`
