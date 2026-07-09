@@ -27,8 +27,9 @@
      (`decisions-audit.py --plan/--merge`, un reviewer par lot).
    - **Feature** — `FEATURE_MAP.md` reste volontairement assez petit pour être **relu en
      entier** (`WORKFLOW.md`) : pas de découpage, un seul passage.
-   - **Mémoire** — ne relire que les `memory/<slug>.md` dont le frontmatter porte
-     `confiance: à vérifier` (repérés par `memory-check.py`) ; le reste (`validé`) n'a
+   - **Mémoire** — ne relire que les `memory/<slug>.md` que `memory-check.py` repère
+     candidates : `confidence: unverified` (`R-UNVERIFIED`) OU `confidence: verified` sans
+     `ratified` (`R-VERIFIED-NOT-RATIFIED`) ; le reste (`verified` + `ratified` tracé) n'a
      rien à revoir.
 
 ## Le barème (étage 2)
@@ -40,8 +41,11 @@ délègue entièrement ce volet — il ne le réimplémente pas.
 
 ### Canal Feature
 
-Pour chaque fiche de `FEATURE_MAP.md` : la fiche décrit-elle encore la réalité du code
-qu'elle cite ?
+Chaque fiche vit dans `features/<slug>.md` (un fichier par fiche, indexé par `FEATURE_MAP.md`) :
+décrit-elle encore la réalité du code qu'elle cite ? Le pré-filtre mécanique s'est enrichi de
+`FM-FRESH` (`feature-map-check.py` : `updated` de la fiche antérieur au dernier commit d'un
+chemin cité en `**Code :**`) — l'étage 2 **traite ces fiches en priorité**, sans s'y limiter
+(une fiche fraîche peut quand même avoir dérivé sémantiquement).
 
 | Verdict | Condition | Preuve attendue |
 |---|---|---|
@@ -53,18 +57,21 @@ Ne signaler QUE `PERIMEE` et `CODE-DEPLACE` — `A-JOUR` n'a pas besoin d'être 
 
 ### Canal Mémoire (préférences)
 
-Pour chaque `memory/<slug>.md` signalé par `memory-check.py` (`confiance: à vérifier`, ou
-`source: externe:...`) :
+Pour chaque `memory/<slug>.md` signalé par `memory-check.py` (`confidence: unverified` →
+`R-UNVERIFIED`, `confidence: verified` sans `ratified` → `R-VERIFIED-NOT-RATIFIED`, ou
+`source: external:...`) — les verdicts décrivent désormais l'**écriture de frontmatter
+attendue**, pas juste un jugement en prose :
 
 | Verdict | Condition | Preuve attendue |
 |---|---|---|
-| `RATIFIER` | recoupée avec le code/une source fiable, elle tient → le frontmatter passe `confiance: validé` | la source de recoupement |
-| `REJETER` | recoupée, elle ne tient pas (obsolète, contredite, jamais vérifiée) → fichier à retirer (+ sa ligne d'index) | pourquoi elle ne tient pas |
+| `RATIFIER` | recoupée avec le code/une source fiable, elle tient → l'agent **propose** le diff de frontmatter qui pose `confidence: verified` + `ratified: <qui>, <AAAA-MM-JJ>` | la source de recoupement |
+| `REJETER` | recoupée, elle ne tient pas (obsolète, contredite, jamais vérifiée) → retrait du fichier + de sa ligne d'index, **journalisé** (raison + historique git) | pourquoi elle ne tient pas |
 | `DOUTE` | non concluant en l'état | 1 phrase de raison |
 
-**Aucune promotion `validé` sans ratification humaine** (`MEMORY.md §Provenance` :
-« rien n'est promu en partagé sans passer `validé` »). L'agent **propose**, l'utilisateur
-ratifie.
+**Aucune écriture sans ratification humaine** (`MEMORY.md §Provenance` : « rien n'est promu en
+partagé sans passer par le cycle de vie tracé »). `RATIFIER` n'est **jamais** une
+auto-application : l'agent propose le diff (`confidence: verified` + `ratified:`), c'est
+l'humain qui le pose.
 
 ## Garde-fou
 

@@ -70,7 +70,10 @@ flowchart TD
    est-elle déjà en place (`decisions/`, `backlog/`) ?
    *Installeur :* sonde et n'écrase rien (idempotent).
 
-2. **Échafauder la structure** — copier `decisions/`, `backlog/`, `checks/`, `hooks/`, `MEMORY.md`,
+2. **Échafauder la structure** — copier `decisions/`, `backlog/` (avec le gabarit
+   `backlog/ETAT.gabarit.md`, à copier tel quel dans `backlog/<id>/ETAT.md`), `features/`
+   (canal Feature, `FEATURE_MAP.md` en index), `checks/`, `hooks/`, `adapters/` (adaptateur
+   Claude Code prêt à câbler — skills + hooks, voir étape 4), `GABARIT-ENTREE.md`, `MEMORY.md`,
    `FEATURE_MAP.md`, `TABLEAU_DE_BORD.md`, `WORKFLOW.md` depuis ce framework vers le projet hôte,
    **si absents**.
    *Installeur :* copie + ne touche pas l'existant ; `--force` explicite pour réécraser.
@@ -88,8 +91,12 @@ flowchart TD
    - **git** : `pre-commit` ;
    - **CI** : un job qui échoue si un check sort ≠ 0 ;
    - **manuel** : rien de câblé, lancés à la main avant de clôturer un chantier.
-   *Installeur :* génère le **fragment de glu propre à l'hôte détecté** (bloc `settings.json`
-   Claude Code, hook `pre-commit`, étape CI) — jamais un câblage imposé.
+   *Installeur :* pour Claude Code, des hooks **PRÊTS** existent déjà dans
+   `adapters/claude-code/hooks/` (sweep `SessionStart`, rapport `Stop`, gardes de sécurité, et
+   `pre-commit-stamp.sh` — le hook `PreToolUse(git commit)` **stampe désormais les trois canaux**
+   `backlog/<id>/ETAT.md`, `features/*.md`, `memory/*.md` avant que le commit ne parte) : l'installeur
+   les **référence** dans `settings.json` au lieu de les régénérer de zéro. Pour `pre-commit` (git)
+   ou CI, il génère le **fragment de glu propre à l'hôte détecté** — jamais un câblage imposé.
 
 5. **Trigger de l'audit sémantique — l'utilisateur choisit QUAND.** L'audit `memory-audit` (étage 2,
    les 3 canaux — Feature/Décision/Mémoire, mémoire↔code) **n'est pas un hook** (il coûte un agent,

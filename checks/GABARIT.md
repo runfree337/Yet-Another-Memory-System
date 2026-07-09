@@ -114,12 +114,18 @@ servi de référence de départ pour dégager le gabarit, pas de base de compara
 
 | Script | Finding (namedtuple) | `collect` git-aware (`--diff`+`--staged`) | `--json` | Conforme au gabarit |
 |---|---|---|---|---|
+| `checks/entrylib.py` (ce framework) | fournit `Finding`/`BLOQUANT`/`CONFIRMER` — pas un check | n/a — bibliothèque partagée, pas de cible à collecter | n/a | **mutualisation de la forme** — les 4 checks de canal ci-dessous l'importent au lieu de redéfinir chacun leur parseur/règles |
+| `checks/memory-check.py` (ce framework) | ✅ (via `entrylib`) | n/a (compare toujours l'index au dossier en entier, même motif que `decisions-check.py` — pas de sous-ensemble à cibler) | ✅ | **conforme** — premier check écrit à partir de ce gabarit, pas redécouvert |
+| `checks/decisions-check.py` (ce framework) | ✅ (via `entrylib`) | n/a (idem `memory-check.py` — compare `decisions/` en entier) | ✅ | **conforme** — via `entrylib` |
+| `checks/feature-map-check.py` (ce framework) | ✅ (via `entrylib`) | n/a (idem, compare `features/` en entier) | ✅ | **conforme** — via `entrylib` |
+| `checks/backlog-check.py` (ce framework) | ✅ (via `entrylib`) | n/a (scanne `backlog/` en entier) | ✅ | **conforme** — via `entrylib` |
 | `checks/doc-refs-check.py` (ce framework) | tuple simple | `--staged` seul, pas `--diff` | non | **dilué** — à réaligner si l'occasion se présente |
 | `hooks/poisoning-scan.py`, `hooks/secret-scan.py` | tuple simple | `--staged` seul | non | dilué — mais gardes courtes, la simplicité prime ici |
-| `checks/memory-check.py` (ce framework) | ✅ | n/a (compare toujours l'index au dossier en entier, même motif que `decisions-check.py` — pas de sous-ensemble à cibler) | ✅ | **conforme** — premier check écrit à partir de ce gabarit, pas redécouvert |
 
 **Le mot d'ordre n'est pas de tout réaligner rétroactivement** — un script qui marche et dont la
 dérive n'a jamais coûté cher ne mérite pas un refacto au nom de la seule cohérence stylistique.
 Ce gabarit sert le **prochain** check à écrire (ce framework ou le projet hôte) : lui, part de
 la forme complète dès le premier jet, plutôt que de redécouvrir empiriquement les mêmes 5 pièces.
-`memory-check.py` en est la première preuve concrète.
+`memory-check.py` en est la première preuve concrète ; `decisions-check.py`, `feature-map-check.py`
+et `backlog-check.py` l'ont suivie en important la même bibliothèque `entrylib.py` plutôt qu'en
+redéfinissant chacun leur propre parseur de frontmatter.
