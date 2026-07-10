@@ -77,6 +77,17 @@ flowchart TD
    `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md` from this framework into the host project,
    **only if missing**.
    *Installer:* copies + leaves existing files untouched; explicit `--force` to overwrite.
+   > **Copy the folders WHOLE — a "scripts-only" cherry-pick bites back.** `checks/` and
+   > `hooks/` include their `README.md` files and `checks/TEMPLATE.md`, which cross-reference
+   > each other (`checks/TEMPLATE.md` cites `checks/README.md`, `checks/memory-audit.md`
+   > cites the adapter skill): skip the READMEs and the adopting repo's own
+   > `doc-refs-check.py` immediately reports those cross-references as dead — measured on a
+   > real adoption. Also copy the three root-level example configs
+   > (`checks-config.example.json`, `capture-policy.example.json`,
+   > `index/index-config.example.json` with its `index/` folder): step 3 and several check
+   > hints say "copy `<name>.example.json` to `<name>.json`" — that instruction must point
+   > at a file that exists in the host repo. Only `checks/index-eval/` (the framework's own
+   > method-evaluation harness and its tests) is safe to leave behind.
    > **Placement assumption — framework at the project root.** The Python scripts locate
    > their data relative to their own file (`checks/..` = framework root), while the
    > adapter hooks `cd` to the **project** root (`CLAUDE_PROJECT_DIR`) and call
@@ -172,6 +183,48 @@ flowchart TD
 6. **Verify** — run the checks once (`checks/*.py`), confirm they're green, summarize what was
    set up and where.
    *Installer:* runs them and prints a summary.
+
+## Migrating a pre-existing corpus (adopting on top of an older method)
+
+Validated end-to-end on a real host (192 decisions, 6 backlog items, 21 feature cards, ~700
+initial findings). The framework's own checks are the **oracle and the progress meter**: run
+them before touching anything (that's the gap measurement), after every batch (finding count
+must decrease monotonically), and at the end (Definition of Done = every channel check exit
+`0`, `doc-refs-check` 0 BLOCKING). Two ground rules that made it safe:
+
+- **Migrate the machine structure, never the prose.** Frontmatter, keys, canonical section
+  markers, index formats — the body text stays in the team's language, untouched
+  (`ENTRY-TEMPLATE.md` prescribes exactly this: keys/values in English, prose free).
+- **Tooling first, removal last.** Copy `checks/`+`hooks/` before converting anything (the
+  instrument measures the whole migration), and keep any pre-existing project linters
+  **until the end**: they understand the OLD formats and stay useful while both coexist.
+  Remove each one only against a **parity proof** — run fork and canon side by side on the
+  migrated corpus; a fork that crashes or flags everything *because the formats moved on* is
+  proof of obsolescence, not of a coverage gap. A project-specific control with no canon
+  equivalent stays (the project bringing its own checks is the normal case, not a conflict).
+
+Suggested order (each step ends on its own green check + one commit): tooling → backlog →
+decisions → features → memory shell → dead references → tooling switch + close with a
+ratified decision recording the adoption. Typical format mapping to plan for (measured on a
+French-keyed corpus; adjust the left column to the legacy at hand):
+
+| Legacy artifact | Target |
+|---|---|
+| per-item state file, local name (`ETAT.md`) | `backlog/<id>/STATE.md`, keys `id/title/status/milestone/after/docs/updated/impacts` |
+| open status vocabulary (`à faire`, `en cours`) | closed vocabulary `todo` / `in-progress` / `blocked` / `done` |
+| free body sections | `## Tasks` (mandatory) + `## Remaining` (optional), nothing else |
+| decision files without frontmatter | YAML frontmatter (`ENTRY-TEMPLATE.md`) + literal `**Decision**` / `**Why**` / `**Invariant**` markers **prepended** — legacy headings kept below |
+| archive subfolder (`decisions/archive/`) | flat folder; archival = `status: archived` + the INDEX line moving to `## Archived` |
+| inline link segments (`rev:`/`sup:`/`cons:` on index lines) | frontmatter `replaces:` (list) ⟺ `replaced-by:` (scalar) reciprocity, `links:` for the rest — prose mention stays |
+| monolithic feature map | one `features/<slug>.md` per card + `FEATURE_MAP.md ## Entries` index; code paths repo-relative |
+| relative code paths (`Scripts/Foo.cs`) | full repo-relative paths — resolves most dead-reference findings mechanically | <!-- template -->
+
+Batching: the biggest channel (decisions, usually) converts safely in parallel batches of
+~20 files — files are independent, the INDEX is rewritten once at the end. Dead references
+come **after** the structural lots (the renames those lots perform resolve most of them);
+what remains is fixed by pointing at today's target, or annotated with a `NEG` word /
+`<!-- template -->` marker when the prose genuinely speaks of something gone or planned
+(`SCRIPTS.md §doc-refs-check.py`).
 
 ## Target shape of `install.py`
 

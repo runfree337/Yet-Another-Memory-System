@@ -121,7 +121,16 @@ python3 checks/decisions-check.py --json
 cited in a `.md` that no longer/never existed — git heuristic: existed then vanished =
 blocking, never created = to-confirm; the "existed" lookup runs on **one** cached
 `git log --all --name-only` dump per run, never one `git log` per token — hookable even on a
-large history); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
+large history. A path to an existing **directory** counts as alive, same reach as a git
+pathspec. Backticked spans are scanned **in place**: a fragment that looks dead only because
+the real directory name contains a space — `` `Tools/My Dir/file.py` `` fragments to <!-- template -->
+`Dir/file.py` — is re-anchored across the span before flagging, existence first, then git <!-- template -->
+history for the severity. The final path segment accepts up to 16 chars after the last dot,
+with a boundary lookahead: a package id like `com.nobi.roundedcorners` is one token, never
+truncated to a ghost `…rounde`, while a sentence-final dot still ends the token. Tokens
+matching a `doc-refs.ignore-prefixes` entry (`checks-config.json`, optional, empty by
+default) are skipped — for runtime-API-joined names like `Application.persistentDataPath/…`
+that look like repo paths but never are); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
 matching `decisions/<id>.md` — blocking; inactive without a `decisions/` folder);
 **R-DEAD-SYMBOL** (a backticked composed-PascalCase token, e.g. `` `FooBarManager` ``, found
 nowhere under the code roots — to-confirm); **R-GHOST-ABSENCE** (the reverse: prose says a
@@ -136,8 +145,11 @@ INACTIVE without that config — the framework never hardcodes a project's code 
 | `paths…` | limits the scan to these paths/files | whole corpus if omitted and `--staged`/`--diff` also absent → see `gather()` |
 | `--staged` | scans **staged** git content instead of disk | disabled |
 | `--diff` | scans **modified-but-unstaged** `.md` files | disabled |
+| *(settings)* `doc-refs.ignore-prefixes` | token prefixes never treated as repo paths (R-DEAD-PATH only) | `[]` |
 
-**Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING".
+**Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
+(including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
+channel checks).
 
 **Template exemption:** an example path (never meant to exist — naming template, config not
 yet created by the project…) escapes the scan via an explicit **HTML marker in

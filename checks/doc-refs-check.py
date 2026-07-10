@@ -9,6 +9,12 @@ Rules:
                   one `/` + an extension) cited in a `.md` that does not/no longer exists.
                   Severity via git: a path with history = existed then disappeared ->
                   BLOCKING; never created -> TO-CONFIRM (might be planned, or a typo).
+                  Backticked spans are scanned in place: a fragment that looks dead only
+                  because the real directory name contains a space (`Tools/My Dir/f.py`
+                  fragments to `Dir/f.py`) is re-anchored across the span before flagging.
+  CFG-INVALID     (BLOCKING) : `checks-config.json` present at the repo root but broken
+                  (unreadable, malformed JSON, non-object top level) — a config the user
+                  believes active is never silently ignored.
   R-DEAD-DECISION (BLOCKING) : a `D-YYYY-MM-DD-NN` id cited in a `.md` with no matching
                   `decisions/<id>.md` file. Resolved from the framework root, same as the
                   path rule above. INACTIVE (no findings) when the project has no
@@ -38,6 +44,9 @@ Exemptions (apply identically to all four rules above):
   - `NEG` word list — a line already marked "deleted/renamed/to create/…" is not flagged
     as dead by R-DEAD-PATH/R-DEAD-DECISION/R-DEAD-SYMBOL (would be redundant with the
     prose). R-GHOST-ABSENCE is the deliberate exception (see above).
+  - `doc-refs.ignore-prefixes` (`checks-config.json`, optional, default empty) — project
+    -declared prefixes for tokens that LOOK like repo paths but never are (a runtime API
+    joined to a filename, e.g. `Application.persistentDataPath/…`). R-DEAD-PATH only.
 
 Modes:
   doc-refs-check.py [paths.md…]  # explicit targets
@@ -54,6 +63,8 @@ import re
 import subprocess
 import sys
 
+import entrylib
+
 # Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -63,7 +74,12 @@ FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # frame
 DECISIONS_DIR = os.path.join(FRAMEWORK, "decisions")
 DECISIONS_INDEX = os.path.join(DECISIONS_DIR, "INDEX.md")
 
-PATH_RE = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,6}")
+# Final segment: up to 16 chars after the last dot (a Unity package id like
+# `com.nobi.roundedcorners` is a legitimate path tail, the old {1,6} bound truncated it
+# to a ghost token `…rounde`). The lookahead refuses to stop mid-word or mid-package
+# (`(?!\.?[A-Za-z0-9])`: neither an alnum continuation nor a further `.segment`), while a
+# sentence-final dot (`see Docs/x.md.`) still ends the token cleanly.
+PATH_RE = re.compile(r"(?:[\w.\-]+/)+[\w.\-]+\.[A-Za-z0-9]{1,16}(?!\.?[A-Za-z0-9])")
 DECISION_RE = re.compile(r"D-\d{4}-\d{2}-\d{2}-\d{2}")
 CODE_SPAN_RE = re.compile(r"`([^`]+)`")
 # composed PascalCase: first char upper, >=4 chars total, >=2 uppercase letters overall
@@ -125,10 +141,49 @@ def repo_root():
 
 REPO = repo_root()
 
+# `doc-refs.ignore-prefixes` — project-declared prefixes for tokens that look like repo
+# paths but never are (runtime API + filename, machine-local paths). Optional, additive,
+# empty by default; a broken config file surfaces as CFG-INVALID in main().
+_CFG, _CFG_ERR = entrylib.load_checks_config(FRAMEWORK)
+IGNORE_PREFIXES = tuple(p for p in entrylib.cfg_get(_CFG, ("doc-refs", "ignore-prefixes"), [])
+                        if isinstance(p, str) and p)
+
 
 def exists_somewhere(token, file_dir):
-    return any(os.path.isfile(os.path.join(base, token))
+    # os.path.exists, not isfile: a reference to a directory that exists (a package
+    # folder, an asset dir) is alive — flagging it was a false positive.
+    return any(os.path.exists(os.path.join(base, token))
                for base in (file_dir, FRAMEWORK, REPO, os.getcwd()))
+
+
+def _path_mentions(line):
+    """PATH_RE hits with their surrounding backtick span (`None` outside spans).
+
+    Spans are scanned in place so a dead-looking fragment can be re-anchored across
+    spaces by `_space_rescue`; the text outside spans is scanned with the spans removed
+    — same coverage as the previous backtick-stripping approach."""
+    pieces, last = [], 0
+    for m in CODE_SPAN_RE.finditer(line):
+        span = m.group(1)
+        for pm in PATH_RE.finditer(span):
+            yield pm.group(0), span, pm.start()
+        pieces.append(line[last:m.start()])
+        last = m.end()
+    pieces.append(line[last:])
+    for pm in PATH_RE.finditer(" ".join(pieces)):
+        yield pm.group(0), None, -1
+
+
+def _space_rescue(span, at, tok):
+    """Left-extensions of a span fragment across spaces, longest first.
+
+    A real directory name may contain a space, which PATH_RE cannot cross:
+    `Tools/My Dir/file.py` fragments to `Dir/file.py` and looks dead while the full
+    span text exists. Candidates only — the caller keeps the verdict (existence, then
+    git history)."""
+    end = at + len(tok)
+    return [span[j:end] for j in range(at)
+            if span[j] != " " and (j == 0 or span[j - 1] == " ")]
 
 
 _HISTORICAL_PATHS = None
@@ -264,11 +319,17 @@ def scan_file(path):
 
         # R-DEAD-PATH
         if not neg:
-            for tok in PATH_RE.findall(line.replace("`", " ")):
-                if TEMPLATE.search(tok) or "://" in tok or exists_somewhere(tok, file_dir):
+            for tok, span, at in _path_mentions(line):
+                if TEMPLATE.search(tok) or "://" in tok or exists_somewhere(tok, file_dir) \
+                        or any(tok.startswith(p) for p in IGNORE_PREFIXES):
                     continue
-                sev = "BLOCKING" if had_history(tok) else "TO-CONFIRM"
-                findings.append((sev, path, i, "R-DEAD-PATH", f"path not found: {tok}"))
+                rescue = _space_rescue(span, at, tok) if span is not None else []
+                if any(exists_somewhere(c, file_dir) for c in rescue):
+                    continue  # the real directory name contains a space; reference alive
+                dead = next((c for c in rescue if had_history(c)), None) \
+                    or (tok if had_history(tok) else None)
+                sev, shown = ("BLOCKING", dead) if dead else ("TO-CONFIRM", tok)
+                findings.append((sev, path, i, "R-DEAD-PATH", f"path not found: {shown}"))
 
         # R-DEAD-DECISION — the decisions/INDEX.md file IS the registry, skip it (avoids
         # duplicating decisions-check.py's own file<->index concordance rule).
@@ -333,6 +394,9 @@ def main():
     a = ap.parse_args()
 
     findings = []
+    if _CFG_ERR:
+        findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
+                         "CFG-INVALID", _CFG_ERR))
     for f in gather(a):
         findings += scan_file(f)
 
