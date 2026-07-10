@@ -168,17 +168,26 @@ def cmd_tier1(cfg_err: str | None = None) -> int:
     if cfg_err:
         print(f"  [!!] CFG-INVALID: {cfg_err}")
         worst = 2
+    # The checks are independent of each other: all launched together, collected in
+    # TIER1 order — identical output, wall time = the slowest child instead of the sum.
+    started = []
     for label, script in TIER1:
         path = os.path.join(CHECKS, script)
-        if not os.path.isfile(path):
+        proc = None
+        if os.path.isfile(path):
+            proc = subprocess.Popen([sys.executable, path], cwd=ROOT,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, encoding="utf-8", errors="replace")
+        started.append((label, script, proc))
+    for label, script, proc in started:
+        if proc is None:
             print(f"  ⨯ {label}: {script} missing — skipped")
             continue
-        r = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True,
-                           text=True, encoding="utf-8", errors="replace")
-        worst = max(worst, r.returncode)
-        mark = "OK " if r.returncode == 0 else ("?? " if r.returncode == 1 else "!! ")
-        tail = (r.stdout.strip().splitlines() or [""])[-1]
-        print(f"  [{mark}] {label}: exit={r.returncode}  {tail}")
+        out, _ = proc.communicate()
+        worst = max(worst, proc.returncode)
+        mark = "OK " if proc.returncode == 0 else ("?? " if proc.returncode == 1 else "!! ")
+        tail = (out.strip().splitlines() or [""])[-1]
+        print(f"  [{mark}] {label}: exit={proc.returncode}  {tail}")
     verdict = "OK" if worst == 0 else ("drift(s)" if worst >= 2 else "OK (to confirm)")
     print(f"\nTier 1 verdict: {verdict}.")
     return worst

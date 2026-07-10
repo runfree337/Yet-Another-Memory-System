@@ -104,33 +104,39 @@ EXTRA_COUNTS = {
 }
 
 
-def _json_findings(cmd: list[str]):
-    """Reruns `cmd` + `--json`, returns the `Finding` (dict) list — `None` if the check
-    doesn't support `--json`, if the output isn't a JSON list, or on any other error
-    (timeout, script missing…). Never raises — this is an enrichment, never a blocking
-    path."""
+def _spawn(cmd: list[str]):
+    """Started child with captured output, `None` if it cannot even start. The tier-1
+    checks are independent of each other: they all launch together and get collected in
+    `TIER1` order — identical output, wall time = the slowest child instead of the sum."""
     try:
-        proc = subprocess.run(cmd + ["--json"], capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=30)
-        data = json.loads(proc.stdout)
-        return data if isinstance(data, list) else None
-    except Exception:
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace")
+    except OSError:
         return None
 
 
-def _channel_counts(label: str, cmd: list[str]) -> dict:
+def _collect_counts(label: str, proc) -> dict:
     """`{rule: n}` counters for the rules useful to this channel's tier 2 (see
-    `EXTRA_COUNTS`). `{}` if the channel has no counters defined, or if
-    `_json_findings` fails — then silently falls back to the current count (exit code +
-    last line)."""
+    `EXTRA_COUNTS`), from the already-started `--json` rerun. `{}` if the channel has no
+    counters defined, if the check doesn't support `--json`, or on any other error
+    (timeout, script missing…) — never raises, this is an enrichment, never a blocking
+    path; the caller silently falls back to the coarse count (exit code + last line)."""
     rules = EXTRA_COUNTS.get(label)
-    if not rules:
+    if proc is None or not rules:
         return {}
-    findings = _json_findings(cmd)
-    if findings is None:
+    try:
+        out, _ = proc.communicate(timeout=30)
+        data = json.loads(out)
+        if not isinstance(data, list):
+            return {}
+    except Exception:
+        try:
+            proc.kill()
+        except OSError:
+            pass
         return {}
     return {
-        rule: sum(1 for f in findings if isinstance(f, dict) and f.get("rule") == rule)
+        rule: sum(1 for f in data if isinstance(f, dict) and f.get("rule") == rule)
         for rule in rules
     }
 
@@ -141,14 +147,20 @@ def run_tier1(as_json: bool) -> int:
     if _CFG_ERR:
         results.append({"channel": "config", "code": 2, "summary": f"CFG-INVALID: {_CFG_ERR}"})
         worst = 2
-    for label, cmd in TIER1:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
+    started = [(label, cmd, _spawn(cmd),
+                _spawn(cmd + ["--json"]) if label in EXTRA_COUNTS else None)
+               for label, cmd in TIER1]
+    for label, cmd, proc, jproc in started:
+        if proc is None:
+            worst = max(worst, 2)
+            results.append({"channel": label, "code": 2, "summary": "check failed to start"})
+            continue
+        out, _ = proc.communicate()
         code = proc.returncode
         worst = max(worst, code)
-        tail = (proc.stdout.strip().splitlines() or [""])[-1]
+        tail = (out.strip().splitlines() or [""])[-1]
         entry = {"channel": label, "code": code, "summary": tail}
-        counts = _channel_counts(label, cmd)
+        counts = _collect_counts(label, jproc)
         if counts:
             entry["counts"] = counts
         results.append(entry)

@@ -22,5 +22,10 @@
   "guards": {
     "extra-watched-files": [],
     "extra-secret-allowlist-paths": []
+  },
+
+  "_doc-refs": "R-DEAD-PATH tuning for `checks/doc-refs-check.py`. `ignore-prefixes` = prefixes of tokens that LOOK like repo paths but never are — typically a runtime API joined to a filename (`Application.persistentDataPath/save.txt` in a Unity project) or a machine-local path cited in a guide. Additive and narrow: a listed prefix silences R-DEAD-PATH for matching tokens only, nothing else.",
+  "doc-refs": {
+    "ignore-prefixes": []
   }
 }
