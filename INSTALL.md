@@ -141,6 +141,14 @@ flowchart TD
    - **git**: `pre-commit`;
    - **CI**: a job that fails if a check exits ≠ 0;
    - **manual**: nothing wired, run by hand before closing a work item.
+   > **Don't forget the SKILL layer.** The adapter also ships the semantic-audit entry
+   > points as templates — `adapters/claude-code/skills/decisions-audit.md`,
+   > `memory-audit.md`, `index-eval.md`. Hooks wire the *deterministic* checks; these
+   > skills are how a user *invokes tier 2* (`--plan`/`--merge` batching, the judgment
+   > rubrics). Materialize each one as `.claude/skills/<name>/SKILL.md` in the host repo
+   > (thin glue pointing at the canonical `checks/*.md` rubrics — never a second copy of
+   > the scale). A method install that stops at scripts + hooks leaves tier 2 with no
+   > entry point — measured on a real adoption.
    *Installer:* for Claude Code, **ready-made** hooks already exist in
    `adapters/claude-code/hooks/` (`SessionStart` sweep, `Stop` report, security guards,
    `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook **now stamps all three channels**
@@ -202,6 +210,12 @@ must decrease monotonically), and at the end (Definition of Done = every channel
   migrated corpus; a fork that crashes or flags everything *because the formats moved on* is
   proof of obsolescence, not of a coverage gap. A project-specific control with no canon
   equivalent stays (the project bringing its own checks is the normal case, not a conflict).
+  ⚠️ The parity proof must cover all **three layers** of what gets removed, not just the
+  first: the **script** (canon `checks/*.py` covers it), the **hook wiring** (wrappers point
+  at the canon), and the **skill / entry point** (the removed folder often also carried the
+  user-invocable tier-2 recipe — its replacement lives in `adapters/<tool>/skills/`, see
+  step 4 of the install). Measured failure mode: folders removed against a script-level
+  proof only, and the semantic audit was left with no way to be invoked.
 
 Suggested order (each step ends on its own green check + one commit): tooling → backlog →
 decisions → features → memory shell → dead references → tooling switch + close with a
