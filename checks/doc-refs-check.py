@@ -96,6 +96,9 @@ NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a
        "deleted", "removed", "to create", "to port", "renamed", "upcoming", "later",
        "moved", "future", "does not exist", "doesn't exist", "not yet", "not created",
        "planned")
+# Same membership test, one compiled alternation instead of 37 substring scans per line
+# (measured ~0.14 s on a 355-file corpus — the single hottest spot of a clean run).
+NEG_RE = re.compile("|".join(re.escape(w) for w in NEG))
 
 # Trigger words for R-GHOST-ABSENCE — prose claiming a symbol is missing/not yet built.
 # Deliberately overlaps NEG (bilingual spirit, same idea) but is its own list: this rule
@@ -315,10 +318,11 @@ def scan_file(path):
         if fenced or i in exempt:
             continue
         low = line.lower()
-        neg = any(m in low for m in NEG)
+        neg = NEG_RE.search(low) is not None
 
-        # R-DEAD-PATH
-        if not neg:
+        # R-DEAD-PATH — the "/" gate skips the span scan on the many lines that cannot
+        # contain a path token at all (PATH_RE requires at least one slash).
+        if not neg and "/" in line:
             for tok, span, at in _path_mentions(line):
                 if TEMPLATE.search(tok) or "://" in tok or exists_somewhere(tok, file_dir) \
                         or any(tok.startswith(p) for p in IGNORE_PREFIXES):

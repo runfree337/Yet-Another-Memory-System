@@ -303,7 +303,8 @@ python3 checks/capture-policy-check.py
 
 ### `decisions-audit.py`
 **Intent:** orchestrator for the **decisions journal** — checks nothing itself, chains/aggregates
-the 4 scripts above and drives the Tier 1 → Tier 2 cycle. Renamed from `memory-audit.py`: its
+the 4 scripts above (launched **concurrently**, collected in order: wall time = the slowest
+child, not the sum) and drives the Tier 1 → Tier 2 cycle. Renamed from `memory-audit.py`: its
 real scope is the decisions journal, not the whole memory — see `memory-audit.py` below
 for the multi-channel orchestrator. Four mutually exclusive modes (priority order:
 `--report` > `--merge` > `--plan` > `--tier1` > *default = both*).
@@ -332,7 +333,8 @@ python3 checks/decisions-audit.py --report                      # OS cron, headl
 ### `memory-audit.py`
 **Intent:** **multi-channel** orchestrator (Feature + Decision + Memory, `WORKFLOW.md §The
 three memories`) — chains `feature-map-check.py`, `decisions-audit.py --tier1` (which
-already covers decisions/doc/index/backlog), `memory-check.py` and `capture-policy-check.py`,
+already covers decisions/doc/index/backlog), `memory-check.py` and `capture-policy-check.py`
+(all launched **concurrently**, collected in channel order — wall time = the slowest child),
 summarizes per channel. No
 `--plan`/`--merge`/`--report` of its own: only the Decision channel accumulates enough to
 justify splitting into batches — delegated to `decisions-audit.py`. Feature and Memory are reread
