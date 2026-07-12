@@ -86,8 +86,9 @@ flowchart TD
    > (`checks-config.example.json`, `capture-policy.example.json`,
    > `index/index-config.example.json` with its `index/` folder): step 3 and several check
    > hints say "copy `<name>.example.json` to `<name>.json`" — that instruction must point
-   > at a file that exists in the host repo. Only `checks/index-eval/` (the framework's own
-   > method-evaluation harness and its tests) is safe to leave behind.
+   > at a file that exists in the host repo. Only the framework's own test/eval harnesses —
+   > `checks/index-eval/` (method-evaluation) and the `checks/tests/` / `hooks/tests/` unit
+   > tests — are safe to leave behind.
    > **Placement assumption — framework at the project root.** The Python scripts locate
    > their data relative to their own file (`checks/..` = framework root), while the
    > adapter hooks `cd` to the **project** root (`CLAUDE_PROJECT_DIR`) and call
@@ -159,7 +160,11 @@ flowchart TD
    counts as consultation — plus its active half `index-nudge.sh`, a `PostToolUse(Grep|Glob)`
    hook that, on the first broad sweep of a covered zone in an unconsulted session, injects a
    note *next to* the raw results pointing to the index and the matching entries with their
-   `updated` dates — never instead of them): the
+   `updated` dates — never instead of them; and the two **memory-graph** nudges built on the
+   derived graph over the four channels: `edit-nudge.sh` (`PreToolUse(Write|Edit)` →
+   `memory-graph.py --mode covers`, surfacing the fiche/decision that governs a file *before*
+   it's edited) and, chained onto the same `PostToolUse(Grep|Glob)` trigger as index-nudge, its
+   `--mode match` half (which decisions/features match the search terms)): the
    installer **references** them in `settings.json` instead of regenerating them from scratch. For `pre-commit` (git)
    or CI, it generates the **glue fragment specific to the detected host** — never wiring imposed.
 
@@ -183,7 +188,13 @@ flowchart TD
         only if the report recommends it, then **deletes** the report.
      → the audit "runs while you're away" (deterministic) **and** the LLM spend stays under
      **human control**. *(CI-only variant: a scheduled job with an API key can do tier 2 itself
-     — more setup, real API cost.)*
+     — more setup, real API cost.)* ⚠️ The OS-cron half assumes a **persistent local machine**;
+     for a team working in **ephemeral remote sessions** (a fresh container per session, where a
+     gitignored report dies with the container), swap the producer for a **scheduled agent
+     session** that runs tier 1 + (on the Volume trigger) tier 2 by batches and hands back a
+     **proposal branch** instead of a local file — same Safeguard, human ratifies. Prompt:
+     `adapters/claude-code/routines/audit-decisions.md`; rationale + choice criterion:
+     `checks/README.md §Semantic`.
    - **On demand** — the user runs the skill whenever they want.
    In every case it **reports**; pruning stays **ratified by a human** (never automatic
    pruning — `decisions/README.md §pruning`, `MEMORY.md §Provenance`).
