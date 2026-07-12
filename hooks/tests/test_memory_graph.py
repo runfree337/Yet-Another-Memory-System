@@ -177,6 +177,43 @@ class TestPrefilterCache(GraphFixture):
         self.assertIsNone(self.mod.load_prefilter_cache(cache_path))
 
 
+class TestChannelsBase(unittest.TestCase):
+    """Channels nested under a subdir (channels-base), e.g. a project keeping
+    its memory in Docs/decisions/ — the layout TheUndeathCurse uses."""
+
+    def setUp(self):
+        self.mod = _load_module()
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.root, ignore_errors=True))
+        _write(os.path.join(self.root, "checks-config.json"),
+               json.dumps({"memory-graph": {"channels-base": "Docs", "self-extra-dirs": [".claude"]}}))
+        _write(os.path.join(self.root, "Docs/features/f.md"),
+               "---\nid: f\ncreated: 2026-07-01\nupdated: 2026-07-11\n---\n"
+               "**Role:** Owner.\n**Code:** `src/Widget.cs`.\n")
+        _write(os.path.join(self.root, "Docs/decisions/INDEX.md"),
+               "# Decisions\n## Active\n- [D-2026-07-11-02](D-2026-07-11-02.md) — x · y.\n")
+        _write(os.path.join(self.root, "Docs/decisions/D-2026-07-11-02.md"),
+               "---\nid: D-2026-07-11-02\nstatus: active\nupdated: 2026-07-11\n---\n**Decision**\n")
+
+    def test_graph_finds_nested_channels(self):
+        nodes, _ = self.mod.load_graph(self.root)
+        self.assertIn("f", nodes)
+        self.assertIn("D-2026-07-11-02", nodes)
+        self.assertEqual(nodes["f"]["path"], "Docs/features/f.md")
+
+    def test_covers_resolves_under_base(self):
+        hits = self.mod.cmd_covers(self.root, "src/Widget.cs")
+        self.assertIn("f", [h[1] for h in hits])
+
+    def test_self_suppression_follows_base_and_extra_dirs(self):
+        self_dirs, self_files = self.mod.resolve_self(self.mod.load_config(self.root))
+        self.assertIn("Docs/decisions", self_dirs)
+        self.assertIn(".claude", self_dirs)             # from self-extra-dirs
+        self.assertIn("Docs/FEATURE_MAP.md", self_files)
+        self.assertTrue(self.mod.is_self_path("Docs/decisions/D-1.md", self_dirs, self_files))
+        self.assertFalse(self.mod.is_self_path("src/Widget.cs", self_dirs, self_files))
+
+
 class TestHookAdapter(GraphFixture):
     def test_self_suppression_on_channel_file(self):
         note, key = self.mod.build_covers_note(

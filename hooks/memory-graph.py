@@ -34,9 +34,13 @@ Keeping it fast enough to do this on every call is a feature, not a corner cut
 — a stored graph would drift the moment a human hand-edits a frontmatter field
 without re-running a build step.
 
-AGNOSTIC by construction. Two things a specific project may vary are read from
-config, never hardcoded:
+AGNOSTIC by construction. A few things a specific project may vary are read
+from config (`checks-config.json → memory-graph`), never hardcoded:
 
+  - **Channel location** (`channels-base`, default `""` = repo root) — the
+    subdir the four channels live under, for a project that nests its memory
+    (e.g. `"Docs"` → `Docs/decisions/`…). Self-suppression follows it, and
+    `self-extra-dirs` overrides the framework tooling dirs it also suppresses.
   - **Cited paths** are extracted from **backticked spans that contain a `/`**
     (`FEATURE_MAP.md §An entry's body` fences code paths in backticks). No
     hardcoded repo root is assumed — a path is whatever a fiche backticks as
@@ -103,10 +107,11 @@ for direct, deliberate lookups):
     "nothing found" hook message would be a permanent, worthless tax on
     every Write/Edit/Grep/Glob call in the repo.
   - **Self-suppression.** Never nudge when the edited/searched target is
-    itself under `decisions/`, `features/`, `memory/`, `backlog/`, `checks/`,
-    `hooks/` or `adapters/`, or is `FEATURE_MAP.md`/`MEMORY.md` — someone
-    already inside a memory channel or the framework tooling doesn't need to
-    be told the memory graph exists.
+    itself a memory channel dir (`decisions/`…, under `channels-base`), a
+    channel index (`FEATURE_MAP.md`/`MEMORY.md`), or a framework tooling dir
+    (`checks/`/`hooks/`/`adapters/` by default, or `self-extra-dirs`) — someone
+    already inside a memory channel or the tooling doesn't need to be told the
+    memory graph exists.
   - **Once per target per session.** `--marker <file>` dedups: for `covers`
     the target is the edited path; for `match` it's the top-ranked node id
     (mirrors `index-nudge.py`'s zone marker). The marker is written only
@@ -137,11 +142,16 @@ FEATURES_DIR = "features"
 MEMORY_DIR = "memory"
 BACKLOG_DIR = "backlog"
 
-# Self-suppression roots for the hook adapters only (see module docstring): the
-# four memory channels, their two top-level index files, and the framework's own
-# tooling dirs.
-SELF_DIRS = ("decisions", "features", "memory", "backlog", "checks", "hooks", "adapters")
-SELF_FILES = ("FEATURE_MAP.md", "MEMORY.md")
+# Channel directory + index-file names (repo-relative, BEFORE any channels-base
+# prefix). A project that nests its memory under a subdir sets
+# `checks-config.json → memory-graph.channels-base` (e.g. "Docs") and every
+# channel path resolves under it — see `_join_base` / `resolve_self`.
+CHANNEL_DIR_NAMES = ("decisions", "features", "memory", "backlog")
+CHANNEL_INDEX_FILES = ("FEATURE_MAP.md", "MEMORY.md")
+# Extra self-suppression roots (the framework's own tooling) — configurable via
+# `memory-graph.self-extra-dirs` for a project whose tooling lives elsewhere
+# (e.g. a Claude Code project keeping its hooks under `.claude/`).
+DEFAULT_SELF_EXTRA_DIRS = ("checks", "hooks", "adapters")
 
 MAX_ENTRIES = 3
 DECISION_ID_RE = re.compile(r'^D-\d{4}-\d{2}-\d{2}-\d+\.md$')
@@ -166,8 +176,10 @@ IDENT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]{2,})(?:\.[A-Za-z0-9]+)?$')
 
 def load_config(root):
     """`checks-config.json → memory-graph` block, or `{}` on any absence/error.
-    The only tunable today is `class-file-extensions` (see module docstring);
-    a broken config must never crash a nudge, so every failure degrades to the
+    Tunables: `class-file-extensions` (covers #2/#3 opt-in), `channels-base`
+    (subdir the four channels live under, default repo root), `self-extra-dirs`
+    (extra self-suppression roots), `code-roots` (ambiguity-guard scan scope).
+    A broken config must never crash a nudge, so every failure degrades to the
     agnostic defaults."""
     try:
         with open(os.path.join(root, "checks-config.json"), encoding="utf-8", errors="replace") as fh:
@@ -191,6 +203,35 @@ def class_file_extensions(cfg):
         if e:
             out.add(e)
     return out
+
+
+def channels_base(cfg):
+    """Repo-relative subdir the four memory channels live under (e.g. `"Docs"`
+    for a project that keeps them in `Docs/decisions/`…), or `""` = repo root
+    (the framework's own layout). Normalized: leading/trailing slashes stripped."""
+    return str(cfg.get("channels-base") or "").strip().strip("/")
+
+
+def _join_base(base, p):
+    """Prefix a repo-relative channel path `p` with `base` (a channels-base),
+    or return it unchanged when `base` is empty."""
+    base = (base or "").strip().strip("/")
+    return base + "/" + p if base else p
+
+
+def resolve_self(cfg):
+    """`(self_dirs, self_files)` for the self-suppression guard, honoring
+    `channels-base` and `self-extra-dirs`: the four channel dirs and the two
+    index files under the configured base, plus the framework tooling dirs
+    (default `checks`/`hooks`/`adapters`, overridable)."""
+    base = channels_base(cfg)
+    chan = tuple(_join_base(base, d) for d in CHANNEL_DIR_NAMES)
+    extra = cfg.get("self-extra-dirs")
+    if not isinstance(extra, list):
+        extra = list(DEFAULT_SELF_EXTRA_DIRS)
+    extra = tuple(str(e).strip().strip("/") for e in extra if str(e).strip())
+    self_files = tuple(_join_base(base, f) for f in CHANNEL_INDEX_FILES)
+    return chan + extra, self_files
 
 
 # ---------------------------------------------------------------------------
@@ -244,11 +285,12 @@ def is_contained(target_n, cited):
     return target_n == cited or target_n.startswith(cited + "/")
 
 
-def is_self_path(path_n):
-    """Hook-adapter-only self-suppression guard (see module docstring)."""
-    if path_n in SELF_FILES:
+def is_self_path(path_n, self_dirs, self_files):
+    """Hook-adapter-only self-suppression guard (see module docstring).
+    `self_dirs`/`self_files` come from `resolve_self` — channels-base aware."""
+    if path_n in self_files:
         return True
-    return any(path_n == d or path_n.startswith(d + "/") for d in SELF_DIRS)
+    return any(path_n == d or path_n.startswith(d + "/") for d in self_dirs)
 
 
 def parse_frontmatter(text):
@@ -328,7 +370,7 @@ def extract_classes(text):
 # path string for cite-path.
 # ---------------------------------------------------------------------------
 
-def load_decision_index(root):
+def load_decision_index(root, base=""):
     """Parse `decisions/INDEX.md` entry lines into
     id -> {"title": short_title, "tags": [...], "section": "active"|"archived"}.
     Only `- [id](path) — <rest>` lines count; the short title is `<rest>` up
@@ -339,7 +381,7 @@ def load_decision_index(root):
     yields empty tag lists."""
     info = {}
     try:
-        with open(os.path.join(root, DECISIONS_INDEX), encoding="utf-8", errors="replace") as fh:
+        with open(os.path.join(root, _join_base(base, DECISIONS_INDEX)), encoding="utf-8", errors="replace") as fh:
             text = fh.read()
     except OSError:
         return info
@@ -362,14 +404,15 @@ def load_decision_index(root):
     return info
 
 
-def load_decisions(root):
+def load_decisions(root, base=""):
     """`decisions/D-*.md` frontmatter (id, status, links, replaces,
     replaced-by) merged with the INDEX's short title + tags. No body parsing:
     a decision contributes NO `cite-path` edges (see module docstring) — only
     its frontmatter fields decide its edges."""
     nodes, edges = {}, []
-    index_info = load_decision_index(root)
-    ddir = os.path.join(root, DECISIONS_DIR)
+    index_info = load_decision_index(root, base)
+    ddir_rel = _join_base(base, DECISIONS_DIR)
+    ddir = os.path.join(root, ddir_rel)
     try:
         names = sorted(f for f in os.listdir(ddir) if DECISION_ID_RE.match(f))
     except OSError:
@@ -392,7 +435,7 @@ def load_decisions(root):
             "section": idx.get("section", "active"),
             "status": fm.get("status", ""),
             "updated": fm.get("updated", ""),
-            "path": DECISIONS_DIR + "/" + name,
+            "path": ddir_rel + "/" + name,
             "cites": [],
         }
         for lid in fm.get("links", []):
@@ -405,13 +448,14 @@ def load_decisions(root):
     return nodes, edges
 
 
-def load_features(root):
+def load_features(root, base=""):
     """`features/*.md` frontmatter (id, links) + the `**Role:**` line (used as
     the node's short title) + every backticked path cited anywhere in the body
     → `cite-path` edges. Backticked bare identifiers are also collected
     (`classes`), consumed only by covers #2 when the project opts in."""
     nodes, edges = {}, []
-    fdir = os.path.join(root, FEATURES_DIR)
+    fdir_rel = _join_base(base, FEATURES_DIR)
+    fdir = os.path.join(root, fdir_rel)
     try:
         names = sorted(f for f in os.listdir(fdir) if f.endswith(".md"))
     except OSError:
@@ -434,7 +478,7 @@ def load_features(root):
             "id": fid,
             "title": role,
             "updated": fm.get("updated", ""),
-            "path": FEATURES_DIR + "/" + name,
+            "path": fdir_rel + "/" + name,
             "cites": cites,
             "classes": classes,
         }
@@ -445,7 +489,7 @@ def load_features(root):
     return nodes, edges
 
 
-def load_memory(root):
+def load_memory(root, base=""):
     """`memory/*.md` frontmatter (id, links) only. The channel may be empty
     (`memory/` may not even exist yet) — this must degrade to empty
     nodes/edges without raising. No `cite-path` edges (same rule as decisions
@@ -454,7 +498,8 @@ def load_memory(root):
     readable `neighbors`/`match` display — the spec for this channel names no
     title source, so this is a convenience, not a contract."""
     nodes, edges = {}, []
-    mdir = os.path.join(root, MEMORY_DIR)
+    mdir_rel = _join_base(base, MEMORY_DIR)
+    mdir = os.path.join(root, mdir_rel)
     try:
         names = sorted(f for f in os.listdir(mdir) if f.endswith(".md"))
     except OSError:
@@ -474,7 +519,7 @@ def load_memory(root):
             "id": mid,
             "title": m.group(1).strip() if m else "",
             "updated": fm.get("updated", ""),
-            "path": MEMORY_DIR + "/" + name,
+            "path": mdir_rel + "/" + name,
             "cites": [],
         }
         for lid in fm.get("links", []):
@@ -482,7 +527,7 @@ def load_memory(root):
     return nodes, edges
 
 
-def load_backlog(root):
+def load_backlog(root, base=""):
     """`backlog/*/STATE.md` frontmatter (id, title, status, after, docs) only
     — no body parsing. `docs:` lists doc filenames colocated with `STATE.md`;
     each is resolved here to a repo-relative path and becomes a `cite-path`
@@ -490,7 +535,8 @@ def load_backlog(root):
     self-suppression guard makes them unreachable via `covers` from a live edit
     — they still matter for `neighbors`)."""
     nodes, edges = {}, []
-    bdir = os.path.join(root, BACKLOG_DIR)
+    bdir_rel = _join_base(base, BACKLOG_DIR)
+    bdir = os.path.join(root, bdir_rel)
     try:
         subdirs = sorted(d for d in os.listdir(bdir) if os.path.isdir(os.path.join(bdir, d)))
     except OSError:
@@ -508,14 +554,14 @@ def load_backlog(root):
         fm, _body = parse_frontmatter(text)
         bid = fm.get("id") or d
         docs = fm.get("docs", [])
-        cites = [BACKLOG_DIR + "/" + d + "/" + doc for doc in docs]
+        cites = [bdir_rel + "/" + d + "/" + doc for doc in docs]
         nodes[bid] = {
             "type": "backlog",
             "id": bid,
             "title": fm.get("title", ""),
             "status": fm.get("status", ""),
             "updated": fm.get("updated", ""),
-            "path": BACKLOG_DIR + "/" + d + "/STATE.md",
+            "path": bdir_rel + "/" + d + "/STATE.md",
             "cites": cites,
         }
         for aid in fm.get("after", []):
@@ -529,8 +575,9 @@ def load_graph(root):
     """The full derived graph — always recomputed, never cached (module
     invariant)."""
     nodes, edges = {}, []
+    base = channels_base(load_config(root))
     for loader in (load_decisions, load_features, load_memory, load_backlog):
-        n, e = loader(root)
+        n, e = loader(root, base)
         nodes.update(n)
         edges.extend(e)
     return nodes, edges
@@ -624,12 +671,18 @@ _WALK_SKIP_DIRS = frozenset((".git", "node_modules", "__pycache__", ".venv", "ve
 
 
 def _code_roots(root_abs):
-    """The directories to scan for the ambiguity guard: the `roots` declared
-    in `index/index-config.json` (the project's own code roots), resolved to
-    absolute paths, or the whole repo when none are configured. Reading the
-    index config keeps the scan narrow on a project that declares its roots;
-    the repo-wide fallback keeps the guard correct (never silently no-op)
-    when it doesn't."""
+    """The directories to scan for the ambiguity guard, in preference order:
+    `memory-graph.code-roots` (checks-config.json), then the `roots` declared
+    in `index/index-config.json` (the project's own code roots), then the whole
+    repo when neither is configured. Narrowing the scan keeps the guard cheap
+    on a project that declares its roots; the repo-wide fallback keeps it
+    correct (never silently no-op) when it doesn't."""
+    mg_roots = load_config(root_abs).get("code-roots")
+    if isinstance(mg_roots, list):
+        dirs = [os.path.join(root_abs, str(r)) for r in mg_roots if isinstance(r, str)]
+        dirs = [d for d in dirs if os.path.isdir(d)]
+        if dirs:
+            return dirs
     try:
         with open(os.path.join(root_abs, "index/index-config.json"), encoding="utf-8", errors="replace") as fh:
             cfg = json.load(fh)
@@ -788,7 +841,8 @@ def build_covers_note(root, root_abs, tool_input, class_exts):
         return "", ""
 
     target_n = norm_path(file_path, root_abs)
-    if is_self_path(target_n):
+    self_dirs, self_files = resolve_self(load_config(root))
+    if is_self_path(target_n, self_dirs, self_files):
         return "", ""
 
     hits = cmd_covers(root, file_path, class_exts)
@@ -914,7 +968,8 @@ def build_covers_note_prefiltered(root, root_abs, tool_input, class_exts, cache_
         return "", ""
 
     target_n = norm_path(file_path, root_abs)
-    if is_self_path(target_n):
+    self_dirs, self_files = resolve_self(load_config(root))
+    if is_self_path(target_n, self_dirs, self_files):
         try:
             os.remove(cache_path)
         except OSError:
@@ -954,8 +1009,10 @@ def build_match_note(root, root_abs, tool_input):
     ("", "") when nothing should fire. `marker_key` is the top-ranked node
     id (mirrors index-nudge.py's per-zone marker, but per-node here)."""
     path = tool_input.get("path") or ""
-    if path and is_self_path(norm_path(path, root_abs)):
-        return "", ""
+    if path:
+        self_dirs, self_files = resolve_self(load_config(root))
+        if is_self_path(norm_path(path, root_abs), self_dirs, self_files):
+            return "", ""
 
     pattern = tool_input.get("pattern") or ""
     terms = [t for t in re.split(r"[^A-Za-z0-9_]+", pattern) if t]

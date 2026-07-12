@@ -29,8 +29,11 @@
     "ignore-prefixes": []
   },
 
-  "_memory-graph": "Opt-in for the `hooks/memory-graph.py covers` class-name correspondence. `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file convention), e.g. [\".cs\"] for a Unity/C# project, [\".py\"] where a module is named after its class. Empty (default) → covers matches by cited-path containment only, fully language-agnostic. Turning it on lets a fiche/decision that cites a symbol (backticked) cover the file whose basename is that symbol.",
+  "_memory-graph": "Settings for `hooks/memory-graph.py`. `channels-base` = the subdir the four memory channels live under, for a project that nests them (e.g. \"Docs\" → Docs/decisions/…); \"\" (default) = repo root, the framework's own layout. `self-extra-dirs` = tooling dirs to also self-suppress nudges on (default [\"checks\",\"hooks\",\"adapters\"]; a Claude Code project might use [\".claude\"]). `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file), e.g. [\".cs\"]; empty (default) → covers matches by cited-path containment only, fully language-agnostic. `code-roots` = dirs the class/tag ambiguity guard scans (default: index-config roots, else the repo).",
   "memory-graph": {
-    "class-file-extensions": []
+    "channels-base": "",
+    "self-extra-dirs": ["checks", "hooks", "adapters"],
+    "class-file-extensions": [],
+    "code-roots": []
   }
 }
