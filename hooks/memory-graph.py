@@ -328,14 +328,20 @@ def extract_paths(text):
     contains a `/`, expanding a single `{a,b,c}` alternation into one path per
     alternative (the sibling-files shorthand, e.g.
     `Scripts/UI/Screens/Camp/{CampJournalController,CampJournalCombosTab}.cs`
-    → both files). Trailing sentence punctuation (`.,;:`) is stripped; a
-    legitimate trailing `.ext` survives because the strip only removes trailing
-    punctuation chars, never interior ones. Backtick-anchored (never a
-    substring match into unrelated prose): a path is whatever a fiche fences as
-    one, which is exactly how `FEATURE_MAP.md` prescribes citing code paths."""
+    → both files). A trailing section anchor (` §Section`, e.g.
+    `doc.md §14/§15`) is truncated first — otherwise the anchor's own text
+    (which can itself contain a `/`) rides along and the span never equals the
+    real file, dropping the cite-path edge. The cut is on ` §` PRECISELY, never
+    any space: a directory name may legitimately contain spaces (a backticked
+    span is exactly how such a path is cited). Trailing sentence punctuation
+    (`.,;:`) is then stripped; a legitimate trailing `.ext` survives because
+    the strip only removes trailing punctuation chars, never interior ones.
+    Backtick-anchored (never a substring match into unrelated prose): a path is
+    whatever a fiche fences as one, which is exactly how `FEATURE_MAP.md`
+    prescribes citing code paths."""
     out = []
     for raw in BACKTICK_RE.findall(text or ""):
-        token = raw.strip().rstrip(".,;:")
+        token = raw.strip().split(" §", 1)[0].strip().rstrip(".,;:")
         if "/" not in token:
             continue  # a bare identifier, not a path — handled by extract_classes
         if "{" in token and "}" in token:

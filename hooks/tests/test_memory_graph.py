@@ -177,6 +177,24 @@ class TestPrefilterCache(GraphFixture):
         self.assertIsNone(self.mod.load_prefilter_cache(cache_path))
 
 
+class TestExtractPaths(unittest.TestCase):
+    def setUp(self):
+        self.mod = _load_module()
+
+    def test_section_anchor_is_truncated(self):
+        # A cited path with a §-anchor (whose own text can contain a `/`) must
+        # resolve to the bare file, not the whole span.
+        got = self.mod.extract_paths("see `Docs/architecture/spec.md §14/§15` and `src/a/B.cs`")
+        self.assertIn("Docs/architecture/spec.md", got)
+        self.assertIn("src/a/B.cs", got)
+        self.assertNotIn("Docs/architecture/spec.md §14/§15", got)
+
+    def test_space_in_directory_name_is_kept(self):
+        # The cut is on " §" only — a legitimate space in a dir name survives.
+        got = self.mod.extract_paths("`Art/UI/My Folder/icon.png`")
+        self.assertIn("Art/UI/My Folder/icon.png", got)
+
+
 class TestClassExtraction(unittest.TestCase):
     def setUp(self):
         self.mod = _load_module()
