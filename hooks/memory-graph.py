@@ -72,6 +72,28 @@ wired as:
     `tool_input.pattern`, split into terms; `tool_input.path`, when given,
     feeds self-suppression).
 
+Session prefilter cache (`--prefilter-cache <file>`, `covers` hook mode
+only): a pure speed optimization layered ON TOP of the exact parse below —
+it never answers a query on its own, it only decides whether the exact parse
+is worth running. `covers` fires on EVERY Write/Edit, and most edited files
+are cited by no memory at all, so without this every such edit pays a full
+four-channel parse to produce an empty result. Same family as the `--marker`
+dedup file: SESSION state, never versioned, dies with the session. On a
+target under a memory channel the cache is dropped outright (a fiche/decision
+may just have changed under our feet); otherwise a miss against its
+`prefixes`/`classes`/`tags` sets skips the parse, a possible hit falls
+through to it. Channel edits made OUTSIDE the session (a `git pull`
+mid-session) can leave it stale — accepted, this is a nudge, not a
+certificate (see `build_covers_note_prefiltered` and `compute_prefilter_sets`
+for the exact contract).
+
+Epistemic status — the absence of a nudge NEVER proves the absence of
+coverage. The graph exposes only the DECLARED map (what fiches/decisions cite
+explicitly); a fiche that omits a file it governs is a silent false negative
+("a fiche that lies is worse than none" holds by omission too). The nudge is
+a reminder, not a certificate: its silence never excuses checking coverage
+yourself when a doubt exists.
+
 Hook-adapter-only invariants (do NOT apply to the plain CLI, which is meant
 for direct, deliberate lookups):
 
@@ -518,7 +540,7 @@ def load_graph(root):
 # Commands
 # ---------------------------------------------------------------------------
 
-def cmd_covers(root, target_path, class_exts=None):
+def cmd_covers(root, target_path, class_exts=None, nodes=None):
     """Which memories cover `target_path`. Three EXACT correspondences, in
     priority order (never fuzzy):
     1. a feature/decision/backlog node with a `cite-path` edge whose path is
@@ -532,12 +554,27 @@ def cmd_covers(root, target_path, class_exts=None):
        newest decisions first.
     Decisions only count when `status: active` (an archived/revoked decision
     no longer governs the file). `class_exts` empty (the default) → only
-    correspondence #1 runs, fully agnostic. Returns up to MAX_ENTRIES
-    (type, id, title) tuples."""
+    correspondence #1 runs, fully agnostic.
+
+    Ambiguity guard on correspondences 2/3: one-symbol-per-file is a
+    convention, not a filesystem guarantee, so even when `class_exts` opts it
+    in, before EITHER kind of hit is kept the target's basename is checked
+    for uniqueness under the project's code roots (`_code_basename_counts`,
+    one `os.walk` done lazily — only if there is at least one class/tag
+    candidate to validate). Two or more files sharing that basename make the
+    class/tag correspondence unsafe: ALL class/tag hits for that basename are
+    dropped (path hits from correspondence 1 are untouched — they don't rely
+    on the basename convention at all).
+
+    `nodes`, when given, is a pre-loaded graph (caller already parsed it —
+    e.g. the `--prefilter-cache` hook path, to avoid a second `load_graph`
+    call); when omitted, this loads the graph itself. Returns up to
+    MAX_ENTRIES (type, id, title) tuples."""
     class_exts = class_exts or set()
     root_abs = os.path.abspath(root).replace("\\", "/")
     target_n = norm_path(target_path, root_abs)
-    nodes, _edges = load_graph(root)
+    if nodes is None:
+        nodes, _edges = load_graph(root)
 
     hits, seen = [], set()
 
@@ -559,18 +596,70 @@ def cmd_covers(root, target_path, class_exts=None):
     if ext.lower() in class_exts:
         stem = base[: len(base) - len(ext)]
         stem_folded = norm_text(stem)
-        for nid, node in sorted(nodes.items()):
-            if node["type"] == "feature" and stem in node.get("classes", set()):
-                add(node, nid)
+        class_hits = [
+            (nid, node) for nid, node in sorted(nodes.items())
+            if node["type"] == "feature" and stem in node.get("classes", set())
+        ]
         tagged = [
             (nid, node) for nid, node in nodes.items()
             if node["type"] == "decision" and node.get("status") == "active"
             and stem_folded in node.get("tags", [])
         ]
+        if class_hits or tagged:
+            # Lazy, once-per-call basename walk — see the ambiguity-guard
+            # paragraph in this function's docstring.
+            if _code_basename_counts(root_abs, ext.lower()).get(base, 0) > 1:
+                class_hits, tagged = [], []
+        for nid, node in class_hits:
+            add(node, nid)
         for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
             add(node, nid)
 
     return hits[:MAX_ENTRIES]
+
+
+# Directory names never worth walking for the ambiguity guard (VCS/build/deps).
+_WALK_SKIP_DIRS = frozenset((".git", "node_modules", "__pycache__", ".venv", "venv",
+                             ".tox", ".mypy_cache", ".pytest_cache", "dist", "build"))
+
+
+def _code_roots(root_abs):
+    """The directories to scan for the ambiguity guard: the `roots` declared
+    in `index/index-config.json` (the project's own code roots), resolved to
+    absolute paths, or the whole repo when none are configured. Reading the
+    index config keeps the scan narrow on a project that declares its roots;
+    the repo-wide fallback keeps the guard correct (never silently no-op)
+    when it doesn't."""
+    try:
+        with open(os.path.join(root_abs, "index/index-config.json"), encoding="utf-8", errors="replace") as fh:
+            cfg = json.load(fh)
+        roots = cfg.get("roots") or []
+        dirs = [os.path.join(root_abs, str(r)) for r in roots if isinstance(r, str)]
+        dirs = [d for d in dirs if os.path.isdir(d)]
+        if dirs:
+            return dirs
+    except (OSError, ValueError):
+        pass
+    return [root_abs]
+
+
+def _code_basename_counts(root_abs, ext):
+    """basename → count of files ending in `ext`, walked over the project's
+    code roots (`_code_roots`), for `cmd_covers`'s class/tag ambiguity guard.
+    Called at most once per `cmd_covers` invocation, and only when there's
+    actually a class/tag candidate to validate — an unconditional walk on
+    every lookup would be a needless tax on the common (single-match) case.
+    Missing/unreadable roots degrade to "nothing is ambiguous" (empty dict)
+    rather than raising — same silent-degradation discipline as the channel
+    loaders above."""
+    counts = {}
+    for base_dir in _code_roots(root_abs):
+        for dirpath, dirnames, filenames in os.walk(base_dir):
+            dirnames[:] = [d for d in dirnames if d not in _WALK_SKIP_DIRS]
+            for fn in filenames:
+                if fn.endswith(ext):
+                    counts[fn] = counts.get(fn, 0) + 1
+    return counts
 
 
 def cmd_match(root, terms):
@@ -713,6 +802,153 @@ def build_covers_note(root, root_abs, tool_input, class_exts):
     return "\n".join(lines), target_n
 
 
+PREFILTER_CACHE_KEYS = ("prefixes", "classes", "tags")
+
+
+def compute_prefilter_sets(nodes):
+    """Derive the three fast-reject sets for the `covers` session prefilter
+    cache from an already-loaded graph:
+
+    - `prefixes` — every node's raw cited path (`cites`; a cited directory OR
+      a cited file — both kept as-is). Paired with `_path_chain`'s
+      target-side walk, this is an EXACT reproduction of `is_contained` for
+      every `(target, cited)` pair — not a superset heuristic — because
+      `is_contained(target_n, cited)` is true iff `cited` equals `target_n`
+      or one of `target_n`'s ancestor directories, i.e. iff `cited` is a
+      member of `_path_chain(target_n)`. Storing the raw cite is already
+      lossless; inflating it would only add false positives (extra parses).
+    - `classes` — every feature's cited class tokens (`classes`), exact case,
+      matching `cmd_covers`'s own case-sensitive comparison.
+    - `tags` — every ACTIVE decision's INDEX tags, as-is (already lowercase by
+      convention — same assumption `cmd_covers` makes)."""
+    prefixes, classes, tags = set(), set(), set()
+    for node in nodes.values():
+        for cited in node.get("cites", []) or []:
+            cited = (cited or "").rstrip("/")
+            if cited:
+                prefixes.add(cited)
+        if node["type"] == "feature":
+            classes.update(node.get("classes", set()) or set())
+        if node["type"] == "decision" and node.get("status") == "active":
+            tags.update(node.get("tags", []) or [])
+    return {"prefixes": sorted(prefixes), "classes": sorted(classes), "tags": sorted(tags)}
+
+
+def _path_chain(path_n):
+    """`path_n` itself plus every one of its ancestor directories, deepest
+    first — e.g. `"a/b/c"` → `["a/b/c", "a/b", "a"]`. Checking membership of
+    this chain against a `prefixes` set exactly reproduces `is_contained`'s
+    equal-or-directory-prefix contract, without re-walking every node."""
+    parts = [p for p in (path_n or "").split("/") if p]
+    return ["/".join(parts[:i]) for i in range(len(parts), 0, -1)]
+
+
+def prefilter_might_cover(target_n, stem, stem_folded, cache):
+    """True when `cache` (a dict with `prefixes`/`classes`/`tags`, see
+    `compute_prefilter_sets`) does NOT rule out a `cmd_covers` hit for
+    `target_n` — i.e. a full parse might still be needed. `stem`/`stem_folded`
+    are the class-file basename (without extension) and its folded form, or
+    `""` when the class correspondence doesn't apply (non-class-ext target)."""
+    prefixes = cache.get("prefixes") or []
+    if prefixes:
+        prefix_set = set(prefixes)
+        if any(p in prefix_set for p in _path_chain(target_n)):
+            return True
+    if stem and stem in (cache.get("classes") or ()):
+        return True
+    if stem_folded and stem_folded in (cache.get("tags") or ()):
+        return True
+    return False
+
+
+def load_prefilter_cache(path):
+    """Load a `--prefilter-cache` file. Returns `None` on ANY problem
+    (missing/unreadable file, corrupt JSON, missing/malformed expected keys)
+    — the caller then falls back to a full parse, exactly as if no cache
+    existed. A cache missing a key is treated the same as corrupt (never
+    silently short-circuits every future call by handing back empty sets)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if not all(isinstance(data.get(k), list) for k in PREFILTER_CACHE_KEYS):
+        return None
+    return data
+
+
+def write_prefilter_cache(path, data):
+    """Atomic write (temp file + `os.replace`) so a crash mid-write never
+    leaves a half-written cache for the next call to trip over. The cache is
+    a pure speed optimization — ANY failure here is swallowed, never raised."""
+    tmp = "%s.tmp.%d" % (path, os.getpid())
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def build_covers_note_prefiltered(root, root_abs, tool_input, class_exts, cache_path):
+    """Session-cache-prefiltered variant of `build_covers_note`, used only
+    when the hook adapter passes `--prefilter-cache` (mode `covers` only —
+    see the module docstring's "Session prefilter cache" paragraph). Same
+    return shape as `build_covers_note`.
+
+    - No `file_path` → same no-op as the uncached path.
+    - Target under a memory channel (`is_self_path`) → drop the cache file (a
+      fiche/decision may have just changed) and stay silent.
+    - A loadable cache that rules out this target (`prefilter_might_cover` is
+      False) → stay silent WITHOUT parsing the four channels — the fast path.
+    - Otherwise (no cache, corrupt cache, or a possible hit) → the real, exact
+      `cmd_covers` parse; a freshly-built cache is written back (best-effort)
+      whenever there wasn't a usable one yet."""
+    file_path = tool_input.get("file_path") or ""
+    if not file_path:
+        return "", ""
+
+    target_n = norm_path(file_path, root_abs)
+    if is_self_path(target_n):
+        try:
+            os.remove(cache_path)
+        except OSError:
+            pass
+        return "", ""
+
+    cache = load_prefilter_cache(cache_path)
+    if cache is not None:
+        base = os.path.basename(target_n)
+        _, ext = os.path.splitext(base)
+        if ext.lower() in class_exts:
+            stem = base[: len(base) - len(ext)]
+            stem_folded = norm_text(stem)
+        else:
+            stem, stem_folded = "", ""
+        if not prefilter_might_cover(target_n, stem, stem_folded, cache):
+            return "", ""
+
+    nodes, _edges = load_graph(root)
+    hits = cmd_covers(root, file_path, class_exts, nodes=nodes)
+
+    if cache is None:
+        write_prefilter_cache(cache_path, compute_prefilter_sets(nodes))
+
+    if not hits:
+        return "", ""
+
+    lines = ["[memory-graph] Memory covering %s:" % target_n]
+    for hit in hits:
+        lines.append("- %s" % format_covers_line(hit))
+    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
+    return "\n".join(lines), target_n
+
+
 def build_match_note(root, root_abs, tool_input):
     """Returns (note_text, marker_key) for the `match` hook mode, or
     ("", "") when nothing should fire. `marker_key` is the top-ranked node
@@ -750,7 +986,11 @@ def hook_main(args):
     try:
         if args.mode == "covers":
             class_exts = class_file_extensions(load_config(args.root))
-            note, key = build_covers_note(args.root, root_abs, tool_input, class_exts)
+            if args.prefilter_cache:
+                note, key = build_covers_note_prefiltered(
+                    args.root, root_abs, tool_input, class_exts, args.prefilter_cache)
+            else:
+                note, key = build_covers_note(args.root, root_abs, tool_input, class_exts)
             event = "PreToolUse"
         elif args.mode == "match":
             note, key = build_match_note(args.root, root_abs, tool_input)
@@ -803,6 +1043,8 @@ def build_argparser():
     ap.add_argument("--mode", choices=("covers", "match"), default="",
                      help="hook mode, used with --stdin-json")
     ap.add_argument("--marker", default="", help="once-per-target-per-session dedup file (hook mode)")
+    ap.add_argument("--prefilter-cache", default="",
+                     help="session cache file to skip the full parse (covers hook mode only)")
 
     sub = ap.add_subparsers(dest="command")
 

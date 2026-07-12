@@ -111,6 +111,72 @@ class TestNeighbors(GraphFixture):
         self.assertIn(("replaces", "D-2026-01-01-01"), types)   # outgoing
 
 
+class TestAmbiguityGuard(GraphFixture):
+    def setUp(self):
+        super().setUp()
+        _write(os.path.join(self.root, "index/index-config.json"),
+               json.dumps({"roots": ["src/"], "extensions": [".cs"]}))
+        self._set_config({"class-file-extensions": [".cs"]})
+        self.exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
+        # A feature citing both the class `CombatManager` and the path.
+        _write(os.path.join(self.root, "features/combat-engine.md"),
+               "---\nid: combat-engine\ncreated: 2026-07-01\nupdated: 2026-07-11\n---\n"
+               "**Role:** Drives combat.\n**Code:** `CombatManager` at `src/combat/CombatManager.cs`.\n")
+        os.makedirs(os.path.join(self.root, "src/combat"), exist_ok=True)
+        open(os.path.join(self.root, "src/combat/CombatManager.cs"), "w").close()
+
+    def test_unique_basename_keeps_class_hit(self):
+        hits = self.mod.cmd_covers(self.root, "src/combat/CombatManager.cs", self.exts)
+        self.assertIn("combat-engine", [h[1] for h in hits])
+
+    def test_duplicate_basename_drops_class_and_tag_hits(self):
+        # A second CombatManager.cs elsewhere makes the basename ambiguous.
+        os.makedirs(os.path.join(self.root, "src/other"), exist_ok=True)
+        open(os.path.join(self.root, "src/other/CombatManager.cs"), "w").close()
+        hits = self.mod.cmd_covers(self.root, "src/combat/CombatManager.cs", self.exts)
+        ids = [h[1] for h in hits]
+        # The path-containment hit (correspondence #1) survives; the class/tag
+        # correspondences are dropped as unsafe.
+        self.assertIn("combat-engine", ids)  # kept via cite-path, not via class
+        self.assertNotIn("D-2026-07-11-02", ids)
+
+
+class TestPrefilterCache(GraphFixture):
+    def test_path_chain_reproduces_containment(self):
+        self.assertEqual(self.mod._path_chain("a/b/c"), ["a/b/c", "a/b", "a"])
+
+    def test_compute_sets_and_might_cover(self):
+        nodes, _ = self.mod.load_graph(self.root)
+        cache = self.mod.compute_prefilter_sets(nodes)
+        # A cited file is in prefixes; an unrelated sibling is ruled out.
+        self.assertTrue(self.mod.prefilter_might_cover("src/combat/CombatManager.cs", "", "", cache))
+        self.assertFalse(self.mod.prefilter_might_cover("src/combat/Unrelated.cs", "", "", cache))
+
+    def test_prefiltered_skips_and_writes_cache(self):
+        cache_path = os.path.join(self.root, "cache.json")
+        note, key = self.mod.build_covers_note_prefiltered(
+            self.root, os.path.abspath(self.root),
+            {"file_path": os.path.join(self.root, "src/combat/Unrelated.cs")}, set(), cache_path)
+        self.assertEqual((note, key), ("", ""))
+        self.assertTrue(os.path.isfile(cache_path), "an uncovered first call still primes the cache")
+
+    def test_prefiltered_self_path_invalidates_cache(self):
+        cache_path = os.path.join(self.root, "cache.json")
+        _write(cache_path, json.dumps({"prefixes": [], "classes": [], "tags": []}))
+        self.mod.build_covers_note_prefiltered(
+            self.root, os.path.abspath(self.root),
+            {"file_path": os.path.join(self.root, "decisions/D-2026-07-11-02.md")}, set(), cache_path)
+        self.assertFalse(os.path.isfile(cache_path), "editing a channel file drops the stale cache")
+
+    def test_corrupt_cache_falls_back_to_parse(self):
+        self.assertIsNone(self.mod.load_prefilter_cache("/nonexistent/path.json"))
+        cache_path = os.path.join(self.root, "bad.json")
+        _write(cache_path, "{ not json")
+        self.assertIsNone(self.mod.load_prefilter_cache(cache_path))
+        _write(cache_path, json.dumps({"prefixes": []}))  # missing keys
+        self.assertIsNone(self.mod.load_prefilter_cache(cache_path))
+
+
 class TestHookAdapter(GraphFixture):
     def test_self_suppression_on_channel_file(self):
         note, key = self.mod.build_covers_note(

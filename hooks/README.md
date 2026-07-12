@@ -65,8 +65,24 @@ exit 0 — the exact discipline `index-nudge.py` established):
 `covers` is agnostic by default (containment of a backticked cited path). Its optional
 class-name correspondence — a fiche/decision that cites a symbol whose basename equals a source
 file's — is a **project** convention (one-symbol-per-file), so it is **opt-in**:
-`checks-config.json → memory-graph.class-file-extensions` (default `[]`, off). See the script's
-module docstring for the full contract.
+`checks-config.json → memory-graph.class-file-extensions` (default `[]`, off). Even when opted
+in, an **ambiguity guard** drops the class/tag hit if two files share that basename under the
+project's code roots (the convention isn't a filesystem guarantee) — path-containment hits are
+never affected.
+
+Two things keep it honest:
+
+- **Session prefilter cache** (`covers` hook only) — since the write nudge fires on *every*
+  edit and most files are cited by nothing, `edit-nudge.sh` passes a `--prefilter-cache` (a
+  `$TMPDIR` session file, same family as `--marker`, never versioned): a target that can't
+  possibly hit is answered *without* parsing the four channels. It never answers in place of the
+  exact parse — only decides whether to run it — and self-invalidates whenever an edit touches a
+  memory channel.
+- **Epistemic status** — the *absence* of a nudge never proves the absence of coverage. The
+  graph exposes only the **declared** map; a fiche that forgot to cite a file it governs is a
+  silent false negative. The nudge is a reminder, not a certificate.
+
+See the script's module docstring for the full contract.
 
 ## Wiring per tool — what the installer materializes
 
