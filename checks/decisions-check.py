@@ -134,13 +134,17 @@ def rule_d4(path: str, body: str) -> list:
 def _index_sections() -> tuple:
     """`(ids under ## Active, ids under ## Archived)` — splits INDEX.md at the first
     `## Archiv...` line. Everything before = Active, everything after (inclusive) =
-    Archived."""
+    Archived. Only ENTRY lines (`- [<id>](…)`) count as "referenced under" a section:
+    an id merely mentioned inline (e.g. a successor cited in an archival gist, or a
+    cross-reference in another entry's invariant) is not an index entry and must not
+    trip D5."""
     if not os.path.isfile(INDEX):
         return set(), set()
     text = open(INDEX, encoding="utf-8").read()
     m = re.search(r"(?m)^##\s*Archiv", text)
     actives_text, archived_text = (text[: m.start()], text[m.start():]) if m else (text, "")
-    return set(ID_RE.findall(actives_text)), set(ID_RE.findall(archived_text))
+    entry_re = re.compile(r"(?m)^-\s*\[(" + ID_RE.pattern + r")\]\(")
+    return set(entry_re.findall(actives_text)), set(entry_re.findall(archived_text))
 
 
 def rule_d5(idv: str, path: str, meta: dict, actives_ids: set, archived_ids: set) -> list:

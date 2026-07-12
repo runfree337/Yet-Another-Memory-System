@@ -22,15 +22,18 @@
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py`, `hooks/normative-write-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
 | `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
 | `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` | <!-- template -->
-| `hooks/index-nudge.sh` | `hooks/index-nudge.py --stdin-json` (canonical logic — conditions, matching, note) | `PostToolUse(Grep\|Glob)` |
+| `hooks/index-nudge.sh` | `hooks/index-nudge.py --stdin-json` + `hooks/memory-graph.py --mode match` (both from one stdin) | `PostToolUse(Grep\|Glob)` |
+| `hooks/edit-nudge.sh` | `hooks/memory-graph.py --stdin-json --mode covers` (which memory governs the edited file) | `PreToolUse(Write\|Edit)` |
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
 | `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
+| `routines/audit-decisions.md` | prompt for a scheduled agent producing the decisions audit (ephemeral-session variant of the OS cron) | scheduled routine (weekly) |
 
 All `.sh` scripts are **silent on success**, except `security-guards.sh` (blocks with a message on
 `exit 2`, as prescribed by the guards it calls), `pre-commit-stamp.sh` (never writes as a
 blocking step — cf. `checks/README.md §Pre-commit wiring`) and `index-nudge.sh` (its whole job is
 to *speak* — a JSON `additionalContext` — but only under the strict conditions listed in its
-header, at most once per zone per session, and it never alters or blocks anything). Each script detects `python3`/`python`
+header, at most once per zone per session, and it never alters or blocks anything) and
+`edit-nudge.sh` (same speak-only job for the write side, once per target per session). Each script detects `python3`/`python`
 and resolves the repo root via `$CLAUDE_PROJECT_DIR` (provided by Claude Code) or, failing that,
 `git rev-parse --show-toplevel` — no hardcoded absolute path.
 
@@ -87,6 +90,10 @@ imposed wiring — each block can be adopted separately.
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/security-guards.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/edit-nudge.sh\""
           }
         ]
       },
@@ -166,7 +173,16 @@ imposed wiring — each block can be adopted separately.
   `PostToolUse` trigger and the session-scoped state paths — is Claude Code-specific, which is
   what porting to another host amounts to, the day it exposes an equivalent post-search
   injection point. Works without the tracker; with it, a session that already consulted any
-  channel index is never nudged.
+  channel index is never nudged. `index-nudge.sh` also **chains** a second, independent nudge on
+  the same stdin: `hooks/memory-graph.py --mode match` — where the index nudge reports the map's
+  *paths*, the graph nudge reports the memory *nodes* (decisions/features) whose ids/titles/tags
+  match the search terms. Two notes side by side, each opt-in on its own artifact; either is a
+  silent no-op when its source isn't installed.
+- `PreToolUse(Write|Edit)` also carries `edit-nudge.sh` — the **write-side** symmetric of
+  index-nudge: thin glue for `hooks/memory-graph.py --mode covers`, it surfaces the
+  fiche/decision that governs the file *about to be edited*, once per target per session, silent
+  on an uncovered or memory-channel target. Same nudge-never-rail discipline; canonical logic in
+  `hooks/memory-graph.py` (cf. `hooks/README.md §Router aid`).
 - The semantic audit (`skills/decisions-audit.md`, `skills/memory-audit.md`) **never** appears in
   `settings.json` — it's not a hook, cf. `checks/README.md §Semantic — agent,
   memory<->code`. It triggers via skill (on demand) or the OS cron job's report loop

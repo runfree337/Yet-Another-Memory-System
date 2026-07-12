@@ -61,6 +61,14 @@ under `**Code:**`, and ≥ 1 durable reference — either a non-empty `**Doc (du
 decision id `D-YYYY-MM-DD-NN` (in the body or in `links:`). An entry missing any one of these
 three is **blocking**: it fails its job as a router.
 
+> **Citing convention — backtick the code.** Every code path and symbol an entry names goes in
+> **backticks** — a path (with a `/`) or a bare symbol like `` `NullGuard` ``. This isn't
+> cosmetic: `hooks/memory-graph.py covers <file>` derives "which memory governs this file" from
+> exactly these backticked spans (a span with a `/` is a cited path; a bare span is a cited
+> symbol, used by the opt-in class-name correspondence). A carrying class left un-backticked, or
+> a path only described in prose, is a fiche the graph can't surface when its file is edited — so
+> name the **carrying classes** in backticks whenever the full path isn't spelled out.
+
 ## Full example
 
 <!-- template -->

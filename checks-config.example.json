@@ -27,5 +27,10 @@
   "_doc-refs": "R-DEAD-PATH tuning for `checks/doc-refs-check.py`. `ignore-prefixes` = prefixes of tokens that LOOK like repo paths but never are — typically a runtime API joined to a filename (`Application.persistentDataPath/save.txt` in a Unity project) or a machine-local path cited in a guide. Additive and narrow: a listed prefix silences R-DEAD-PATH for matching tokens only, nothing else.",
   "doc-refs": {
     "ignore-prefixes": []
+  },
+
+  "_memory-graph": "Opt-in for the `hooks/memory-graph.py covers` class-name correspondence. `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file convention), e.g. [\".cs\"] for a Unity/C# project, [\".py\"] where a module is named after its class. Empty (default) → covers matches by cited-path containment only, fully language-agnostic. Turning it on lets a fiche/decision that cites a symbol (backticked) cover the file whose basename is that symbol.",
+  "memory-graph": {
+    "class-file-extensions": []
   }
 }

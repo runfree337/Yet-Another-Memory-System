@@ -102,6 +102,24 @@ python3 checks/memory-audit.py            # multi-channel tier1 (feature + decis
 
 **Semantic — agent, memory↔code:** the `memory-audit` audit (tier 2, all 3 channels) **is not a hook** — it requires *retrieve-then-verify* judgment and can't run silently every session. Its regime: **Volume trigger** (on the Decision side, the only channel that swells enough for it), **or scheduled**, **or on demand**. For scheduled *while away*, the report loop (see `INSTALL.md` step 5): an **OS cron** runs `decisions-audit.py --report` → writes a **deterministic** report (tier 1, **no LLM**, 0 tokens) to `$YAMS_MEMORY_REPORT_DIR` (default `.memory-reports/`, **to be gitignored**); the `SessionStart` sweep above **detects and surfaces** it; the agent **asks**, the user **decides** whether to wake up tier 2 (LLM, on demand — `memory-audit.py --tier1` first if the Feature/Memory channels are also in doubt). In every case it **reports**; pruning stays **ratified by a human** — a cron never fixes anything on its own.
 
+> **Producer variant — a scheduled AGENT session instead of the OS cron.** The report loop
+> above assumes a **persistent local machine**: the cron writes a gitignored file, the next
+> `SessionStart` sweep on that same disk surfaces it. That assumption breaks for a team that
+> works in **ephemeral remote sessions** (a fresh container per session): a report written to a
+> gitignored dir dies with the container, and no later session ever sees it. There, the
+> producer is a **scheduled agent session** (e.g. a weekly routine on a cheap model) rather
+> than the OS cron. It runs the SAME work — tier 1 (`decisions-audit.py --tier1`), then, when
+> the **Volume** trigger fires, tier 2 by balanced batches (`--plan` → one sub-reviewer per
+> batch → `--merge` with the coverage check) — but its deliverable is a **report plus a
+> proposal branch pushed** (never merged, never touching the default branch), not a
+> local file surfaced by a hook. The **Safeguard is unchanged**: the agent PRODUCES and
+> PROPOSES, a human RATIFIES — the routine merges nothing, deletes nothing, promotes no entry
+> to `confidence: verified`. Choice criterion: **persistent local machine → OS cron**
+> (deterministic, 0 LLM tokens, silent consumer); **ephemeral remote sessions → scheduled
+> agent** (survives the container, hands back a reviewable branch). See
+> `adapters/claude-code/routines/audit-decisions.md` for a routine prompt implementing this
+> variant.
+
 ## The project brings its OWN
 
 **Code** checks (lint, tests, analyzers, style standards) are **tech-specific** → the **project** brings and wires them, along with the **semantic review** (its own review skill). Here, we only provide **method** checks.

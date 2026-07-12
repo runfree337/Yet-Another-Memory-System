@@ -38,6 +38,36 @@ python3 hooks/index-nudge.py --tool Grep --pattern "damage tick" --path src   # 
 python3 hooks/index-nudge.py --stdin-json                                     # Claude Code adapter
 ```
 
+## Router aid — `memory-graph.py` (the derived graph, same discipline)
+
+Also not a guard: it **adds**. Where `index-nudge` points at the file **map**, `memory-graph`
+points at the four **memory channels** (`decisions/`, `features/`, `memory/`, `backlog/`) — it
+reads their frontmatters + bodies and derives a **typed graph** on every call (`links`,
+`replaces`/`replaced-by`, `after`, `cite-path`). **Nothing is stored**: the files + git stay the
+only source of truth, so the graph can never rot out of sync. Three commands:
+
+```bash
+python3 hooks/memory-graph.py covers  src/combat/CombatManager.cs   # which memories cover this file
+python3 hooks/memory-graph.py match   combat clock                  # which decisions/features match these terms
+python3 hooks/memory-graph.py neighbors D-2026-07-11-02             # a node's typed neighborhood
+python3 hooks/memory-graph.py --stdin-json --mode covers|match      # Claude Code adapter
+```
+
+It feeds **two** nudges, both nudge-never-rail (note next to the raw result, silent on an
+uncovered target, once per target per session, self-suppressed inside a memory channel, always
+exit 0 — the exact discipline `index-nudge.py` established):
+
+- **write side** (`covers`): `PreToolUse(Write|Edit)` → the agent about to touch a file sees the
+  fiche/decision that governs it BEFORE editing — the symmetric of the search-side nudge.
+- **search side** (`match`): chained after `index-nudge.py` on `PostToolUse(Grep|Glob)` — one
+  hook, two notes side by side (the map's paths + the graph's nodes).
+
+`covers` is agnostic by default (containment of a backticked cited path). Its optional
+class-name correspondence — a fiche/decision that cites a symbol whose basename equals a source
+file's — is a **project** convention (one-symbol-per-file), so it is **opt-in**:
+`checks-config.json → memory-graph.class-file-extensions` (default `[]`, off). See the script's
+module docstring for the full contract.
+
 ## Wiring per tool — what the installer materializes
 
 The **trigger** is tool-specific; the guard is not. Materialization table:
@@ -48,6 +78,8 @@ The **trigger** is tool-specific; the guard is not. Materialization table:
 | secret-scan | before a commit · before writing | `PreToolUse(Bash\|Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
 | destructive-guard | before a shell command | `PreToolUse(Bash)` hook → `--stdin-json` ("ask" decision) | `pre-commit` (exit 2 = block) |
 | index-nudge | after a search sweeping a covered zone | `PostToolUse(Grep\|Glob)` hook → `--stdin-json` (`additionalContext`) | — session-scoped by nature; other agent hosts the day they expose a post-search injection point (only the envelope changes, the logic is this file) |
+| memory-graph (`match`) | after a search — which memories match the terms | chained in the same `PostToolUse(Grep\|Glob)` hook → `--stdin-json --mode match` | — session-scoped |
+| memory-graph (`covers`) | before writing a file — which memory governs it | `PreToolUse(Write\|Edit)` hook → `--stdin-json --mode covers` (`additionalContext`) | — session-scoped |
 
 > The `checks/` **method controls** (`backlog-check`, `decisions-check`, `memory-audit`)
 > also get wired as hooks — typically `Stop` (end of task) / `SessionStart` (post-merge
