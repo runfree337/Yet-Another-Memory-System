@@ -164,10 +164,14 @@ H1_RE = re.compile(r'^#\s+(.*)$', re.M)
 BACKTICK_RE = re.compile(r'`([^`]+)`')
 INDEX_ENTRY_RE = re.compile(r'^-\s+\[(D-\d{4}-\d{2}-\d{2}-\d+)\]\([^)]+\)\s+—\s+(.*)$')
 TAG_RE = re.compile(r'\[([A-Za-z0-9][\w\-]*)\](?!\()')
-# A bare backticked identifier, optionally written with a file extension
+# A bare backticked identifier, optionally written with a FILE EXTENSION
 # (`NullGuard`, `CombatManager.cs`) — the way fiches cite a symbol without its
-# full path. Used only when `class-file-extensions` is configured (opt-in).
-IDENT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]{2,})(?:\.[A-Za-z0-9]+)?$')
+# full path. The optional suffix is restricted to an extension-shaped token
+# (lowercase, ≤5 chars) so a MEMBER reference (`CardData.RefreshTabBadges`,
+# `Foo.OnClick`) is NOT read as citing the class — that would inflate coverage
+# and, under the 3-hit cap, crowd out lower-priority (decision/tag) hits.
+# Used only when `class-file-extensions` is configured (opt-in).
+IDENT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]{2,})(?:\.[a-z][a-z0-9]{0,4})?$')
 
 
 # ---------------------------------------------------------------------------

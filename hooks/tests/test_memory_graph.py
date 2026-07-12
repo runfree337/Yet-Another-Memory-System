@@ -177,6 +177,21 @@ class TestPrefilterCache(GraphFixture):
         self.assertIsNone(self.mod.load_prefilter_cache(cache_path))
 
 
+class TestClassExtraction(unittest.TestCase):
+    def setUp(self):
+        self.mod = _load_module()
+
+    def test_extension_stripped_but_member_not_treated_as_class(self):
+        body = ("`NullGuard`, `CombatManager.cs`, `CardData.RefreshTabBadges`, "
+                "`Foo.OnClick`, `parse.py`")
+        classes = self.mod.extract_classes(body)
+        self.assertIn("NullGuard", classes)      # bare identifier
+        self.assertIn("CombatManager", classes)  # file extension stripped
+        self.assertIn("parse", classes)          # lowercase extension too
+        self.assertNotIn("CardData", classes)    # member ref, not a class citation
+        self.assertNotIn("Foo", classes)
+
+
 class TestChannelsBase(unittest.TestCase):
     """Channels nested under a subdir (channels-base), e.g. a project keeping
     its memory in Docs/decisions/ — the layout TheUndeathCurse uses."""
