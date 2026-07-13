@@ -242,7 +242,7 @@ French-keyed corpus; adjust the left column to the legacy at hand):
 | archive subfolder (`decisions/archive/`) | flat folder; archival = `status: archived` + the INDEX line moving to `## Archived` |
 | inline link segments (`rev:`/`sup:`/`cons:` on index lines) | frontmatter `replaces:` (list) ⟺ `replaced-by:` (scalar) reciprocity, `links:` for the rest — prose mention stays |
 | monolithic feature map | one `features/<slug>.md` per card + `FEATURE_MAP.md ## Entries` index; code paths repo-relative |
-| relative code paths (`Scripts/Foo.cs`) | full repo-relative paths — resolves most dead-reference findings mechanically | <!-- template -->
+| relative code paths (`src/Foo.ext`) | full repo-relative paths — resolves most dead-reference findings mechanically | <!-- template -->
 
 Batching: the biggest channel (decisions, usually) converts safely in parallel batches of
 ~20 files — files are independent, the INDEX is rewritten once at the end. Dead references

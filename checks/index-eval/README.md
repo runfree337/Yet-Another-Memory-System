@@ -48,7 +48,7 @@ tested on independent ground.
    (`lib/scorer.py`) computes the lift ± McNemar CI from the two routings and classifies
    the verdict. The **reporter** (`lib/reporter.py`) renders the final markdown.
 
-Nothing in this pipeline is Unity- or project-specific: it reads and writes only
+Nothing in this pipeline is language- or project-specific: it reads and writes only
 `index/manifest.tsv` and `index/index-config.json`, both already generalized by <!-- template -->
 `checks/index-check.py` / `index/manifest.py`.
 
@@ -62,7 +62,7 @@ Same file as `checks/index-check.py` / `index/manifest.py` (schema:
 `index/index-config.example.json`), two keys read by `prefilter.py`:
 
 - **`manifest`** (default `index/manifest.tsv`) — same key/default as `index-check.py`. <!-- template -->
-- **`eval-groups`** (optional array of path prefixes, e.g. `["src/combat/", "src/ui/"]`)
+- **`eval-groups`** (optional array of path prefixes, e.g. `["src/orders/", "src/ui/"]`)
   — the groups prefiltered by default when `prefilter.py` runs with no explicit
   argument. **If absent**, groups are **derived** from the first-level directory
   prefixes actually present in the manifest (`prefilter.derive_groups` — e.g.

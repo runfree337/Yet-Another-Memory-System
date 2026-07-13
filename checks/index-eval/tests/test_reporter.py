@@ -7,12 +7,12 @@ from lib.reporter import render
 class TestReporter(unittest.TestCase):
     def test_render_contains_recap_and_verdict(self):
         results = [{
-            "group": "src/combat/",
+            "group": "src/orders/",
             "n_files": 20, "diag_names": 0.55, "diag_name_intent": 0.85,
             "lift": 0.30, "ci": [0.22, 0.38], "n_queries": 100, "verdict": "Keep",
             "partial": False,
-            "rewrite": [{"file": "ResultType.py", "misses": 3, "into": "SlotCondition.py"}],
-            "confusions": {"ResultType.py": {"SlotCondition.py": 3}},
+            "rewrite": [{"file": "ResultType.py", "misses": 3, "into": "CartValidator.py"}],
+            "confusions": {"ResultType.py": {"CartValidator.py": 3}},
         }]
         md = render(results)
         self.assertIn("| Group | Verdict | lift", md)   # recap

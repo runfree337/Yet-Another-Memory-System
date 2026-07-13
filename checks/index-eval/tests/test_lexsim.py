@@ -13,9 +13,9 @@ class TestLexsim(unittest.TestCase):
 
     def test_pairwise_finds_confusable(self):
         entries = [
-            {"file": "A.py", "intent_prefixed": "tick damage status burn"},
-            {"file": "B.py", "intent_prefixed": "tick damage status poison"},
-            {"file": "C.py", "intent_prefixed": "orchestrates the combat phases"},
+            {"file": "A.py", "intent_prefixed": "apply fee region north"},
+            {"file": "B.py", "intent_prefixed": "apply fee region south"},
+            {"file": "C.py", "intent_prefixed": "orchestrates the order phases"},
         ]
         res = pairwise(entries)
         self.assertGreater(res["max_pair_sim"], 0.5)

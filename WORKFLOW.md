@@ -1,6 +1,6 @@
 # Working method with an AI — process framework
 
-> **What.** A **work process** for an AI to develop on a project, **derived** from The Undeath Curse's method. It says *how to work and remember* — **not** which tech, which architecture, nor which code tools. **That's the project's job** (its doc, its tools, its review skill).
+> **What.** A **work process** for an AI to develop on a project, **derived** from a real production project's method. It says *how to work and remember* — **not** which tech, which architecture, nor which code tools. **That's the project's job** (its doc, its tools, its review skill).
 > **Agnostic** to the tool (Claude Code, Copilot, other — placement in `README.md`) **and** to the tech/architecture.
 > **Seed**: drop it in as-is, then **amend** it to fit the project.
 

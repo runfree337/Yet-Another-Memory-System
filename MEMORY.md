@@ -28,13 +28,13 @@ the Decision/Backlog channels).
   `ENTRY-TEMPLATE.md §The common frontmatter`):
   ```
   ---
-  id: mem-null-check-unity
+  id: mem-money-uses-decimal
   source: human
   confidence: verified
   created: 2026-07-09
   updated: 2026-07-09
   links: [D-2026-07-09-01]
-  ratified: raphael, 2026-07-09
+  ratified: <who>, 2026-07-09
   ---
   <the rule itself, in free prose>
   ```

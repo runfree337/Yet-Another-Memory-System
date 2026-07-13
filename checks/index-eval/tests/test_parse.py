@@ -3,13 +3,13 @@ import unittest
 
 from lib.parse import content_tokens, parse_subindex
 
-SAMPLE = """# Index — Combat
-- `CombatManager.py` — Orchestrates the 5 combat phases.
+SAMPLE = """# Index — Orders
+- `OrderManager.py` — Orchestrates the 5 checkout phases.
 
-## Conditions/
-- `SlotCondition.py` — True if the slot holds a card.
-- `StatusDamageTickEffect.py` — Applies a damage tick for a status.
-- `StatusDamageTickEffect.py` — Status damage tick effect (duplicate line).
+## Validators/
+- `CartValidator.py` — True if the cart holds an item.
+- `TaxLineEffect.py` — Applies a tax line for a region.
+- `TaxLineEffect.py` — Tax line effect (duplicate line).
 """
 
 
@@ -17,26 +17,26 @@ class TestParse(unittest.TestCase):
     def test_extracts_file_and_intent(self):
         e = parse_subindex(SAMPLE)
         files = [x["file"] for x in e]
-        self.assertIn("CombatManager.py", files)
-        self.assertIn("SlotCondition.py", files)
+        self.assertIn("OrderManager.py", files)
+        self.assertIn("CartValidator.py", files)
 
     def test_section_prefix_applied(self):
         e = parse_subindex(SAMPLE)
-        slot = next(x for x in e if x["file"] == "SlotCondition.py")
-        self.assertTrue(slot["intent_prefixed"].startswith("[Conditions]"))
-        mgr = next(x for x in e if x["file"] == "CombatManager.py")
+        slot = next(x for x in e if x["file"] == "CartValidator.py")
+        self.assertTrue(slot["intent_prefixed"].startswith("[Validators]"))
+        mgr = next(x for x in e if x["file"] == "OrderManager.py")
         self.assertEqual(mgr["section"], None)
 
     def test_duplicates_flagged(self):
         e = parse_subindex(SAMPLE)
-        dups = [x for x in e if x["file"] == "StatusDamageTickEffect.py"]
+        dups = [x for x in e if x["file"] == "TaxLineEffect.py"]
         self.assertEqual(len(dups), 2)
         self.assertEqual([d["dup"] for d in dups], [False, True])
 
     def test_content_tokens_drops_stopwords(self):
-        toks = content_tokens("True if the slot holds a card and the deck")
-        self.assertIn("slot", toks)
-        self.assertIn("card", toks)
+        toks = content_tokens("True if the cart holds an item and the order")
+        self.assertIn("cart", toks)
+        self.assertIn("item", toks)
         self.assertNotIn("the", toks)
         self.assertNotIn("and", toks)
 

@@ -126,7 +126,7 @@ def _index_section_tempfile() -> str | None:
     lines are replaced with blank lines to preserve line numbering (findings stay
     `path:line`-addressable on the original). Needed because the rest of the document
     (`§The format`, `§Full example`…) legitimately cites other `.md` files
-    (`ENTRY-TEMPLATE.md`, the `null-check-unity.md` example…) unrelated to the index — a
+    (`ENTRY-TEMPLATE.md`, the `money-uses-decimal.md` example…) unrelated to the index — a
     full-page scan would produce false-positive `R-DEAD-INDEX` on those mentions."""
     if not os.path.isfile(FMAP):
         return None
