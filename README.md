@@ -1,11 +1,11 @@
 # YAMS — Yet Another Memory System
 
-A **methodological orchestrator** for working with an AI on a software project.
+A **methodological orchestrator** for working with an AI on a software project. i try to made it
 **Agnostic** to the tool (Claude Code, Copilot, other) and to the tech/architecture. The project
 brings its architecture, its code tools, its doc and its review; YAMS brings **how to work and
-remember** — it *plugs into* the project, it doesn't replace any of that.
+remember** — it *plugs into* the project, it doesn't replace any of that. 
 
-This framework was mostly developped with the help of Claude AI
+This framework was mostly developped with the help of Claude AI. The idea came from what i did for a solor project. I extract here what worked for me.
 
 ## The idea
 
