@@ -48,7 +48,7 @@ memory entry — one file + one index line, common frontmatter). What follows on
    replaces: []
    replaced-by: null
    links: []
-   ratified: raphael, 2026-07-09
+   ratified: <who>, 2026-07-09
    ---
 
    **Decision**: what was settled.

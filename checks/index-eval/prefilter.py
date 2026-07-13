@@ -4,7 +4,7 @@ no LLM). Full method: `checks/index-eval/README.md`.
 
 Reads the flat manifest (`path<TAB>intent`, source of truth for the per-file index,
 see `index/manifest.tsv`) and evaluates GROUPS of manifest entries that share a
-directory prefix (e.g. `src/combat/`). A "group" is just a path-prefix filter over the
+directory prefix (e.g. `src/orders/`). A "group" is just a path-prefix filter over the
 flat manifest — there is no per-directory `.md` sub-index file to scan.
 
 AGNOSTIC, like `checks/index-check.py` / `index/manifest.py`: this script hardcodes

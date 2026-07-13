@@ -24,12 +24,12 @@
     "extra-secret-allowlist-paths": []
   },
 
-  "_doc-refs": "R-DEAD-PATH tuning for `checks/doc-refs-check.py`. `ignore-prefixes` = prefixes of tokens that LOOK like repo paths but never are — typically a runtime API joined to a filename (`Application.persistentDataPath/save.txt` in a Unity project) or a machine-local path cited in a guide. Additive and narrow: a listed prefix silences R-DEAD-PATH for matching tokens only, nothing else.",
+  "_doc-refs": "R-DEAD-PATH tuning for `checks/doc-refs-check.py`. `ignore-prefixes` = prefixes of tokens that LOOK like repo paths but never are — typically a runtime API joined to a filename (`Runtime.dataDir/save.txt` from a runtime API) or a machine-local path cited in a guide. Additive and narrow: a listed prefix silences R-DEAD-PATH for matching tokens only, nothing else.",
   "doc-refs": {
     "ignore-prefixes": []
   },
 
-  "_memory-graph": "Settings for `hooks/memory-graph.py`. `channels-base` = the subdir the four memory channels live under, for a project that nests them (e.g. \"Docs\" → Docs/decisions/…); \"\" (default) = repo root, the framework's own layout. `self-extra-dirs` = tooling dirs to also self-suppress nudges on (default [\"checks\",\"hooks\",\"adapters\"]; a Claude Code project might use [\".claude\"]). `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file), e.g. [\".cs\"]; empty (default) → covers matches by cited-path containment only, fully language-agnostic. `code-roots` = dirs the class/tag ambiguity guard scans (default: index-config roots, else the repo).",
+  "_memory-graph": "Settings for `hooks/memory-graph.py`. `channels-base` = the subdir the four memory channels live under, for a project that nests them (e.g. \"Docs\" → Docs/decisions/…); \"\" (default) = repo root, the framework's own layout. `self-extra-dirs` = tooling dirs to also self-suppress nudges on (default [\"checks\",\"hooks\",\"adapters\"]; a Claude Code project might use [\".claude\"]). `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file), e.g. [\".java\"]; empty (default) → covers matches by cited-path containment only, fully language-agnostic. `code-roots` = dirs the class/tag ambiguity guard scans (default: index-config roots, else the repo).",
   "memory-graph": {
     "channels-base": "",
     "self-extra-dirs": ["checks", "hooks", "adapters"],

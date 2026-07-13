@@ -7,7 +7,7 @@
 > framework itself gains a new agnostic check.
 >
 > **Provenance:** extracted by observation from the real code of two linters of the original
-> project YAMS was extracted from — a C#/Unity code-standards linter (named `audit.py` on the
+> project YAMS was extracted from — a code-standards linter (named `audit.py` on the
 > project side) and a doc-freshness linter (named `doc-audit.py` on the project side) — that
 > independently converged on the same shape. Inferred by the AI, not yet ratified by a human as
 > a team rule; recoup it before treating it as an established fact (the original project isn't

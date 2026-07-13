@@ -62,7 +62,7 @@ decision id `D-YYYY-MM-DD-NN` (in the body or in `links:`). An entry missing any
 three is **blocking**: it fails its job as a router.
 
 > **Citing convention — backtick the code.** Every code path and symbol an entry names goes in
-> **backticks** — a path (with a `/`) or a bare symbol like `` `NullGuard` ``. This isn't
+> **backticks** — a path (with a `/`) or a bare symbol like `` `Money` ``. This isn't
 > cosmetic: `hooks/memory-graph.py covers <file>` derives "which memory governs this file" from
 > exactly these backticked spans (a span with a `/` is a cited path; a bare span is a cited
 > symbol, used by the opt-in class-name correspondence). A carrying class left un-backticked, or
@@ -73,37 +73,38 @@ three is **blocking**: it fails its job as a router.
 
 <!-- template -->
 
-`features/null-check-unity.md`:
+`features/money-uses-decimal.md`:
 
 ```
 ---
-id: null-check-unity
+id: money-uses-decimal
 created: 2026-07-09
 updated: 2026-07-09
 links: [D-2026-07-09-01]
 source: human
 confidence: verified
-ratified: raphael, 2026-07-09
+ratified: <who>, 2026-07-09
 ---
 
-**Role:** Prevents Unity false-negatives — a destroyed `UnityEngine.Object` still reads as
-"non-null" for `??`/`?.`, which bypass Unity's `==` override; never use `??` on a Unity type.
+**Role:** Prevents rounding drift — a binary floating-point number can't represent most
+decimal fractions exactly, so summing amounts in a `float` accumulates error; never hold a
+monetary amount in a floating-point type.
 
-**Code:** `Scripts/Combat/CombatManager.cs` (turn resolution), `Scripts/Core/NullGuard.cs`
-(shared `IsAlive` guard).
+**Code:** `src/billing/InvoiceTotals.ext` (line-item sums), `src/money/Money.ext`
+(shared fixed-precision value type).
 
-**Doc (durable):** `Docs/architecture/ARCHITECTURE.md §Unity null check`.
+**Doc (durable):** `Docs/architecture/ARCHITECTURE.md §Money & rounding`.
 
-**Tests:** `Tests/EditMode/NullGuardTests.cs`.
+**Tests:** `tests/money/MoneyTotalsTests.ext`.
 
-**Add pattern:** any new component referencing an optional `UnityEngine.Object` goes through
-`NullGuard.IsAlive(obj)` rather than a raw `??`/`?.` operator.
+**Add pattern:** any new field or column holding an amount goes through `Money` rather than
+a raw `float`/`double`.
 ```
 
 Matching line in `FEATURE_MAP.md`:
 
 ```
-- [null-check-unity](features/null-check-unity.md) — guard against Unity null-check false negatives.
+- [money-uses-decimal](features/money-uses-decimal.md) — hold money in a fixed-precision type, never a float.
 ```
 
 <!-- /template -->

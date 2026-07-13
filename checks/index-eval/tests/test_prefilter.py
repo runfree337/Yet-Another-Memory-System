@@ -22,8 +22,8 @@ class TestPrefilter(unittest.TestCase):
 
     def test_emits_expected_keys(self):
         path = self._manifest([
-            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the deck"),
-            ("src/C.py", "applies the damage"), ("src/D.py", "manages the statuses"),
+            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the order"),
+            ("src/C.py", "applies the fee"), ("src/D.py", "manages the regions"),
             ("src/E.py", "computes the formulas"),
             ("other/X.py", "outside the group"),
         ])
@@ -48,13 +48,13 @@ class TestPrefilter(unittest.TestCase):
         self.assertEqual(out["n_files"], 2)
 
     def test_entries_for_prefix_strips_prefix(self):
-        rows = [("src/combat/A.py", "orchestrates the phases")]
-        entries = entries_for_prefix(rows, "src/combat/")
+        rows = [("src/orders/A.py", "orchestrates the phases")]
+        entries = entries_for_prefix(rows, "src/orders/")
         self.assertEqual(entries[0]["file"], "A.py")
         self.assertEqual(entries[0]["intent_prefixed"], "orchestrates the phases")
 
     def test_derive_groups_from_manifest_structure(self):
-        rows = [("src/combat/A.py", "x"), ("src/combat/B.py", "y"),
+        rows = [("src/orders/A.py", "x"), ("src/orders/B.py", "y"),
                  ("docs/README.md", "z"), ("root_only.py", "w")]
         groups = derive_groups(rows)
         self.assertEqual(groups, ["src/", "docs/"])   # first-seen order, no duplicates
@@ -75,8 +75,8 @@ class TestPrefilter(unittest.TestCase):
 
     def test_main_with_config_and_explicit_group(self):
         manifest_path = self._manifest([
-            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the deck"),
-            ("src/C.py", "applies the damage"), ("src/D.py", "manages the statuses"),
+            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the order"),
+            ("src/C.py", "applies the fee"), ("src/D.py", "manages the regions"),
             ("src/E.py", "computes the formulas"),
         ])
         fd, config_path = tempfile.mkstemp(suffix=".json")
@@ -95,8 +95,8 @@ class TestPrefilter(unittest.TestCase):
 
     def test_main_with_config_falls_back_to_derived_groups(self):
         manifest_path = self._manifest([
-            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the deck"),
-            ("src/C.py", "applies the damage"), ("src/D.py", "manages the statuses"),
+            ("src/A.py", "orchestrates the phases"), ("src/B.py", "holds the order"),
+            ("src/C.py", "applies the fee"), ("src/D.py", "manages the regions"),
             ("src/E.py", "computes the formulas"),
         ])
         fd, config_path = tempfile.mkstemp(suffix=".json")

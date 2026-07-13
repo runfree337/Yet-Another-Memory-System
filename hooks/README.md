@@ -47,8 +47,8 @@ reads their frontmatters + bodies and derives a **typed graph** on every call (`
 only source of truth, so the graph can never rot out of sync. Three commands:
 
 ```bash
-python3 hooks/memory-graph.py covers  src/combat/CombatManager.cs   # which memories cover this file
-python3 hooks/memory-graph.py match   combat clock                  # which decisions/features match these terms
+python3 hooks/memory-graph.py covers  src/orders/OrderManager.java  # which memories cover this file
+python3 hooks/memory-graph.py match   order clock                  # which decisions/features match these terms
 python3 hooks/memory-graph.py neighbors D-2026-07-11-02             # a node's typed neighborhood
 python3 hooks/memory-graph.py --stdin-json --mode covers|match      # Claude Code adapter
 ```

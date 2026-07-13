@@ -126,10 +126,10 @@ pathspec. Backticked spans are scanned **in place**: a fragment that looks dead 
 the real directory name contains a space — `` `Tools/My Dir/file.py` `` fragments to <!-- template -->
 `Dir/file.py` — is re-anchored across the span before flagging, existence first, then git <!-- template -->
 history for the severity. The final path segment accepts up to 16 chars after the last dot,
-with a boundary lookahead: a package id like `com.nobi.roundedcorners` is one token, never
+with a boundary lookahead: a package id like `com.example.roundedcorners` is one token, never
 truncated to a ghost `…rounde`, while a sentence-final dot still ends the token. Tokens
 matching a `doc-refs.ignore-prefixes` entry (`checks-config.json`, optional, empty by
-default) are skipped — for runtime-API-joined names like `Application.persistentDataPath/…`
+default) are skipped — for runtime-API-joined names like `Runtime.dataDir/…`
 that look like repo paths but never are); **R-DEAD-DECISION** (a `D-YYYY-MM-DD-NN` id with no
 matching `decisions/<id>.md` — blocking; inactive without a `decisions/` folder);
 **R-DEAD-SYMBOL** (a backticked composed-PascalCase token, e.g. `` `FooBarManager` ``, found
@@ -184,7 +184,7 @@ pass on. **Inactive without configuration**, like `index-check.py`.
 
 ```bash
 python3 checks/index-eval/prefilter.py                       # requires index/index-config.json
-python3 checks/index-eval/prefilter.py src/combat/ src/ui/    # explicit groups only
+python3 checks/index-eval/prefilter.py src/orders/ src/ui/    # explicit groups only
 ```
 
 The scoring/verdict half (`checks/index-eval/lib/scorer.py`, `checks/index-eval/lib/sufficiency.py`,
@@ -481,7 +481,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"
 
 The **tech-specific** scripts of the host project (lint, tests, analyzers…) are not part of this
 framework — they stay documented by the project itself. This file only references what
-**YAMS** provides. To write one on the project side (like the reference host project's
+**YAMS** provides. To write one on the project side (like a host project's own
 `audit.py`): `checks/TEMPLATE.md` gives the common shape, not the tech-specific content.
 
 > **Watch for homonyms**: a project adopting YAMS may already have its own `manifest.py` /

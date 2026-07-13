@@ -46,7 +46,7 @@ Exemptions (apply identically to all four rules above):
     prose). R-GHOST-ABSENCE is the deliberate exception (see above).
   - `doc-refs.ignore-prefixes` (`checks-config.json`, optional, default empty) — project
     -declared prefixes for tokens that LOOK like repo paths but never are (a runtime API
-    joined to a filename, e.g. `Application.persistentDataPath/…`). R-DEAD-PATH only.
+    joined to a filename, e.g. `Runtime.dataDir/…`). R-DEAD-PATH only.
 
 Modes:
   doc-refs-check.py [paths.md…]  # explicit targets
@@ -74,8 +74,8 @@ FRAMEWORK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # frame
 DECISIONS_DIR = os.path.join(FRAMEWORK, "decisions")
 DECISIONS_INDEX = os.path.join(DECISIONS_DIR, "INDEX.md")
 
-# Final segment: up to 16 chars after the last dot (a Unity package id like
-# `com.nobi.roundedcorners` is a legitimate path tail, the old {1,6} bound truncated it
+# Final segment: up to 16 chars after the last dot (a package id like
+# `com.example.roundedcorners` is a legitimate path tail, the old {1,6} bound truncated it
 # to a ghost token `…rounde`). The lookahead refuses to stop mid-word or mid-package
 # (`(?!\.?[A-Za-z0-9])`: neither an alnum continuation nor a further `.segment`), while a
 # sentence-final dot (`see Docs/x.md.`) still ends the token cleanly.

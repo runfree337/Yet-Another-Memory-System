@@ -33,5 +33,5 @@ maintained by hand).
 (schema: `index/index-config.example.json`), typically **when the framework is installed**: the
 extensions to index depend on the project's language, the framework doesn't assume them. Without
 config, `manifest.py` and `index-check.py` are simply **inactive**. This TSV format is the one
-used by the reference host project — we **don't touch** its existing index, we adopt the same
-format.
+used by the real project this framework was extracted from — we **don't touch** its existing
+index, we adopt the same format.

@@ -14,7 +14,7 @@ invocation:
     `## Archived`).
   - **feature**   `features/*.md` frontmatter (id, links) + the `**Role:**`
     line + every backticked path cited in the body (a backticked span
-    containing `/`, e.g. `Scripts/Combat/CombatManager.cs` — including a single
+    containing `/`, e.g. `src/orders/OrderManager.java` — including a single
     `{a,b,c}` brace alternation, the sibling-files shorthand).
   - **memory**    `memory/*.md` frontmatter (id, links) only.
   - **backlog**   `backlog/*/STATE.md` frontmatter (id, title, status, after,
@@ -51,7 +51,7 @@ from config (`checks-config.json → memory-graph`), never hardcoded:
     That is a PROJECT convention, not a universal one, so it is **opt-in**:
     `checks-config.json` → `memory-graph.class-file-extensions` (default `[]`,
     correspondence OFF). List the extensions whose basename equals an
-    identifier (e.g. `[".cs"]` for a Unity project) to turn it on.
+    identifier (e.g. `[".java"]` for a Java project) to turn it on.
 
 Three CLI commands (see each `cmd_*` docstring for the exact contract):
 
@@ -165,9 +165,9 @@ BACKTICK_RE = re.compile(r'`([^`]+)`')
 INDEX_ENTRY_RE = re.compile(r'^-\s+\[(D-\d{4}-\d{2}-\d{2}-\d+)\]\([^)]+\)\s+—\s+(.*)$')
 TAG_RE = re.compile(r'\[([A-Za-z0-9][\w\-]*)\](?!\()')
 # A bare backticked identifier, optionally written with a FILE EXTENSION
-# (`NullGuard`, `CombatManager.cs`) — the way fiches cite a symbol without its
+# (`AuthGuard`, `OrderManager.java`) — the way fiches cite a symbol without its
 # full path. The optional suffix is restricted to an extension-shaped token
-# (lowercase, ≤5 chars) so a MEMBER reference (`CardData.RefreshTabBadges`,
+# (lowercase, ≤5 chars) so a MEMBER reference (`Invoice.RefreshTotals`,
 # `Foo.OnClick`) is NOT read as citing the class — that would inflate coverage
 # and, under the 3-hit cap, crowd out lower-priority (decision/tag) hits.
 # Used only when `class-file-extensions` is configured (opt-in).
@@ -327,7 +327,7 @@ def extract_paths(text):
     """Repo-relative paths cited in the body — every backticked span that
     contains a `/`, expanding a single `{a,b,c}` alternation into one path per
     alternative (the sibling-files shorthand, e.g.
-    `Scripts/UI/Screens/Camp/{CampJournalController,CampJournalCombosTab}.cs`
+    `src/ui/settings/{SettingsController,SettingsAdvancedTab}.java`
     → both files). A trailing section anchor (` §Section`, e.g.
     `doc.md §14/§15`) is truncated first — otherwise the anchor's own text
     (which can itself contain a `/`) rides along and the span never equals the
@@ -360,8 +360,8 @@ def extract_paths(text):
 
 def extract_classes(text):
     """Bare backticked identifiers cited in the body (a span with no `/`),
-    stripped of any file extension: `NullGuard`, `CombatManager.cs` →
-    `CombatManager`. Only consumed by covers #2 when the project opts into the
+    stripped of any file extension: `AuthGuard`, `OrderManager.java` →
+    `OrderManager`. Only consumed by covers #2 when the project opts into the
     class-name correspondence; harmless to collect otherwise."""
     out = set()
     for raw in BACKTICK_RE.findall(text or ""):
