@@ -251,6 +251,47 @@ what remains is fixed by pointing at today's target, or annotated with a `NEG` w
 `<!-- template -->` marker when the prose genuinely speaks of something gone or planned
 (`SCRIPTS.md §doc-refs-check.py`).
 
+## Seeding the feature channel from scratch (a mature codebase, no prior feature docs)
+
+Distinct from the migration above: there, feature cards already exist and only their **format**
+moves; here the code exists but the **feature channel is empty**, and nothing fills it on its own.
+The feature channel grows at a work item's closure (`WORKFLOW.md`) — but code written *before* the
+framework arrived, and not currently being reworked, never reaches that closure. A mature host
+therefore needs an explicit **seeding pass**, or its most-depended-on code stays unmapped
+indefinitely: the exact moment the edit-nudge should fire on that file, it finds no card.
+
+The seeding pass, five steps — each batch ends on a green `feature-map-check` and one commit, the
+same discipline as the migration:
+
+1. **Rank by structural centrality.** Order the code by external fan-in — how many *other* files
+   depend on each unit. This needs a deterministic structural map of the repo (a symbol /
+   dependency graph); *which* producer builds it is deliberately out of scope here
+   (`ROADMAP.md §3` — "one deterministic extractor, three consumers"). The framework consumes the
+   ranking; it does not prescribe the extractor.
+2. **Cluster, never 1:1.** Group co-dependent units into task-sized features — "what you attack as
+   one task" (`FEATURE_MAP.md`). One card can cover several files; the point is *not* one card per
+   file. That exhaustive per-file map already exists — it is the **index** (`index/`), a different
+   channel. The feature channel is the *selective* overlay on top, not a second index.
+3. **Draft unverified, recouped with code.** Write each card `source: inferred` /
+   `confidence: unverified` (`ENTRY-TEMPLATE.md`), with its Role and every cited path checked
+   against the actual code at write time (retrieve-then-verify). Small batches — a handful of
+   cards, never the whole ranking at once.
+4. **Ratify before the next batch.** `feature-map-check` flags every unverified card
+   (`R-UNVERIFIED`) into the tier-2 semantic-audit inbox; a human promotes it to
+   `confidence: verified` + `ratified:` or rewrites it (`ENTRY-TEMPLATE.md` — promotion to
+   `verified` requires human ratification, always). This gate is what makes seeding safe: *a card
+   that lies is worse than none*, so a seeded card is provisional until ratified — never team truth
+   by mere persistence.
+5. **Converge, don't complete.** Re-rank; stop when "high-centrality **and** absent from the
+   feature channel" is empty, or holds only infrastructure. The same ranking is both the seeding
+   tool and the finish line (as the checks are "oracle and progress meter" in the migration above).
+
+One guardrail, the mirror of the migration's two ground rules: **centrality is a prompt, not a
+verdict.** An enum, an interface, a constants holder or an extension helper can top the fan-in and
+still deserve no card — judgment decides where the curve flattens from *feature* into *plumbing*. A
+mass-generate-then-ratify run inverts this: it floods the inbox with plausible-but-wrong cards.
+Batch small and ratify between, so each judgment stays cheap and errors surface early.
+
 ## Target shape of `install.py`
 
 Interactive **but idempotent**: *detects → asks → generates the glue → writes its choices to an
