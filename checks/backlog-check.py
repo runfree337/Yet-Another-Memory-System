@@ -137,11 +137,17 @@ def check_config() -> list[Finding]:
 IMPACT_KEYWORDS = {"decision", "feature", "memory"}
 
 # DoD (cf. backlog/README.md). `{target}` = the work item to remove. Step 1 is a CHECK
-# (capitalization already happened task by task), not heavy lifting.
+# (capitalization already happened task by task), not heavy lifting. Step 3 REQUIRES the
+# review but never assumes the answer: the standard's own tier-1 checks always run, the
+# project's review is ASKED unless a standing answer sits under `closure.review`.
 CLOSURE_STEPS = [
     ("Durable", "check that no durable content is left unmigrated (STATE.md never carries "
                 "any) — otherwise migrate it now to its home + the affected memories"),
     ("Decision", "log the decision if the closure settles a structural choice"),
+    ("Review", "run the standard's own tier-1 checks (`memory-audit.py --tier1`), then **ask** "
+               "whether to run the project's review of the delivered surface — unless the user "
+               "already settled it; a standing answer goes under `closure.review` in "
+               "`checks-config.json`"),
     ("Backlog", "delete {target} **+ its line in `INDEX.md`**"),
     ("State", "update `DASHBOARD.md`: progress of the affected milestone, hot spots"),
     ("Capitalization", "ask the question \"reusable method learning?\" and route if so"),
@@ -164,6 +170,31 @@ def _durable_step_wording(impacts):
     return " ; ".join(parts) if parts else None
 
 
+_REVIEW_PREFIX = "run the standard's own tier-1 checks (`memory-audit.py --tier1`), then "
+
+
+def _review_step_wording(cfg):
+    """Project's half of the Review step — `closure.review` in the global settings file.
+
+    Tri-state: key absent or blank -> `None`, the caller keeps the generic wording, which
+    tells the agent to ASK (the default — the standard requires the review but never assumes
+    the answer, `INSTALL.md §Guiding principle`); a non-empty string -> a standing yes,
+    printed as the project's own definition; `false` -> a standing waiver, printed as such so
+    the choice stays visible in the checklist. Any other value falls back to asking.
+
+    The tier-1 half (`_REVIEW_PREFIX`) is the standard's own and is NEVER replaceable: YAMS
+    applies its own tools and only opens an anchor point for the business review. Read
+    section-wise rather than via `cfg_get(..., ("closure", "review"), None)`, which swallows
+    a JSON `false` on its bool/non-bool type guard (`entrylib.cfg_get`)."""
+    section = entrylib.cfg_get(cfg, ("closure",), {})
+    raw = section.get("review") if isinstance(section, dict) else None
+    if isinstance(raw, str) and raw.strip():
+        return _REVIEW_PREFIX + raw.strip()
+    if raw is False:
+        return _REVIEW_PREFIX + "the project's review is waived (`closure.review: false`)"
+    return None
+
+
 def closure_checklist(target="the work item's folder", impacts=None):
     head = "Closure checklist (DoD — `backlog/README.md`):"
     rows = []
@@ -171,6 +202,8 @@ def closure_checklist(target="the work item's folder", impacts=None):
         desc = d.format(target=target)
         if t == "Durable":
             desc = _durable_step_wording(impacts) or desc
+        elif t == "Review":
+            desc = _review_step_wording(_CFG) or desc
         rows.append(f"  [ ] {i}. **{t}** — {desc}")
     return "\n".join([head, *rows])
 
