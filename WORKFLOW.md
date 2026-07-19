@@ -31,7 +31,7 @@ For every task, the AI:
 5. **Self-improves** — capture the *method*-level learning (see §Knowledge capture).
 6. **Hands back** — summarize what changed; the user drives what's next.
 
-> No PR or Git gate imposed. The loop stops at "durable record up to date + self-improvement", then the human takes over. The project wires this into **its own** closure ritual (its review skill, its merge, or nothing).
+> No PR or Git gate imposed. The loop stops at "durable record up to date + self-improvement", then the human takes over. The project wires this into **its own** closure ritual (its review skill, its merge) — or declares it wants none (`closure.review: false`, `backlog/README.md §Definition of Done` step 3). Nothing is assumed by silence.
 
 ## Work in progress — the backlog
 

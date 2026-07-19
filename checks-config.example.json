@@ -35,5 +35,10 @@
     "self-extra-dirs": ["checks", "hooks", "adapters"],
     "class-file-extensions": [],
     "code-roots": []
+  },
+
+  "_closure": "Definition of Done, step 3 (`backlog/README.md`). The framework ALWAYS runs its own tier-1 checks at closure; `review` only answers for the PROJECT's review of the delivered surface. Tri-state: key absent or empty = the agent ASKS at each closure (the default — the standard requires the review but never assumes the answer, `INSTALL.md §Guiding principle`); a non-empty string = a standing yes, printed in place of the generic wording (say what reviewing means here: which skill, which agent, which scope); `false` = a standing waiver, printed as such so the choice stays visible. Any other value falls back to asking. There is deliberately NO mechanical check that the review happened — unverifiable without false positives, so out of tier 1 by construction. Example of a declared value: 'standards-auditor agent over the whole work-item surface, not just the last diff'.",
+  "closure": {
+    "review": ""
   }
 }

@@ -11,7 +11,8 @@
 Optional, at the repo root: `checks-config.json` (canonical schema + defaults: <!-- template -->
 [`checks-config.example.json`](checks-config.example.json)). One file, one section per concern:
 `audit` (when the deterministic report recommends a tier-2 audit), `sizes` (granularity
-signals), `guards` (extension-only surveillance lists). Absent file or key = the built-in
+signals), `guards` (extension-only surveillance lists), `doc-refs` (R-DEAD-PATH tuning),
+`closure` (the project's answer on the DoD review step). Absent file or key = the built-in
 defaults, i.e. the historical behavior. Present but broken, the two families diverge **by
 design**: the **checks** surface a blocking `CFG-INVALID` finding (a config the user believes
 active is never silently ignored), while the **hooks** fall back to their built-ins without
@@ -39,6 +40,14 @@ check, it may name a doc to create at closure) or one of the channel keywords
 vocabulary; `E-IMPACT-EMPTY` (to-confirm) fires only once every task is `done` and the ledger
 is still empty ("ready to close with no declared durable impact?") — silent while work is open.
 
+`closure.review` (global settings file) answers, once and for all or not at all, the **Review**
+step of the DoD (step 3): a non-empty string is printed in place of the generic project half
+(what "reviewing" means in this project), `false` prints the step as explicitly waived, an
+absent key leaves the generic wording, which tells the agent to **ask** the user. The tier-1
+half of the step ("run `memory-audit.py --tier1`") is the standard's own and is never
+substituted. `--checklist` only ever **prints** — the asking is the agent's job, tier 1 stays
+non-interactive.
+
 | Parameter | Effect | Default |
 |---|---|---|
 | *(none)* | runs the full check, prints the text report | — |
@@ -47,7 +56,7 @@ is still empty ("ready to close with no declared durable impact?") — silent wh
 | `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
 | `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | acts on the files passed as arguments |
 | `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit |
-| `--checklist [id]` | prints the closure checklist (Definition of Done, 5 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording | — |
+| `--checklist [id]` | prints the closure checklist (Definition of Done, 6 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording; the **Review** step substitutes the project's half from `closure.review` | — |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.
 **Write (`--stamp` mode):** mutates the `updated` field and nothing else — bounded, mechanical, never blocking (see `checks/README.md §Pre-commit wiring`). Same mode on `feature-map-check.py` and `memory-check.py`.

@@ -12,6 +12,7 @@
 | `poisoning-scan.py` | **invisible/bidi** Unicode in instruction & memory files (a "TrapDoor" poisoning vector) | exit 2 = block |
 | `secret-scan.py` | committed **keys/tokens** (18 patterns) — Anthropic, AWS, GitHub, Slack, Stripe… | exit 2 = block |
 | `destructive-guard.py` | broad **destructive** shell commands (`find -delete`, `-exec rm`) | "ask" (confirm) |
+| `normative-write-guard.py` | a write about to land **normative content** in a file the capture policy governs | "ask" (confirm) |
 
 Each one is **portable** (stdlib, no dependency) and offers two entry points:
 - **universal**: `--staged` (git-staged content — pre-commit / CI) or paths as arguments;
@@ -93,6 +94,7 @@ The **trigger** is tool-specific; the guard is not. Materialization table:
 | poisoning-scan | session start · before writing an instruction file | `SessionStart` / `PreToolUse(Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
 | secret-scan | before a commit · before writing | `PreToolUse(Bash\|Write\|Edit)` hook → `--stdin-json` | `pre-commit` → `--staged` |
 | destructive-guard | before a shell command | `PreToolUse(Bash)` hook → `--stdin-json` ("ask" decision) | `pre-commit` (exit 2 = block) |
+| normative-write | before writing a policy-governed file | `PreToolUse(Write\|Edit)` hook → `--stdin-json` ("ask" decision), **after** poisoning-scan and secret-scan | — inactive without a root `capture-policy.json` |
 | index-nudge | after a search sweeping a covered zone | `PostToolUse(Grep\|Glob)` hook → `--stdin-json` (`additionalContext`) | — session-scoped by nature; other agent hosts the day they expose a post-search injection point (only the envelope changes, the logic is this file) |
 | memory-graph (`match`) | after a search — which memories match the terms | chained in the same `PostToolUse(Grep\|Glob)` hook → `--stdin-json --mode match` | — session-scoped |
 | memory-graph (`covers`) | before writing a file — which memory governs it | `PreToolUse(Write\|Edit)` hook → `--stdin-json --mode covers` (`additionalContext`) | — session-scoped |

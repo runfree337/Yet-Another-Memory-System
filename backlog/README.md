@@ -107,11 +107,24 @@ in its frontmatter.
    promise. Run `backlog-check.py --checklist <id>`: it enumerates the work item's `impacts:`
    ledger (see above) as a **nominative checklist** for this step, instead of relying on recall.
 2. **Decision** recorded if the closure settles a structural choice.
-3. **Backlog cleared** — the work item + its `INDEX.md` line are **removed** (or status updated if
+3. **Review** — the standard's own tier-1 checks first (`checks/memory-audit.py --tier1`); they
+   are agnostic and always available, so this half never depends on the project. Then the
+   **project's review of the delivered surface** — its content belongs to the project, not to the
+   framework: a review skill, an auditing agent, a second pair of eyes, a cross-read. **Ask before
+   assuming.** Unless the user already settled it in the session, or a standing answer sits under
+   `closure.review` in `checks-config.json` (a non-empty string = do it, and this is what
+   reviewing means here; `false` = the project waived it, and the step still prints, marked as
+   waived, so the choice stays visible). No key, no session answer → the question gets asked. The
+   framework **requires** the review; it neither prescribes its nature nor assumes the answer
+   (`INSTALL.md §Guiding principle`).
+4. **Backlog cleared** — the work item + its `INDEX.md` line are **removed** (or status updated if
    partial).
-4. **State updated** — `DASHBOARD.md`: progress of the relevant milestone, hot spots (resolved
+5. **State updated** — `DASHBOARD.md`: progress of the relevant milestone, hot spots (resolved
    ones removed / new ones added), date line.
-5. **Knowledge capture** — ask "reusable method learned here?" and route it if so.
+6. **Knowledge capture** — ask "reusable method learned here?" and route it if so.
 
-> Until these steps are done, the work item **is not closed**. The validation step plugs into the
-> project's own ritual (its review skill, etc.) — the process doesn't impose one.
+> Until these steps are done, the work item **is not closed**. Step 3 is where the project's own
+> ritual plugs in (its review skill, its merge, its auditing agent) — the process requires the
+> step, never its content, and there is **no mechanical check that the review happened**:
+> unverifiable without false positives, so out of tier 1 by construction (`checks/TEMPLATE.md`).
+> It's a box to tick, like the five others.
