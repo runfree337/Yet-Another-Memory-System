@@ -156,7 +156,12 @@ known only to it; **`ignore-symbols`** — literal candidate exclusions for host
 (`MonoBehaviour`…), additive not substitutive; **`symbol-ignore-dirs`** — doc dirs (relative
 to the framework root) where the two symbol rules are muted (transient docs naming not-yet-built
 types, e.g. `backlog/`), while R-DEAD-PATH / R-DEAD-DECISION stay active there (a dead path in
-a transient doc is a real drift, an unwritten type is not).
+a transient doc is a real drift, an unwritten type is not). Two more precision knobs sit outside
+the symbol-corpus family: **`neg-words`** appends project-language negation vocabulary (French
+`pas d'`, `non retenue`…) to the built-in bilingual NEG list, so a symbol/path the prose itself
+says is absent stops being double-reported — declared per project rather than baking broad words
+into every default; and the `Xxx` PascalCase placeholder is now recognized built-in alongside
+`XXXX`, so fill-in-the-blank names (`CampJournalXxxTab`) are treated as templates, not dead symbols.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -167,6 +172,7 @@ a transient doc is a real drift, an unwritten type is not).
 | *(settings)* `doc-refs.symbol-suffixes` | keep only PascalCase candidates ending in one of these (R-DEAD-SYMBOL / R-GHOST-ABSENCE); empty ⇒ all | `[]` |
 | *(settings)* `doc-refs.ignore-symbols` | literal candidate exclusions, host-ecosystem API (same two rules) | `[]` |
 | *(settings)* `doc-refs.symbol-ignore-dirs` | doc dirs (framework-relative) where the two symbol rules are muted | `[]` |
+| *(settings)* `doc-refs.neg-words` | extra project-language negation words appended to NEG (suppress R-DEAD-PATH/DECISION/SYMBOL, never R-GHOST-ABSENCE) | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the

@@ -61,6 +61,10 @@ Exemptions (apply identically to all four rules above):
   - `doc-refs.symbol-ignore-dirs` (optional, default empty) — doc dirs (relative to the
     framework root) where the two symbol rules are muted (transient docs naming not-yet-built
     types, e.g. `backlog/`). R-DEAD-PATH / R-DEAD-DECISION stay active there.
+  - `doc-refs.neg-words` (optional, default empty) — extra negation words appended to the
+    built-in bilingual NEG list, for docs in the project's own language (French `pas d'`,
+    `non retenue`…). Suppresses R-DEAD-PATH / R-DEAD-DECISION / R-DEAD-SYMBOL, like NEG; never
+    R-GHOST-ABSENCE. (The `Xxx` PascalCase placeholder, like `XXXX`, is recognized built-in.)
 
 Modes:
   doc-refs-check.py [paths.md…]  # explicit targets
@@ -99,7 +103,7 @@ CODE_SPAN_RE = re.compile(r"`([^`]+)`")
 # composed PascalCase: first char upper, >=4 chars total, >=2 uppercase letters overall
 # (filters out ordinary single words like `Foo` or `Ok`).
 PASCAL_RE = re.compile(r"^[A-Z][A-Za-z0-9]{3,}$")
-TEMPLATE = re.compile(r"[<>{}*…]|YYYY|AAAA|XXXX|MM-|/\.\.\.")
+TEMPLATE = re.compile(r"[<>{}*…]|Xxx|YYYY|AAAA|XXXX|MM-|/\.\.\.")
 
 # Prose words that neutralize a path/decision/symbol mention — both languages covered
 # (docs may be authored in either while the corpus is being translated; keep both sets,
@@ -111,7 +115,8 @@ NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a
        "moved", "future", "does not exist", "doesn't exist", "not yet", "not created",
        "planned")
 # Same membership test, one compiled alternation instead of 37 substring scans per line
-# (measured ~0.14 s on a 355-file corpus — the single hottest spot of a clean run).
+# (measured ~0.14 s on a 355-file corpus — the single hottest spot of a clean run). Rebuilt
+# once below if `doc-refs.neg-words` adds project-language vocabulary (empty default = as is).
 NEG_RE = re.compile("|".join(re.escape(w) for w in NEG))
 
 # Trigger words for R-GHOST-ABSENCE — prose claiming a symbol is missing/not yet built.
@@ -184,6 +189,19 @@ IGNORE_SYMBOLS = frozenset(s for s in entrylib.cfg_get(_CFG, ("doc-refs", "ignor
                            if isinstance(s, str) and s)
 SYMBOL_IGNORE_DIRS = tuple(d.strip("/") for d in entrylib.cfg_get(_CFG, ("doc-refs", "symbol-ignore-dirs"), [])
                            if isinstance(d, str) and d.strip("/"))
+
+# `doc-refs.neg-words` — extra negation vocabulary appended to the built-in bilingual NEG
+# list, for docs authored in the project's own language (e.g. French `pas d'`, `non retenue`).
+# The framework carries FR + EN; a project whose docs use other phrasings (or a third language)
+# declares them here rather than forcing broad words like `pas de` onto every project's default.
+# Matched lowercased against the line, like the built-ins; suppresses R-DEAD-PATH /
+# R-DEAD-DECISION / R-DEAD-SYMBOL on a line whose prose already states the target is absent —
+# never R-GHOST-ABSENCE (which fires ON such lines by design). Optional, additive, empty by
+# default (⇒ NEG_RE unchanged).
+NEG_EXTRA = tuple(w.lower() for w in entrylib.cfg_get(_CFG, ("doc-refs", "neg-words"), [])
+                  if isinstance(w, str) and w)
+if NEG_EXTRA:
+    NEG_RE = re.compile("|".join(re.escape(w) for w in NEG + NEG_EXTRA))
 
 
 def exists_somewhere(token, file_dir):

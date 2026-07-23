@@ -10,6 +10,7 @@
 #   - symbol-ignore-dirs : mute the two symbol rules on given doc dirs; paths stay checked.
 import importlib.util
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -110,6 +111,38 @@ class TestSymbolIgnoreDirs(SymbolTuningBase):
         rules = self._rules("See `GhostManager` for the plan.",
                             suffixes=["Manager"], ignore_dirs=["backlog"], subdir="architecture")
         self.assertIn("R-DEAD-SYMBOL", rules)
+
+
+class TestXxxTemplate(SymbolTuningBase):
+    def test_xxx_placeholder_not_flagged(self):
+        # `CampJournalXxxTab` / `XxxDetailView` are fill-in-the-blank names, not real symbols:
+        # the `Xxx` placeholder (like the built-in `XXXX`) makes them template → never flagged.
+        rules = self._rules("Tabs `CampJournalXxxTab`, `XxxDetailView`, `XxxEntryView`.")
+        self.assertNotIn("R-DEAD-SYMBOL", rules)
+
+    def test_real_symbol_without_xxx_still_flagged(self):
+        # Control: a composed name with no `Xxx` and absent from the corpus is still flagged.
+        self.assertIn("R-DEAD-SYMBOL", self._rules("See `MissingWidget` here."))
+
+
+class TestNegWords(SymbolTuningBase):
+    def _with_neg(self, *extra):
+        """Rebuild NEG_RE with project-language words, mirroring the script's config path."""
+        self.mod.NEG_RE = re.compile(
+            "|".join(re.escape(w) for w in self.mod.NEG + tuple(w.lower() for w in extra)))
+
+    def test_french_negation_suppresses_dead_symbol(self):
+        # `IAudioProvider` is absent from the corpus; the prose says `pas d'IAudioProvider`
+        # (there is none) — with the French word taught, R-DEAD-SYMBOL is suppressed as redundant.
+        self._with_neg("pas d'", "non retenue")
+        self.assertNotIn("R-DEAD-SYMBOL",
+                         self._rules("il n'y a pas d'`IAudioProvider` dans ce build"))
+        self.assertNotIn("R-DEAD-SYMBOL",
+                         self._rules("Proposition NON RETENUE : `GhostThing`"))
+
+    def test_without_neg_word_still_flagged(self):
+        # Control: the same absent symbol on a neutral line is still flagged (default NEG).
+        self.assertIn("R-DEAD-SYMBOL", self._rules("le module `IAudioProvider` gère le son"))
 
 
 if __name__ == "__main__":
