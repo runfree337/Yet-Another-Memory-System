@@ -21,10 +21,15 @@ Rules:
                   `decisions/` folder at all — nothing to check against.
   R-DEAD-SYMBOL   (TO-CONFIRM) : a backticked, composed PascalCase token (>= 2 capitalized
                   words, e.g. `FooBarManager` — filters out ordinary single words) not
-                  found (grep-style) across the project's code, per `index/index-config.json`
-                  (`roots` + `extensions`). AGNOSTIC/INACTIVE (no findings, no error) when
-                  that config is absent or has no `roots`/`extensions` — the framework does
-                  not hardcode a project's code layout. Narrowable per project (all optional,
+                  found (grep-style) across the project's code. The corpus comes from
+                  `doc-refs.code-roots` + `doc-refs.code-extensions` (checks-config.json,
+                  roots resolved from the REPO root) when both are set, else from
+                  `index/index-config.json` (`roots` + `extensions`) as before — the
+                  dedicated keys DECOUPLE this check from index-check's config, whose `base`
+                  semantics differ when the framework is nested (e.g. under `Docs/`) and
+                  whose manifest a project may not want activated. AGNOSTIC/INACTIVE (no
+                  findings, no error) when neither source provides roots + extensions — the
+                  framework does not hardcode a project's code layout. Narrowable per project (all optional,
                   all additive, defaults = today's behavior) via `doc-refs.symbol-suffixes`
                   (keep only names ending in a declared suffix), `doc-refs.ignore-symbols`
                   (drop host-ecosystem API names) and `doc-refs.symbol-ignore-dirs` (mute the
@@ -250,16 +255,35 @@ if NEG_EXTRA:
 # precision of what it declares). Purely suppressive — can only remove findings, never add.
 # An unparsable pattern becomes a BLOCKING CFG-INVALID in main(): a config the user believes
 # active is never silently ignored. Optional, empty by default (⇒ behavior unchanged).
-GHOST_EXCLUDE, _GHOST_EXCLUDE_ERRS = [], []
+_CFG_KEY_ERRS = []  # per-key config errors, surfaced as BLOCKING CFG-INVALID in main()
+GHOST_EXCLUDE = []
 for _pat in entrylib.cfg_get(_CFG, ("doc-refs", "ghost-exclude-patterns"), []):
     if not (isinstance(_pat, str) and _pat):
         continue
     try:
         GHOST_EXCLUDE.append(re.compile(_pat, re.IGNORECASE))
     except re.error as _e:
-        _GHOST_EXCLUDE_ERRS.append(
+        _CFG_KEY_ERRS.append(
             f"doc-refs.ghost-exclude-patterns: invalid regex {_pat!r} ({_e})")
 GHOST_EXCLUDE = tuple(GHOST_EXCLUDE)
+
+# `doc-refs.code-roots` + `doc-refs.code-extensions` — DEDICATED corpus keys for the two
+# symbol rules, decoupling them from `index/index-config.json`. Reusing index-check's file
+# proved a trap on a host with the framework nested under `Docs/`: `base` is resolved
+# against FRAMEWORK here but against the cwd by index-check (one file cannot satisfy both),
+# and merely creating the file wakes index-check up against a manifest whose path format the
+# project may not share. Roots are resolved from the REPO root (git toplevel — the natural
+# frame for "where does the code live", nesting-proof); extensions as in index-config.
+# Both-or-neither: exactly one of the two set is a BLOCKING CFG-INVALID, never a silent
+# no-op. Absent (default) ⇒ fallback on index-config.json, today's behavior unchanged.
+CODE_ROOTS = tuple(r for r in entrylib.cfg_get(_CFG, ("doc-refs", "code-roots"), [])
+                   if isinstance(r, str) and r)
+CODE_EXTENSIONS = tuple(e for e in entrylib.cfg_get(_CFG, ("doc-refs", "code-extensions"), [])
+                        if isinstance(e, str) and e)
+if bool(CODE_ROOTS) != bool(CODE_EXTENSIONS):
+    _CFG_KEY_ERRS.append(
+        "doc-refs.code-roots / doc-refs.code-extensions: set together — one without the "
+        "other activates nothing")
 
 
 def exists_somewhere(token, file_dir):
@@ -365,11 +389,13 @@ def _candidate_symbol(span):
 
 # --------------------------------------------------------------------------- #
 # Code corpus for R-DEAD-SYMBOL / R-GHOST-ABSENCE — agnostic: the roots and
-# extensions to search are never hardcoded here, they come from the project's
-# own `index/index-config.json` (schema: `index/index-config.example.json`,
-# same file `checks/index-check.py` loads). Absent/incomplete config -> both
-# rules stay INACTIVE (no findings, no error): the framework does not assume
-# the host project's code layout on its own.
+# extensions to search are never hardcoded here. Two sources, in order:
+# (1) the dedicated `doc-refs.code-roots`/`code-extensions` keys (see their
+# loading block above — repo-root-relative, index-check-free); (2) fallback:
+# the project's own `index/index-config.json` (schema:
+# `index/index-config.example.json`, same file `checks/index-check.py` loads).
+# Neither source complete -> both rules stay INACTIVE (no findings, no error):
+# the framework does not assume the host project's code layout on its own.
 # --------------------------------------------------------------------------- #
 
 _CODE_CORPUS = None  # sentinel None = not loaded yet; "" (falsy) = loaded, inactive
@@ -390,14 +416,24 @@ def _load_code_index_config():
     return base, roots, exts
 
 
+def _load_code_config():
+    """(base, roots, extensions) of the code corpus, or None. Dedicated keys first —
+    `doc-refs.code-roots`/`code-extensions`, resolved from the REPO root — then fallback
+    on `index/index-config.json` (unchanged), so a project that only wants the symbol
+    rules never has to create index-check's config file."""
+    if CODE_ROOTS and CODE_EXTENSIONS:
+        return REPO, list(CODE_ROOTS), CODE_EXTENSIONS
+    return _load_code_index_config()
+
+
 def code_corpus():
     """Concatenated text of every file under the configured code roots/extensions — a
-    grep-style "does this symbol exist" search space. Empty string (falsy) when
-    `index/index-config.json` is absent or incomplete."""
+    grep-style "does this symbol exist" search space. Empty string (falsy) when neither
+    the dedicated `doc-refs` keys nor `index/index-config.json` provide a complete config."""
     global _CODE_CORPUS
     if _CODE_CORPUS is not None:
         return _CODE_CORPUS
-    cfg = _load_code_index_config()
+    cfg = _load_code_config()
     chunks = []
     if cfg:
         base, roots, exts = cfg
@@ -542,7 +578,7 @@ def main():
     if _CFG_ERR:
         findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
                          "CFG-INVALID", _CFG_ERR))
-    for err in _GHOST_EXCLUDE_ERRS:
+    for err in _CFG_KEY_ERRS:
         findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
                          "CFG-INVALID", err))
     for f in gather(a):

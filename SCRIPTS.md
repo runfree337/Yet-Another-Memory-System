@@ -148,9 +148,17 @@ symbol is missing/not yet built while it *does* exist in code — to-confirm, an
 and the symbol must share a **segment** of the line — split on `|`/`;`/sentence enders, never
 `,`/`:` — so a ghost word one table cell or one clause away is not read as a claim about the
 symbol, which drops ~two-thirds of the line-cooccurrence noise). The two
-symbol rules are agnostic: they read `roots`/`extensions` from `index/index-config.json` <!-- template -->
-(created at install time, schema: `index/index-config.example.json`) and stay silently
-INACTIVE without that config — the framework never hardcodes a project's code layout. Same
+symbol rules are agnostic: their code corpus comes from the **dedicated keys**
+**`code-roots`** + **`code-extensions`** (`checks-config.json`, dirs resolved from the **repo
+root** — git toplevel; set together or not at all, exactly one is a BLOCKING `CFG-INVALID`),
+falling back on `roots`/`extensions` from `index/index-config.json` <!-- template -->
+(created at install time, schema: `index/index-config.example.json`) when the keys are absent,
+and stay silently INACTIVE without either — the framework never hardcodes a project's code
+layout. The dedicated keys exist because reusing index-check's file proved a trap on a host
+with the framework nested under a subdir (`Docs/`): its `base` resolves against the framework
+root in doc-refs but against the cwd in index-check — one file cannot satisfy both — and merely
+creating it wakes index-check up against a manifest whose path format the project may not
+share. Same
 reasoning extends their tuning to three optional, additive `doc-refs` keys (all empty by
 default ⇒ today's behavior): **`symbol-suffixes`** — when non-empty, a candidate is kept only
 if it ends with a project-declared suffix (`Manager`/`View`/`Registry`…), the lever that
@@ -187,6 +195,8 @@ is the exact fix, after which a project's patterns simply empty out.
 | *(settings)* `doc-refs.symbol-ignore-dirs` | doc dirs (framework-relative) where the two symbol rules are muted | `[]` |
 | *(settings)* `doc-refs.neg-words` | extra project-language negation words appended to NEG (suppress R-DEAD-PATH/DECISION/SYMBOL, never R-GHOST-ABSENCE) | `[]` |
 | *(settings)* `doc-refs.ghost-exclude-patterns` | case-insensitive segment regexes suppressing R-GHOST-ABSENCE where they match — a project's grammar as config data, suppressive only | `[]` |
+| *(settings)* `doc-refs.code-roots` | dedicated corpus dirs for the two symbol rules, resolved from the repo root — set with `code-extensions`, replaces the `index-config.json` fallback | `[]` |
+| *(settings)* `doc-refs.code-extensions` | file extensions of the dedicated corpus (e.g. `.cs`) — set with `code-roots` | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
