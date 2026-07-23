@@ -24,7 +24,11 @@ Rules:
                   found (grep-style) across the project's code, per `index/index-config.json`
                   (`roots` + `extensions`). AGNOSTIC/INACTIVE (no findings, no error) when
                   that config is absent or has no `roots`/`extensions` — the framework does
-                  not hardcode a project's code layout.
+                  not hardcode a project's code layout. Narrowable per project (all optional,
+                  all additive, defaults = today's behavior) via `doc-refs.symbol-suffixes`
+                  (keep only names ending in a declared suffix), `doc-refs.ignore-symbols`
+                  (drop host-ecosystem API names) and `doc-refs.symbol-ignore-dirs` (mute the
+                  rule on transient doc dirs) — see the Exemptions below.
   R-GHOST-ABSENCE (TO-CONFIRM) : the reverse drift — a line whose prose claims a symbol is
                   missing/not yet built ("not yet", "missing", "absent", "to be built",
                   "not wired", "pas encore", "manquant", "à créer"…) while the backticked
@@ -47,6 +51,16 @@ Exemptions (apply identically to all four rules above):
   - `doc-refs.ignore-prefixes` (`checks-config.json`, optional, default empty) — project
     -declared prefixes for tokens that LOOK like repo paths but never are (a runtime API
     joined to a filename, e.g. `Runtime.dataDir/…`). R-DEAD-PATH only.
+  - `doc-refs.symbol-suffixes` (optional, default empty) — when non-empty, a PascalCase
+    candidate is kept only if it ends with one of these suffixes (a project's type-naming
+    convention: Manager, View, Registry…). Empty/absent = every composed PascalCase token,
+    unchanged. R-DEAD-SYMBOL / R-GHOST-ABSENCE.
+  - `doc-refs.ignore-symbols` (optional, default empty) — literal candidate exclusions for
+    host-ecosystem API cited in the docs (`MonoBehaviour`, `RectTransform`…). Additive,
+    never substitutive. R-DEAD-SYMBOL / R-GHOST-ABSENCE.
+  - `doc-refs.symbol-ignore-dirs` (optional, default empty) — doc dirs (relative to the
+    framework root) where the two symbol rules are muted (transient docs naming not-yet-built
+    types, e.g. `backlog/`). R-DEAD-PATH / R-DEAD-DECISION stay active there.
 
 Modes:
   doc-refs-check.py [paths.md…]  # explicit targets
@@ -151,6 +165,26 @@ _CFG, _CFG_ERR = entrylib.load_checks_config(FRAMEWORK)
 IGNORE_PREFIXES = tuple(p for p in entrylib.cfg_get(_CFG, ("doc-refs", "ignore-prefixes"), [])
                         if isinstance(p, str) and p)
 
+# Three optional, additive symbol-rule tunings (R-DEAD-SYMBOL / R-GHOST-ABSENCE) — all empty
+# by default, so an absent config keeps today's behavior exactly. Same nature as `roots`/
+# `extensions` in index-config: a host ecosystem's API surface and naming conventions
+# (Unity != React != Django) are the project's to declare, never hardcoded in the framework.
+#   symbol-suffixes    — when non-empty, a PascalCase candidate is kept only if it ends with
+#                        one of these suffixes (`Manager`, `View`, `Registry`…). Empty/absent
+#                        ⇒ every composed PascalCase token, as before. The lever that silences
+#                        the host API cited across a project's docs.
+#   ignore-symbols     — literal exclusions for host-ecosystem API names (`MonoBehaviour`,
+#                        `RectTransform`…). Additive, never substitutive.
+#   symbol-ignore-dirs — doc dirs (relative to the framework root) where the two symbol rules
+#                        are muted — transient docs that legitimately name not-yet-built types
+#                        (a `backlog/`). R-DEAD-PATH / R-DEAD-DECISION stay ACTIVE there.
+SYMBOL_SUFFIXES = tuple(s for s in entrylib.cfg_get(_CFG, ("doc-refs", "symbol-suffixes"), [])
+                        if isinstance(s, str) and s)
+IGNORE_SYMBOLS = frozenset(s for s in entrylib.cfg_get(_CFG, ("doc-refs", "ignore-symbols"), [])
+                           if isinstance(s, str) and s)
+SYMBOL_IGNORE_DIRS = tuple(d.strip("/") for d in entrylib.cfg_get(_CFG, ("doc-refs", "symbol-ignore-dirs"), [])
+                           if isinstance(d, str) and d.strip("/"))
+
 
 def exists_somewhere(token, file_dir):
     # os.path.exists, not isfile: a reference to a directory that exists (a package
@@ -233,7 +267,10 @@ def _candidate_symbol(span):
     """Extract a composed-PascalCase candidate from a backtick span, or None. Strips a
     trailing call/generic (`Foo(x)` -> `Foo`, `Foo<T>` -> `Foo`) and a member access
     (`Foo.Bar` -> `Foo`), then requires PASCAL_RE + >=2 uppercase letters — filters out
-    ordinary single words so common prose doesn't get flagged."""
+    ordinary single words so common prose doesn't get flagged. Two optional, additive
+    config filters narrow the result further: `symbol-suffixes` (when non-empty, keep only
+    names ending in a project-declared suffix) and `ignore-symbols` (drop host-ecosystem
+    API names outright) — both empty by default, i.e. today's unfiltered behavior."""
     s = span.strip().split("(")[0].split("<")[0]
     s = s.strip(" .,;:'\"`")
     first = s.split(".")[0]
@@ -243,6 +280,10 @@ def _candidate_symbol(span):
         return None
     if TEMPLATE.search(first):  # gabarit placeholder (Xxx, YYYY…)
         return None
+    if SYMBOL_SUFFIXES and not first.endswith(SYMBOL_SUFFIXES):
+        return None  # project convention: a type ends in Manager/View/Registry/…
+    if first in IGNORE_SYMBOLS:
+        return None  # host-ecosystem API cited in the docs (MonoBehaviour…)
     return first
 
 
@@ -298,6 +339,20 @@ def code_corpus():
     return _CODE_CORPUS
 
 
+def _symbol_muted(path):
+    """True when `path` sits under a `doc-refs.symbol-ignore-dirs` entry (relative to the
+    framework root) — the two symbol rules are silenced there (transient docs that name
+    not-yet-built types, e.g. `backlog/`). R-DEAD-PATH / R-DEAD-DECISION stay active: a
+    dead path cited in a transient doc is a real drift, an unwritten type is not."""
+    if not SYMBOL_IGNORE_DIRS:
+        return False
+    try:
+        rel = os.path.relpath(os.path.abspath(path), FRAMEWORK).replace(os.sep, "/")
+    except ValueError:  # different drive on Windows — cannot be under FRAMEWORK
+        return False
+    return any(rel == d or rel.startswith(d + "/") for d in SYMBOL_IGNORE_DIRS)
+
+
 def scan_file(path):
     findings = []  # each: (severity, path, line, rule, msg)
     try:
@@ -308,6 +363,7 @@ def scan_file(path):
     file_dir = os.path.dirname(os.path.abspath(path))
     exempt = template_lines(lines)
     corpus = code_corpus()
+    symbol_muted = _symbol_muted(path)
     is_decisions_index = (os.path.basename(path) == "INDEX.md"
                            and os.path.dirname(os.path.abspath(path)) == DECISIONS_DIR)
 
@@ -343,8 +399,9 @@ def scan_file(path):
                     findings.append(("BLOCKING", path, i, "R-DEAD-DECISION",
                                      f"decision id with no decisions/{did}.md file: {did}"))
 
-        # R-DEAD-SYMBOL — inactive (corpus falsy) when index-config.json is absent/incomplete.
-        if not neg and corpus:
+        # R-DEAD-SYMBOL — inactive (corpus falsy) when index-config.json is absent/incomplete;
+        # muted on files under `doc-refs.symbol-ignore-dirs` (transient docs naming non-built types).
+        if not neg and corpus and not symbol_muted:
             seen = set()
             for m in CODE_SPAN_RE.finditer(line):
                 sym = _candidate_symbol(m.group(1))
@@ -354,8 +411,8 @@ def scan_file(path):
                                      f"symbol not found under the configured code roots: {sym}"))
 
         # R-GHOST-ABSENCE — deliberately NOT gated by `neg`: it fires exactly on the lines
-        # NEG would otherwise suppress. Same config gating as R-DEAD-SYMBOL.
-        if corpus and any(w in low for w in GHOST_WORDS):
+        # NEG would otherwise suppress. Same config gating as R-DEAD-SYMBOL (corpus + muted dirs).
+        if corpus and not symbol_muted and any(w in low for w in GHOST_WORDS):
             seen = set()
             for m in CODE_SPAN_RE.finditer(line):
                 sym = _candidate_symbol(m.group(1))
