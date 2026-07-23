@@ -217,6 +217,37 @@ class TestGhostExcludePatterns(SymbolTuningBase):
                       self._rules("l'icône absente du `FooManager` sera livrée"))
 
 
+class TestDedicatedCodeKeys(SymbolTuningBase):
+    # `doc-refs.code-roots`/`code-extensions` decouple the symbol-rule corpus from
+    # index-check's `index/index-config.json` (whose `base` semantics differ when the
+    # framework is nested, and whose mere presence wakes index-check up). Roots resolve
+    # from the REPO root; absent keys ⇒ fallback on index-config, today's behavior.
+    def _repo_with_code(self):
+        repo = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(repo, ignore_errors=True))
+        os.makedirs(os.path.join(repo, "Src"))
+        with open(os.path.join(repo, "Src", "a.cs"), "w", encoding="utf-8") as fh:
+            fh.write("public class KeyedManager {}\n")
+        return repo
+
+    def test_dedicated_keys_feed_the_corpus(self):
+        # No index-config.json anywhere: the dedicated keys alone activate the rules.
+        self.mod.REPO = self._repo_with_code()
+        self.mod.CODE_ROOTS, self.mod.CODE_EXTENSIONS = ("Src",), (".cs",)
+        self.mod._CODE_CORPUS = None  # drop the corpus pre-seeded by setUp
+        self.assertIn("KeyedManager", self.mod.code_corpus())
+        self.assertNotIn("R-DEAD-SYMBOL", self._rules("see `KeyedManager` here"))
+        self.assertIn("R-DEAD-SYMBOL", self._rules("see `MissingWidget` here"))
+
+    def test_absent_keys_fall_back_to_index_config(self):
+        # Keys empty and no index/index-config.json under FRAMEWORK → corpus empty (falsy),
+        # both symbol rules inactive — exactly today's behavior.
+        self.mod.CODE_ROOTS = self.mod.CODE_EXTENSIONS = ()
+        self.mod._CODE_CORPUS = None
+        self.assertEqual("", self.mod.code_corpus())
+        self.assertNotIn("R-DEAD-SYMBOL", self._rules("see `MissingWidget` here"))
+
+
 class TestIgnorePragma(SymbolTuningBase):
     def test_pragma_silences_all_rules_on_its_line(self):
         # Dead symbol + dead path on the marked line → nothing at all is reported.
