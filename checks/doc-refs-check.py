@@ -39,7 +39,11 @@ Rules:
                   symbol. Same config gating as R-DEAD-SYMBOL. Trigger words overlap `NEG`
                   (which otherwise suppresses R-DEAD-PATH/R-DEAD-DECISION/R-DEAD-SYMBOL on a
                   line) by design: this rule is exactly what fires ON those lines, it is
-                  never skipped by `NEG`.
+                  never skipped by `NEG`. Residual noise where the ghost word binds to a
+                  NEIGHBOURING noun (`icône absente du SpriteRegistry` — the icon is absent,
+                  not the registry) is grammar, out of reach of any proximity rule: the
+                  project declares its own prose shapes in
+                  `doc-refs.ghost-exclude-patterns` (see the Exemptions below).
 
 Zero false positive on the firm (BLOCKING) tier; TO-CONFIRM is a pre-filter for judgment.
 Flags, never fixes.
@@ -68,6 +72,19 @@ Exemptions (apply identically to all four rules above):
     built-in bilingual NEG list, for docs in the project's own language (French `pas d'`,
     `non retenue`…). Suppresses R-DEAD-PATH / R-DEAD-DECISION / R-DEAD-SYMBOL, like NEG; never
     R-GHOST-ABSENCE. (The `Xxx` PascalCase placeholder, like `XXXX`, is recognized built-in.)
+  - `doc-refs.ghost-exclude-patterns` (optional, default empty) — project-declared regexes
+    (case-insensitive) matched against the SEGMENT R-GHOST-ABSENCE is about to flag; a match
+    suppresses the rule for that segment only. This is where a project's GRAMMAR lives as
+    data — e.g. a French container shape like "(absente|manquante)…(du|de la|des|dans)
+    followed by a backtick" says "the ghost word binds to a neighbouring noun, the symbol is
+    only its container" — the framework itself stays language-blind. Purely SUPPRESSIVE: a
+    pattern can only remove findings, never add one, so the zero-FP contract is untouched.
+    An invalid regex is a BLOCKING CFG-INVALID, never silently dropped. R-GHOST-ABSENCE only.
+  - `<!-- doc-refs: ignore -->` pragma — an explicit reviewed-and-accepted escape hatch: every
+    doc-refs rule is silenced on the line carrying the marker (that line only, all four
+    rules). Distinct in INTENT from `<!-- template -->` (this target is an example) even
+    though both exempt their line: the pragma says "a human looked at this finding and keeps
+    the prose as-is". Reserve it for the residue no config key covers cleanly.
 
 Modes:
   doc-refs-check.py [paths.md…]  # explicit targets
@@ -135,7 +152,9 @@ GHOST_WORDS = ("not yet", "missing", "absent", "to be built", "not wired",
 # the line-cooccurrence false positives, keeps every genuine "delivered but the doc still
 # says missing" case. The residual — a ghost word grammatically bound to a NEIGHBOURING noun
 # (`icône absente du SpriteRegistry` claims the icon is absent, not the registry) — is the
-# lexical ceiling, out of reach of any proximity rule (see the code-symbol-graph roadmap).
+# lexical ceiling, out of reach of any proximity rule: bridged per project by
+# `doc-refs.ghost-exclude-patterns` (grammar as config data, see GHOST_EXCLUDE below) until
+# the code-symbol-graph roadmap makes the rule exact.
 GHOST_SEGMENT_RE = re.compile(r"[|;]|(?<=[.!?])\s+")
 
 # TEMPLATE exemption — explicit HTML marker, never a hidden allowlist in the script.
@@ -145,6 +164,12 @@ GHOST_SEGMENT_RE = re.compile(r"[|;]|(?<=[.!?])\s+")
 #             back to case (a) — exempts only its own line.
 TEMPLATE_OPEN = "<!-- template -->"
 TEMPLATE_CLOSE = "<!-- /template -->"
+
+# Reviewed-and-accepted escape hatch — same explicit-marker philosophy as TEMPLATE (in the
+# text, never a hidden allowlist), but a different INTENT: `<!-- template -->` says "this
+# target is an example, never meant to exist"; the pragma says "a human reviewed this finding
+# and keeps the prose as-is". Line form only, silences every doc-refs rule on its own line.
+PRAGMA = "<!-- doc-refs: ignore -->"
 
 
 def template_lines(lines):
@@ -215,6 +240,26 @@ NEG_EXTRA = tuple(w.lower() for w in entrylib.cfg_get(_CFG, ("doc-refs", "neg-wo
                   if isinstance(w, str) and w)
 if NEG_EXTRA:
     NEG_RE = re.compile("|".join(re.escape(w) for w in NEG + NEG_EXTRA))
+
+# `doc-refs.ghost-exclude-patterns` — project-declared regexes (compiled case-insensitive)
+# matched against the SEGMENT R-GHOST-ABSENCE is about to flag; any match suppresses the rule
+# for that segment. The residual noise past the segment split is grammatical — the ghost word
+# binds to a NEIGHBOURING noun and the symbol is only its container (`icône absente du
+# `SpriteRegistry``) — and grammar is a language's own, so it goes here as per-project DATA,
+# never hardcoded in the framework (same contract as `neg-words`: the project answers for the
+# precision of what it declares). Purely suppressive — can only remove findings, never add.
+# An unparsable pattern becomes a BLOCKING CFG-INVALID in main(): a config the user believes
+# active is never silently ignored. Optional, empty by default (⇒ behavior unchanged).
+GHOST_EXCLUDE, _GHOST_EXCLUDE_ERRS = [], []
+for _pat in entrylib.cfg_get(_CFG, ("doc-refs", "ghost-exclude-patterns"), []):
+    if not (isinstance(_pat, str) and _pat):
+        continue
+    try:
+        GHOST_EXCLUDE.append(re.compile(_pat, re.IGNORECASE))
+    except re.error as _e:
+        _GHOST_EXCLUDE_ERRS.append(
+            f"doc-refs.ghost-exclude-patterns: invalid regex {_pat!r} ({_e})")
+GHOST_EXCLUDE = tuple(GHOST_EXCLUDE)
 
 
 def exists_somewhere(token, file_dir):
@@ -402,7 +447,7 @@ def scan_file(path):
         if line.lstrip().startswith("```"):
             fenced = not fenced
             continue
-        if fenced or i in exempt:
+        if fenced or i in exempt or PRAGMA in line:
             continue
         low = line.lower()
         neg = NEG_RE.search(low) is not None
@@ -450,6 +495,9 @@ def scan_file(path):
             for seg in GHOST_SEGMENT_RE.split(line):
                 if not any(w in seg.lower() for w in GHOST_WORDS):
                     continue
+                if any(rx.search(seg) for rx in GHOST_EXCLUDE):
+                    continue  # project-declared prose shape: the ghost word binds to a
+                    #           neighbouring noun, the symbol is only its container
                 for m in CODE_SPAN_RE.finditer(seg):
                     sym = _candidate_symbol(m.group(1))
                     if sym and sym not in seen and sym in corpus:
@@ -494,6 +542,9 @@ def main():
     if _CFG_ERR:
         findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
                          "CFG-INVALID", _CFG_ERR))
+    for err in _GHOST_EXCLUDE_ERRS:
+        findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
+                         "CFG-INVALID", err))
     for f in gather(a):
         findings += scan_file(f)
 
