@@ -144,7 +144,10 @@ matching `decisions/<id>.md` — blocking; inactive without a `decisions/` folde
 **R-DEAD-SYMBOL** (a backticked composed-PascalCase token, e.g. `` `FooBarManager` ``, found
 nowhere under the code roots — to-confirm); **R-GHOST-ABSENCE** (the reverse: prose says a
 symbol is missing/not yet built while it *does* exist in code — to-confirm, and deliberately
-**not** suppressed by the NEG word list, since it fires exactly on those lines). The two
+**not** suppressed by the NEG word list, since it fires exactly on those lines; the ghost word
+and the symbol must share a **segment** of the line — split on `|`/`;`/sentence enders, never
+`,`/`:` — so a ghost word one table cell or one clause away is not read as a claim about the
+symbol, which drops ~two-thirds of the line-cooccurrence noise). The two
 symbol rules are agnostic: they read `roots`/`extensions` from `index/index-config.json` <!-- template -->
 (created at install time, schema: `index/index-config.example.json`) and stay silently
 INACTIVE without that config — the framework never hardcodes a project's code layout. Same

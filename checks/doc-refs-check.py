@@ -29,14 +29,17 @@ Rules:
                   (keep only names ending in a declared suffix), `doc-refs.ignore-symbols`
                   (drop host-ecosystem API names) and `doc-refs.symbol-ignore-dirs` (mute the
                   rule on transient doc dirs) — see the Exemptions below.
-  R-GHOST-ABSENCE (TO-CONFIRM) : the reverse drift — a line whose prose claims a symbol is
+  R-GHOST-ABSENCE (TO-CONFIRM) : the reverse drift — prose claiming a symbol is
                   missing/not yet built ("not yet", "missing", "absent", "to be built",
                   "not wired", "pas encore", "manquant", "à créer"…) while the backticked
-                  PascalCase symbol on that line DOES exist in the code ("delivered but the
-                  doc doesn't know"). Same config gating as R-DEAD-SYMBOL. Trigger words
-                  overlap `NEG` (which otherwise suppresses R-DEAD-PATH/R-DEAD-DECISION/
-                  R-DEAD-SYMBOL on a line) by design: this rule is exactly what fires ON
-                  those lines, it is never skipped by `NEG`.
+                  PascalCase symbol DOES exist in the code ("delivered but the doc doesn't
+                  know"). PROXIMITY: the ghost word and the symbol must share a SEGMENT of the
+                  line (split on `|`/`;`/sentence enders, never `,`/`:`), not just the line —
+                  a ghost word one table cell or one clause away is not a claim about the
+                  symbol. Same config gating as R-DEAD-SYMBOL. Trigger words overlap `NEG`
+                  (which otherwise suppresses R-DEAD-PATH/R-DEAD-DECISION/R-DEAD-SYMBOL on a
+                  line) by design: this rule is exactly what fires ON those lines, it is
+                  never skipped by `NEG`.
 
 Zero false positive on the firm (BLOCKING) tier; TO-CONFIRM is a pre-filter for judgment.
 Flags, never fixes.
@@ -124,6 +127,16 @@ NEG_RE = re.compile("|".join(re.escape(w) for w in NEG))
 # must still run on a NEG-flagged line, since that's precisely the drift it looks for.
 GHOST_WORDS = ("not yet", "missing", "absent", "to be built", "not wired",
                "pas encore", "manquant", "à créer", "a creer")
+# R-GHOST-ABSENCE proximity — a ghost word only claims a symbol is missing when the two
+# share a SEGMENT, not merely the line. Split on `|` (markdown table cells) + `;` + sentence
+# enders (`.`/`!`/`?` before whitespace). Deliberately NOT `,` nor `:` — a comma or a
+# "label:" colon routinely sits between a symbol and its own negation (`absent : Foo`), and
+# splitting there would drop the real drift. Measured on a 287-doc host: cuts ~two-thirds of
+# the line-cooccurrence false positives, keeps every genuine "delivered but the doc still
+# says missing" case. The residual — a ghost word grammatically bound to a NEIGHBOURING noun
+# (`icône absente du SpriteRegistry` claims the icon is absent, not the registry) — is the
+# lexical ceiling, out of reach of any proximity rule (see the code-symbol-graph roadmap).
+GHOST_SEGMENT_RE = re.compile(r"[|;]|(?<=[.!?])\s+")
 
 # TEMPLATE exemption — explicit HTML marker, never a hidden allowlist in the script.
 # (a) line  : "<!-- template -->" on a line exempts the paths on THAT line.
@@ -429,16 +442,21 @@ def scan_file(path):
                                      f"symbol not found under the configured code roots: {sym}"))
 
         # R-GHOST-ABSENCE — deliberately NOT gated by `neg`: it fires exactly on the lines
-        # NEG would otherwise suppress. Same config gating as R-DEAD-SYMBOL (corpus + muted dirs).
+        # NEG would otherwise suppress. Same config gating as R-DEAD-SYMBOL (corpus + muted
+        # dirs). Proximity: the ghost word must share a SEGMENT with the symbol, not just the
+        # line (GHOST_SEGMENT_RE) — the cheap line-level `any(...)` stays as a fast pre-gate.
         if corpus and not symbol_muted and any(w in low for w in GHOST_WORDS):
             seen = set()
-            for m in CODE_SPAN_RE.finditer(line):
-                sym = _candidate_symbol(m.group(1))
-                if sym and sym not in seen and sym in corpus:
-                    seen.add(sym)
-                    findings.append(("TO-CONFIRM", path, i, "R-GHOST-ABSENCE",
-                                     f"doc claims {sym} is missing/not built, but it exists "
-                                     "in code"))
+            for seg in GHOST_SEGMENT_RE.split(line):
+                if not any(w in seg.lower() for w in GHOST_WORDS):
+                    continue
+                for m in CODE_SPAN_RE.finditer(seg):
+                    sym = _candidate_symbol(m.group(1))
+                    if sym and sym not in seen and sym in corpus:
+                        seen.add(sym)
+                        findings.append(("TO-CONFIRM", path, i, "R-GHOST-ABSENCE",
+                                         f"doc claims {sym} is missing/not built, but it "
+                                         "exists in code"))
     return findings
 
 
