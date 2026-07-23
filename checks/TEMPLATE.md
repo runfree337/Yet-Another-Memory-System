@@ -131,7 +131,7 @@ the starting reference to derive the template, not as a line-by-line comparison 
 | `checks/decisions-check.py` (this framework) | ✅ (via `entrylib`) | n/a (same as `memory-check.py` — compares `decisions/` in full) | ✅ | **conforming** — via `entrylib` |
 | `checks/feature-map-check.py` (this framework) | ✅ (via `entrylib`) | n/a (same, compares `features/` in full) | ✅ | **conforming** — via `entrylib` |
 | `checks/backlog-check.py` (this framework) | ✅ (via `entrylib`) | n/a (scans `backlog/` in full) | ✅ | **conforming** — via `entrylib` |
-| `checks/doc-refs-check.py` (this framework) | plain tuple | `--staged` only, no `--diff` | no | **diluted** — to be realigned if the occasion arises |
+| `checks/doc-refs-check.py` (this framework) | plain tuple | ✅ (`--diff`+`--staged`) | no | **diluted** — plain-tuple finding + no `--json`, to be realigned if the occasion arises |
 | `hooks/poisoning-scan.py`, `hooks/secret-scan.py` | plain tuple | `--staged` only | no | diluted — but short guards, simplicity wins here |
 
 **The point is not to retroactively realign everything** — a script that works and whose
