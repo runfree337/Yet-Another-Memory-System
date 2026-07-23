@@ -165,6 +165,16 @@ the symbol-corpus family: **`neg-words`** appends project-language negation voca
 says is absent stops being double-reported — declared per project rather than baking broad words
 into every default; and the `Xxx` PascalCase placeholder is now recognized built-in alongside
 `XXXX`, so fill-in-the-blank names (`CampJournalXxxTab`) are treated as templates, not dead symbols.
+Past the segment split, the residual R-GHOST-ABSENCE noise is grammatical — a ghost word bound to
+a *neighbouring* noun, the symbol being only its container (`icône absente du SpriteRegistry`
+claims the icon is absent, not the registry) — and grammar is a language's own, so it follows the
+same route as `neg-words`: **`ghost-exclude-patterns`** holds project-declared regexes
+(case-insensitive) matched against the segment the rule is about to flag; a match suppresses the
+rule for that segment only. Purely **suppressive** — a pattern can only remove findings, never add
+one, so the zero-FP contract is untouched; an invalid regex is a BLOCKING `CFG-INVALID`, never
+silently dropped; and the project answers for the precision of what it declares (an over-broad
+pattern can mask a genuine ghost). This is a bridge: the code-symbol-graph track (`ROADMAP.md §3`)
+is the exact fix, after which a project's patterns simply empty out.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -176,6 +186,7 @@ into every default; and the `Xxx` PascalCase placeholder is now recognized built
 | *(settings)* `doc-refs.ignore-symbols` | literal candidate exclusions, host-ecosystem API (same two rules) | `[]` |
 | *(settings)* `doc-refs.symbol-ignore-dirs` | doc dirs (framework-relative) where the two symbol rules are muted | `[]` |
 | *(settings)* `doc-refs.neg-words` | extra project-language negation words appended to NEG (suppress R-DEAD-PATH/DECISION/SYMBOL, never R-GHOST-ABSENCE) | `[]` |
+| *(settings)* `doc-refs.ghost-exclude-patterns` | case-insensitive segment regexes suppressing R-GHOST-ABSENCE where they match — a project's grammar as config data, suppressive only | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
@@ -188,6 +199,12 @@ line — a path on a line containing `<!-- template -->` is ignored; block — p
 **between** `<!-- template -->` and `<!-- /template -->` are ignored. The marker stays readable
 in plain text in the `.md` (HTML comment — invisible when rendered, visible when editing): no
 separate list to keep in sync with the docs.
+
+**Ignore pragma:** a second marker, `<!-- doc-refs: ignore -->`, silences **every** doc-refs rule
+on its own line (that line only — no block form). Same explicit-marker philosophy, different
+*intent*: `<!-- template -->` says "this target is an example, never meant to exist"; the pragma
+says "a human reviewed this finding and keeps the prose as-is". Reserve it for the residue no
+config key covers cleanly — a config pattern is reread in one place, ten scattered pragmas rot.
 
 ```bash
 python3 checks/doc-refs-check.py                 # script's default corpus

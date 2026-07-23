@@ -8,6 +8,9 @@
 #   - symbol-suffixes    : when non-empty, keep only candidates ending in a declared suffix.
 #   - ignore-symbols     : literal candidate exclusions (host API), additive not substitutive.
 #   - symbol-ignore-dirs : mute the two symbol rules on given doc dirs; paths stay checked.
+#   - ghost-exclude-patterns : per-project grammar-as-data regexes suppressing R-GHOST-ABSENCE
+#     on the segments they match (the container-problem) — suppressive only, never additive.
+#   - `<!-- doc-refs: ignore -->` pragma : silences every rule on its own line, that line only.
 import importlib.util
 import os
 import re
@@ -173,6 +176,62 @@ class TestGhostAbsenceProximity(SymbolTuningBase):
     def test_comma_does_not_split(self):
         self.assertIn("R-GHOST-ABSENCE",
                       self._rules("le `FooManager`, pas encore câblé proprement"))
+
+
+class TestGhostExcludePatterns(SymbolTuningBase):
+    # `FooManager` exists in the corpus. `ghost-exclude-patterns` is the per-project home for
+    # the grammar the segment split cannot reach — a ghost word bound to a NEIGHBOURING noun,
+    # the symbol being only its container. Purely suppressive: a pattern removes findings on
+    # the segments it matches, never adds one, and never reaches past its own segment.
+    FR_CONTAINER = r"(absente?s?|manquante?s?)[^`;|]*\b(du|de la|des|dans) `"
+
+    def _with_patterns(self, *pats):
+        self.mod.GHOST_EXCLUDE = tuple(re.compile(p, re.IGNORECASE) for p in pats)
+
+    def test_container_shape_suppressed(self):
+        # The icon is absent, not the registry — the declared shape silences the segment.
+        self._with_patterns(self.FR_CONTAINER)
+        self.assertNotIn("R-GHOST-ABSENCE",
+                         self._rules("l'icône absente du `FooManager` sera livrée"))
+
+    def test_genuine_claim_still_flagged(self):
+        # Control: same config, but a real "doc says missing, code has it" still fires —
+        # the ghost word is the symbol's own predicate, no container shape around it.
+        self._with_patterns(self.FR_CONTAINER)
+        self.assertIn("R-GHOST-ABSENCE",
+                      self._rules("le `FooManager` est absent pour l'instant"))
+
+    def test_suppression_is_per_segment(self):
+        # `;` splits: the container shape silences only its own segment; the genuine claim
+        # about `BarView` (also in the corpus) in the next segment still fires.
+        self._with_patterns(self.FR_CONTAINER)
+        ghosts = [f for f in self._scan(
+            "icône absente du `FooManager` ; `BarView` pas encore câblé")
+            if f[3] == "R-GHOST-ABSENCE"]
+        self.assertEqual(len(ghosts), 1)
+        self.assertIn("BarView", ghosts[0][4])
+
+    def test_absent_config_unchanged(self):
+        # No patterns declared → today's behavior: the container-problem line still fires.
+        self.assertIn("R-GHOST-ABSENCE",
+                      self._rules("l'icône absente du `FooManager` sera livrée"))
+
+
+class TestIgnorePragma(SymbolTuningBase):
+    def test_pragma_silences_all_rules_on_its_line(self):
+        # Dead symbol + dead path on the marked line → nothing at all is reported.
+        self.assertEqual(set(), self._rules(
+            "The `GhostManager` reads `nowhere/ghost_file.py`. <!-- doc-refs: ignore -->"))
+
+    def test_pragma_silences_ghost_too(self):
+        self.assertNotIn("R-GHOST-ABSENCE", self._rules(
+            "le `FooManager` n'est pas encore câblé <!-- doc-refs: ignore -->"))
+
+    def test_pragma_scopes_to_its_own_line(self):
+        # The same dead symbol on the next, unmarked line is still flagged.
+        finds = self._scan("`MissingWidget` reviewed here. <!-- doc-refs: ignore -->\n"
+                           "`MissingWidget` cited again here.")
+        self.assertEqual([f[2] for f in finds if f[3] == "R-DEAD-SYMBOL"], [2])
 
 
 if __name__ == "__main__":

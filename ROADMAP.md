@@ -60,7 +60,8 @@ extraction of the repo's symbol/structure facts — same tier-1 discipline as ev
   everything else is detected (or repaired) without an LLM call.
 - `checks/doc-refs-check.py` — today it *greps a flat code corpus* for dead symbols, the most
   fragile mechanism in the repo. It would consume real symbols instead (`R-DEAD-SYMBOL` /
-  `R-GHOST-ABSENCE` become exact rather than lexical).
+  `R-GHOST-ABSENCE` become exact rather than lexical); the per-project
+  `doc-refs.ghost-exclude-patterns` grammar bridge then empties out.
 - **The agent** — query the structure ("who calls X", "what breaks if I rename Y") instead of
   re-reading files: the impact analysis `index/INDEX.md` promises but does not yet deliver.
 
