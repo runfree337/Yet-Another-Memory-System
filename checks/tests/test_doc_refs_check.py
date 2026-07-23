@@ -145,5 +145,35 @@ class TestNegWords(SymbolTuningBase):
         self.assertIn("R-DEAD-SYMBOL", self._rules("le module `IAudioProvider` gère le son"))
 
 
+class TestGhostAbsenceProximity(SymbolTuningBase):
+    # `FooManager` exists in the corpus (SymbolTuningBase). R-GHOST-ABSENCE must fire only
+    # when a ghost word shares a SEGMENT with it, not merely the line.
+    def test_same_segment_flags(self):
+        self.assertIn("R-GHOST-ABSENCE",
+                      self._rules("le `FooManager` n'est pas encore câblé"))
+
+    def test_table_cells_do_not_flag(self):
+        # ghost word in one markdown cell, symbol in another → not a claim about the symbol.
+        self.assertNotIn("R-GHOST-ABSENCE",
+                         self._rules("| à créer plus tard | `FooManager` ailleurs |"))
+
+    def test_separate_sentences_do_not_flag(self):
+        self.assertNotIn("R-GHOST-ABSENCE",
+                         self._rules("Rien à créer ici. `FooManager` existe déjà."))
+
+    def test_semicolon_splits(self):
+        self.assertNotIn("R-GHOST-ABSENCE",
+                         self._rules("à créer bientôt ; `FooManager` est là"))
+
+    def test_colon_does_not_split(self):
+        # `:` is a label separator, not a clause break — `absent : Foo` is a real claim.
+        self.assertIn("R-GHOST-ABSENCE",
+                      self._rules("absent : `FooManager` reste à faire"))
+
+    def test_comma_does_not_split(self):
+        self.assertIn("R-GHOST-ABSENCE",
+                      self._rules("le `FooManager`, pas encore câblé proprement"))
+
+
 if __name__ == "__main__":
     unittest.main()
