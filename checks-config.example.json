@@ -24,9 +24,12 @@
     "extra-secret-allowlist-paths": []
   },
 
-  "_doc-refs": "R-DEAD-PATH tuning for `checks/doc-refs-check.py`. `ignore-prefixes` = prefixes of tokens that LOOK like repo paths but never are — typically a runtime API joined to a filename (`Runtime.dataDir/save.txt` from a runtime API) or a machine-local path cited in a guide. Additive and narrow: a listed prefix silences R-DEAD-PATH for matching tokens only, nothing else.",
+  "_doc-refs": "Tuning for `checks/doc-refs-check.py`. Every key OPTIONAL and ADDITIVE — absent ⇒ today's behavior. `ignore-prefixes` (R-DEAD-PATH) = prefixes of tokens that LOOK like repo paths but never are — a runtime API joined to a filename (`Runtime.dataDir/save.txt`) or a machine-local path in a guide. The next three tune the two SYMBOL rules (R-DEAD-SYMBOL / R-GHOST-ABSENCE), whose corpus is a host ecosystem's own — Unity ≠ React ≠ Django — so, like index-config's `roots`/`extensions`, the framework never hardcodes them. `symbol-suffixes` = when NON-EMPTY, a `PascalCase` candidate is kept only if it ends with one of these (a project's type-naming convention: `Manager`, `View`, `Registry`…); empty ⇒ every composed PascalCase token, as before — this is the lever that silences a host API cited across the docs. `ignore-symbols` = literal candidate exclusions for host-ecosystem API (`MonoBehaviour`, `RectTransform`…), additive not substitutive. `symbol-ignore-dirs` = doc dirs (relative to the framework root) where the two symbol rules are muted — transient docs that legitimately name not-yet-built types (`backlog/`); R-DEAD-PATH / R-DEAD-DECISION stay ACTIVE there.",
   "doc-refs": {
-    "ignore-prefixes": []
+    "ignore-prefixes": [],
+    "symbol-suffixes": [],
+    "ignore-symbols": [],
+    "symbol-ignore-dirs": []
   },
 
   "_memory-graph": "Settings for `hooks/memory-graph.py`. `channels-base` = the subdir the four memory channels live under, for a project that nests them (e.g. \"Docs\" → Docs/decisions/…); \"\" (default) = repo root, the framework's own layout. `self-extra-dirs` = tooling dirs to also self-suppress nudges on (default [\"checks\",\"hooks\",\"adapters\"]; a Claude Code project might use [\".claude\"]). `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file), e.g. [\".java\"]; empty (default) → covers matches by cited-path containment only, fully language-agnostic. `code-roots` = dirs the class/tag ambiguity guard scans (default: index-config roots, else the repo).",

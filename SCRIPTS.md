@@ -11,7 +11,7 @@
 Optional, at the repo root: `checks-config.json` (canonical schema + defaults: <!-- template -->
 [`checks-config.example.json`](checks-config.example.json)). One file, one section per concern:
 `audit` (when the deterministic report recommends a tier-2 audit), `sizes` (granularity
-signals), `guards` (extension-only surveillance lists), `doc-refs` (R-DEAD-PATH tuning),
+signals), `guards` (extension-only surveillance lists), `doc-refs` (R-DEAD-PATH + symbol-rule tuning),
 `closure` (the project's answer on the DoD review step). Absent file or key = the built-in
 defaults, i.e. the historical behavior. Present but broken, the two families diverge **by
 design**: the **checks** surface a blocking `CFG-INVALID` finding (a config the user believes
@@ -147,7 +147,16 @@ symbol is missing/not yet built while it *does* exist in code — to-confirm, an
 **not** suppressed by the NEG word list, since it fires exactly on those lines). The two
 symbol rules are agnostic: they read `roots`/`extensions` from `index/index-config.json` <!-- template -->
 (created at install time, schema: `index/index-config.example.json`) and stay silently
-INACTIVE without that config — the framework never hardcodes a project's code layout.
+INACTIVE without that config — the framework never hardcodes a project's code layout. Same
+reasoning extends their tuning to three optional, additive `doc-refs` keys (all empty by
+default ⇒ today's behavior): **`symbol-suffixes`** — when non-empty, a candidate is kept only
+if it ends with a project-declared suffix (`Manager`/`View`/`Registry`…), the lever that
+silences a host ecosystem's API cited across the docs since a project's naming conventions are
+known only to it; **`ignore-symbols`** — literal candidate exclusions for host-ecosystem API
+(`MonoBehaviour`…), additive not substitutive; **`symbol-ignore-dirs`** — doc dirs (relative
+to the framework root) where the two symbol rules are muted (transient docs naming not-yet-built
+types, e.g. `backlog/`), while R-DEAD-PATH / R-DEAD-DECISION stay active there (a dead path in
+a transient doc is a real drift, an unwritten type is not).
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -155,6 +164,9 @@ INACTIVE without that config — the framework never hardcodes a project's code 
 | `--staged` | scans **staged** git content instead of disk | disabled |
 | `--diff` | scans **modified-but-unstaged** `.md` files | disabled |
 | *(settings)* `doc-refs.ignore-prefixes` | token prefixes never treated as repo paths (R-DEAD-PATH only) | `[]` |
+| *(settings)* `doc-refs.symbol-suffixes` | keep only PascalCase candidates ending in one of these (R-DEAD-SYMBOL / R-GHOST-ABSENCE); empty ⇒ all | `[]` |
+| *(settings)* `doc-refs.ignore-symbols` | literal candidate exclusions, host-ecosystem API (same two rules) | `[]` |
+| *(settings)* `doc-refs.symbol-ignore-dirs` | doc dirs (framework-relative) where the two symbol rules are muted | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
