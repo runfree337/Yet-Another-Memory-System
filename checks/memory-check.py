@@ -113,7 +113,8 @@ def audit_memory_dir() -> list:
         if not fname.endswith(".md"):
             continue
         fpath = os.path.join(MEMORY_DIR, fname)
-        text = open(fpath, encoding="utf-8").read()
+        with open(fpath, encoding="utf-8") as fh:
+            text = fh.read()
         meta, body, _err = entrylib.parse_frontmatter(text)
         path = rel(fpath)
         findings += entrylib.validate_entry(path, meta, "memory")

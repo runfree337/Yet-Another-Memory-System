@@ -17,6 +17,72 @@ run** (every session? at end of turn? on commit? in CI? by hand?). The installer
 - a **git** repo (the framework relies on git as a permanent record);
 - **python 3** (`python` or `python3` — the scripts detect either).
 
+## Adoption profiles — start small, grow on a signal
+
+**The whole framework is not the entry price.** `README.md` presents the five pieces
+together because that is what they *are*; it is not what you must adopt on day one. The
+channels are independent by construction, and every check **degrades to a clean no-op**
+when the channel it guards is absent — that is a property of the scripts, not a promise:
+with no `memory/`, no `features/`, no `index/index-config.json` and no <!-- template -->
+`capture-policy.json`, `memory-check`, `feature-map-check`, `index-check` and
+`capture-policy-check` each print one "channel absent, nothing to verify" line and exit
+`0`. So a partial install is a **supported state**, not a half-broken one.
+
+Three profiles. Each is a superset of the one before, and moving up is a **file drop plus
+a wiring line** — never a migration.
+
+> **Profiles are about what you _scaffold and wire_, not what you delete.** Copy the
+> framework tree in whole (step 2 below); a profile only decides which channels you
+> populate and which checks you hook. Deleting framework files instead is what makes
+> `doc-refs-check` light up: the shipped docs cross-reference each other, so a tree with
+> `backlog/README.md` or `adapters/` removed reports those as dead paths — correctly.
+
+### Profile `core` — the floor (a solo dev, a fresh project, a team trying this out)
+
+| You scaffold | Why it is in the floor |
+|---|---|
+| `WORKFLOW.md`, pointed at from the host's context file (`CLAUDE.md`, `.github/copilot-instructions.md`, …) | Without the loop there is no method — only files. | <!-- template -->
+| `DASHBOARD.md` | The *state* leg: where things stand, so a session can resume. |
+| `backlog/INDEX.md`, **inline items only** (`[todo]`/`[in-progress]` badges, no `<id>/STATE.md` folders) | The *todo* leg, at its cheapest tier — `backlog/README.md §Structure` already provides for it. |
+| `decisions/` + `decisions/INDEX.md`, entries with the **full frontmatter** | The *why*. This is the channel whose absence costs the most: a decision re-litigated is a decision re-made. |
+
+| You wire | Cost |
+|---|---|
+| `checks/decisions-check.py`, `checks/backlog-check.py`, `checks/doc-refs-check.py` | 3 script calls, zero config |
+| `hooks/secret-scan.py`, `hooks/poisoning-scan.py`, `hooks/destructive-guard.py` | write-path guards, cheap and unconditional — never worth deferring |
+
+**Keep `source` / `confidence` / `ratified` from day one.** They are three frontmatter
+lines per entry, and `decisions-check` validates them for free. What is *expensive* in
+the provenance model is the **ratification loop** (the inbox, the tier-2 audit, the
+periodic sweep) — not the traceability itself. Dropping the fields to "keep it light"
+trades away the framework's main safeguard to save nothing measurable: an entry whose
+origin is unrecorded cannot be re-verified later, only trusted or rewritten.
+
+Left out at this stage: the Memory and Feature channels, doc-backed backlog items, the
+index, capture policies, memory graph and nudges, tier-2 semantic audits, `index-eval`.
+
+### Profile `standard` — add on the signal, not on the calendar
+
+| Add | When this signal appears |
+|---|---|
+| **Feature channel** (`features/` + `FEATURE_MAP.md`) + `feature-map-check.py` | The agent (or a newcomer) repeatedly re-searches *where* a feature lives, or re-derives how to extend it. |
+| **Doc-backed backlog items** (`<id>/STATE.md`, `STATE.template.md`) + `--board` | An inline line stops holding a work item — it has its own spec, tasks and dependencies. |
+| **Memory channel** (`memory/` + `MEMORY.md`) + `memory-check.py` | The same convention gets restated (or contradicted) across sessions, and it belongs to nobody's code in particular. |
+| `--stamp --staged` at pre-commit | `updated` dates start drifting because they are being written by hand. |
+
+### Profile `full` — the whole thing
+
+Add the navigation layer (`index/index-config.json`, `index/manifest.tsv`, <!-- template -->
+`index-check.py`, `hooks/index-nudge.py`, `hooks/memory-graph.py`), the capture policy,
+the tier-2 semantic audits (`memory-audit.py`, `decisions-audit.py` and their rubrics)
+and `checks/index-eval/`. Signals: the corpus is large enough that *finding* an entry
+costs real time; entries are numerous enough that some are silently stale; more than a
+couple of contributors or agents write into the same channels.
+
+**Do not skip a profile to "get it over with."** Each layer added without its signal is
+documentation you will maintain without ever reading — the failure mode `WORKFLOW.md`
+names as worse than having no memory at all.
+
 ## Wiring overview (steps 4 and 5)
 
 Two natures of control, two distinct decision trees — **never the same wiring** for the
@@ -88,7 +154,7 @@ flowchart TD
    > hints say "copy `<name>.example.json` to `<name>.json`" — that instruction must point
    > at a file that exists in the host repo. Only the framework's own test/eval harnesses —
    > `checks/index-eval/` (method-evaluation) and the `checks/tests/` / `hooks/tests/` unit
-   > tests — are safe to leave behind.
+   > tests, together with their `run-tests.py` entry point — are safe to leave behind.
    > **Placement assumption — framework at the project root.** The Python scripts locate
    > their data relative to their own file (`checks/..` = framework root), while the
    > adapter hooks `cd` to the **project** root (`CLAUDE_PROJECT_DIR`) and call

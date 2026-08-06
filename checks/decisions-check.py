@@ -140,7 +140,8 @@ def _index_sections() -> tuple:
     trip D5."""
     if not os.path.isfile(INDEX):
         return set(), set()
-    text = open(INDEX, encoding="utf-8").read()
+    with open(INDEX, encoding="utf-8") as fh:
+        text = fh.read()
     m = re.search(r"(?m)^##\s*Archiv", text)
     actives_text, archived_text = (text[: m.start()], text[m.start():]) if m else (text, "")
     entry_re = re.compile(r"(?m)^-\s*\[(" + ID_RE.pattern + r")\]\(")
@@ -260,7 +261,8 @@ def rule_d8(by_id: dict) -> list:
 
     findings = []
     for fpath, scan_body in _reference_files():
-        text = open(fpath, encoding="utf-8").read()
+        with open(fpath, encoding="utf-8") as fh:
+            text = fh.read()
         meta, body, _ = entrylib.parse_frontmatter(text)
 
         referenced = set(_as_list(meta.get("links"))) & retired
@@ -288,7 +290,8 @@ def audit() -> list:
     loaded = []  # (path, meta, body) in discovery order
     for idv, fname in files.items():
         fpath = os.path.join(DEC, fname)
-        text = open(fpath, encoding="utf-8").read()
+        with open(fpath, encoding="utf-8") as fh:
+            text = fh.read()
         meta, body, err = entrylib.parse_frontmatter(text)
         loaded.append((fpath, meta, body))
         if meta.get("id"):

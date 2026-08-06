@@ -49,6 +49,13 @@ project's standards", and wiring closure into the existing ritual (e.g. the revi
 > index config, **wiring the checks wherever the user wants**, triggering the semantic audit).
 > Principle: *detect + flag, the user decides when checks run*. The interactive `install.py`
 > still needs to be built; `INSTALL.md` holds its spec and serves as a manual guide until then.
+>
+> **The five pieces above are what YAMS _is_, not what you adopt on day one.** Start at the
+> `core` profile — the loop, `DASHBOARD.md`, an inline backlog, the decision channel, three
+> checks and the write-path guards — and add a layer only when a **signal** calls for it:
+> [`INSTALL.md §Adoption profiles`](INSTALL.md#adoption-profiles--start-small-grow-on-a-signal).
+> Every check no-ops cleanly on a channel you haven't adopted, so a partial install is a
+> supported state.
 
 ## Contents
 

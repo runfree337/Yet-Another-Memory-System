@@ -443,8 +443,9 @@ def code_corpus():
                     if not n.endswith(exts):
                         continue
                     try:
-                        chunks.append(open(os.path.join(dpath, n),
-                                            encoding="utf-8", errors="replace").read())
+                        with open(os.path.join(dpath, n),
+                                  encoding="utf-8", errors="replace") as fh:
+                            chunks.append(fh.read())
                     except OSError:
                         continue
     _CODE_CORPUS = "\n".join(chunks)
@@ -468,7 +469,8 @@ def _symbol_muted(path):
 def scan_file(path):
     findings = []  # each: (severity, path, line, rule, msg)
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
     except (OSError, UnicodeDecodeError):
         return findings
     fenced = False
