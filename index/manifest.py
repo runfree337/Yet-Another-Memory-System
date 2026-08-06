@@ -56,13 +56,14 @@ def manifest_path(cfg, base):
 def load(path):
     rows = {}
     if os.path.exists(path):
-        for line in open(path, encoding="utf-8"):
-            line = line.rstrip("\n")
-            if not line or line.startswith("#"):
-                continue
-            p, _, intent = line.partition("\t")
-            if p:
-                rows[p] = intent
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if not line or line.startswith("#"):
+                    continue
+                p, _, intent = line.partition("\t")
+                if p:
+                    rows[p] = intent
     return rows
 
 
@@ -112,7 +113,8 @@ def cmd_stamp(cfg, base):
             stderr=subprocess.DEVNULL).decode().strip()
     except Exception:
         head = "?"
-    lines = open(hub_path, encoding="utf-8").read().splitlines()
+    with open(hub_path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
     stamped = False
     for i, l in enumerate(lines):
         if l.startswith("> Last updated:"):
@@ -122,7 +124,8 @@ def cmd_stamp(cfg, base):
     if not stamped:
         print(f"manifest: no '> Last updated: ...' line in {hub} — nothing to stamp.")
         return 0
-    open(hub_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+    with open(hub_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
     print(f"stamped: {today} ({head}) → {hub}")
     return 0
 

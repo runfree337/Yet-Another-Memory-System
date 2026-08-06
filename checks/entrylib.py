@@ -457,7 +457,8 @@ def _selftest() -> int:
             fh.write("---\nid: x\nupdated: 2020-01-01\n---\nbody\n")
         ok = stamp_updated(p, "2026-07-09")
         check(ok, "stamp_updated: reports a modification")
-        text = open(p, encoding="utf-8").read()
+        with open(p, encoding="utf-8") as fh:
+            text = fh.read()
         check("updated: 2026-07-09" in text, "stamp_updated: date rewritten")
         check("id: x" in text, "stamp_updated: other keys untouched")
         check(not stamp_updated(p, "2026-07-09"), "stamp_updated: no-op if already up to date")
@@ -469,8 +470,9 @@ def _selftest() -> int:
             fh.write("---\nid: x\n---\nquoted template:\nupdated: 2020-01-01\n")
         check(not stamp_updated(p, "2026-07-09"),
               "stamp_updated: no-op when the frontmatter has no updated field")
-        check("updated: 2020-01-01" in open(p, encoding="utf-8").read(),
-              "stamp_updated: body updated: line untouched")
+        with open(p, encoding="utf-8") as fh:
+            check("updated: 2020-01-01" in fh.read(),
+                  "stamp_updated: body updated: line untouched")
 
     # check_index_concordance — a dead id repeated on the same line doesn't double the finding
     with tempfile.TemporaryDirectory() as td:

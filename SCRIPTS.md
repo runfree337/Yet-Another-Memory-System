@@ -534,6 +534,40 @@ python3 hooks/normative-write-guard.py --path CLAUDE.md      # exit 2 if normati
 echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"}}' | python3 hooks/normative-write-guard.py --stdin-json
 ```
 
+## The framework's own tests
+
+### `run-tests.py` (repo root)
+**Intent:** **single entry point for the framework's own test suites** — not a check, and
+nothing an adopting project needs (`INSTALL.md §Steps` leaves the test harnesses behind).
+Runs the three `unittest` suites plus `entrylib.py --selftest`, prints one line per suite
+with its test count, and exits ≠ 0 if any suite fails **or collects nothing**.
+
+Its reason to exist is a discovery trap: the suites have **no common importable root**.
+`checks/index-eval/tests/` does `from lib.scorer import …` and resolves only under
+`-t checks/index-eval`; `checks/tests/` and `hooks/tests/` load their targets by path and
+need `-t <their own dir>` (neither carries an `__init__.py`). So a plain
+`python3 -m unittest discover` from the root prints **`Ran 0 tests … OK`** — a silent zero
+that is indistinguishable from a green run — and a per-suite discovery that forgets `-t`
+drops a whole suite just as quietly. Both under-report coverage while looking healthy. The
+runner turns each into an explicit failure.
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `-v` / `--verbose` | per-test output for every suite | summary only (failing suites always print in full) |
+
+**Exit codes:** `0` every suite green · `1` at least one failed or collected 0 tests.
+
+```bash
+python3 run-tests.py         # 95 unit tests / 3 suites + 1 embedded selftest
+python3 run-tests.py -v
+```
+
+Suites run: `checks/tests/` (doc-refs, decisions) · `hooks/tests/` (memory-graph) ·
+`checks/index-eval/tests/` (scorer, lexsim, parse, guard, prefilter, reporter, sufficiency) ·
+`checks/entrylib.py --selftest` (the shared validator, one case per rule). Discovery runs
+under `-W error::ResourceWarning`, so a file handle left unclosed in a script under test
+fails the run rather than printing a warning nobody reads.
+
 ## What does NOT belong here
 
 The **tech-specific** scripts of the host project (lint, tests, analyzers…) are not part of this

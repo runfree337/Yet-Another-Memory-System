@@ -115,7 +115,8 @@ def audit_unratified(channels: dict) -> list:
         if pattern is None or level not in ("off", "propose"):
             continue
         for path in sorted(glob.glob(pattern)):
-            text = open(path, encoding="utf-8").read()
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
             meta, _body, err = entrylib.parse_frontmatter(text)
             if err or "confidence" not in meta:
                 continue
