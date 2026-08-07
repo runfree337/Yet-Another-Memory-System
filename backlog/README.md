@@ -107,7 +107,10 @@ in its frontmatter.
    promise. Run `backlog-check.py --checklist <id>`: it enumerates the work item's `impacts:`
    ledger (see above) as a **nominative checklist** for this step, instead of relying on recall.
 2. **Decision** recorded if the closure settles a structural choice.
-3. **Review** — the standard's own tier-1 checks first (`checks/memory-audit.py --tier1`); they
+3. **Review** — the standard's own tier-1 checks first (`checks/memory-audit.py --tier1`, then
+   `checks/coverage-check.py <work-item-dir>` if any of its documents dispatches an enumerated
+   list into a table — **a plan of work is not the inventory of what it claims to cover**, and
+   this step is exactly where a closure gets signed on the table's authority); they
    are agnostic and always available, so this half never depends on the project. Then the
    **project's review of the delivered surface** — its content belongs to the project, not to the
    framework: a review skill, an auditing agent, a second pair of eyes, a cross-read. **Ask before

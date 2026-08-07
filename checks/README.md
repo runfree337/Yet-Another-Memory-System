@@ -32,6 +32,35 @@ python3 checks/decisions-audit.py         # decisions tier1 + journal audit plan
 python3 checks/memory-audit.py            # multi-channel tier1 (feature + decisions + memory)
 ```
 
+## When to declare a coverage set (`coverage-check.py`)
+
+A declarative check has one structural weakness, and pretending otherwise would be the same false
+green it exists to prevent: **an unmarked document is silent — indistinguishable from a compliant
+one.** The markers cannot find their own occasions. So the trigger is written here, once, and the
+places that produce or sign these documents point at this section rather than restating it.
+
+**The trigger, one sentence.** As soon as a document **enumerates** items — findings, requirements,
+milestones, open questions — and a **table in that same document** says how they are dispatched
+(into batches, phases, owners, releases), declare the set. Two jeux, one document, one recount.
+
+The tell is a sentence that will eventually be written on the table's authority: *"all N are
+handled"*. Whoever writes it will not recount by hand — that is the step a reader skips, and the
+whole reason for this check.
+
+**Where it does NOT apply** — a marker with nothing to compare is ceremony, and ceremony teaches
+people to ignore markers:
+- a bare list with no dispatching table (the list *is* the content — nothing claims to cover it);
+- an index of a memory channel (`decisions/INDEX.md`, `FEATURE_MAP.md`, `MEMORY.md`, `backlog/INDEX.md`):
+  file↔index concordance is **already** `entrylib.check_index_concordance`, wired into the channel
+  checks. A second path saying the same thing is a mirror, not a guard;
+- a table whose own text says it is partial ("what is not here is in the git log") — it claims no
+  coverage, so there is nothing to recount.
+
+**What it does not reach.** The two markers must sit in the **same file**. A claim made in one
+document about a set carried by another — a state file signing for its companion docs — is out of
+scope, and so is a claim written in **prose** rather than in a table: neither has two comparable
+sets. Recounting those stays a human act, which is what the review step of the DoD is for.
+
 ## To wire — running automatically
 
 **Two natures, two regimes.** The structural (these scripts) is cheap and gets wired to run often; the semantic (the `memory-audit` audit, tier 2) costs an agent and **doesn't get hooked**.
