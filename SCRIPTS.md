@@ -54,8 +54,8 @@ non-interactive.
 | `--json` | same check, JSON output of findings | disabled |
 | `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
 | `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | acts on the files passed as arguments |
-| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | paths framework-relative, repo-relative or absolute; one that resolves to no file is named on stderr, never swallowed |
+| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit; selection via `entrylib.stamp_targets`, so it holds when the framework is nested |
 | `--checklist [id]` | prints the closure checklist (Definition of Done, 6 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording; the **Review** step substitutes the project's half from `closure.review` | — |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.
@@ -82,7 +82,7 @@ another format is invisible to this check, not validated by it.
 |---|---|---|
 | *(none)* | text report, sorted blocking then to-confirm | — |
 | `--json` | JSON output of findings (5-field `Finding`) | disabled |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited entries | acts on the files passed as arguments |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited entries | paths framework-relative, repo-relative or absolute; an unresolved one is named on stderr |
 | `--stamp --staged` | same effect, but scope = `features/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`FM-FRESH`, `FM-GRAN` — soft)
@@ -279,8 +279,24 @@ entry is**, no more regex duplication between checks.
 Public API: `Finding`/`BLOCKING`/`CONFIRM` (the `checks/TEMPLATE.md` template), `CHANNELS`
 (required/optional/enum spec per channel), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
 `check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`,
-`load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global settings file loader —
-absent file = defaults, broken file = an error the caller surfaces as `CFG-INVALID`).
+`repo_root(start)` + `stamp_targets(framework, argv, prefix, match)` (the shared `--stamp`
+selector, see below), `load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global
+settings file loader — absent file = defaults, broken file = an error the caller surfaces as
+`CFG-INVALID`).
+
+**`stamp_targets` — why the three `--stamp` commands share one selector.** They differ only by
+`(prefix, match)`; everything else was copied three times, and the copy carried a defect none of
+the three could see alone. `git diff --cached --name-only` prints **repo-relative** paths, so a
+`startswith("backlog/")` filter applied with `cwd=<framework>` **can never match when the
+framework is nested** in a host subdirectory — the selector returned nothing, the caller printed
+`0 stamped` and exited `0`. A false green, structurally invisible in this repo, where the
+framework sits at the root. `stamp_targets` resolves the repo root (`repo_root`, the same
+`git rev-parse --show-toplevel` that made `doc-refs-check.py` immune), filters in repo space and
+returns **framework-relative** paths for both selectors. It also accepts explicit paths in
+framework-relative, repo-relative or absolute form, and returns what it could NOT resolve so the
+caller names it on stderr — *a stamp that cannot select its target must never look like a stamp
+that found none*. Regression suite: `checks/tests/test_stamp_targets.py`, every case run twice
+(framework at the root **and** nested), since a flat-only test passes against the broken code.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -324,7 +340,7 @@ No targeting parameter (like `decisions-check.py`, always compares `MEMORY.md` a
 | Parameter | Effect | Default |
 |---|---|---|
 | `--json` | JSON output | disabled |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited `memory/*.md` files | acts on the files passed as arguments |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `memory/*.md` files | paths framework-relative, repo-relative or absolute; an unresolved one is named on stderr |
 | `--stamp --staged` | same effect, but scope = `memory/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
 **Exit codes:** `0` clean · `1` only "to-confirm" · `2` at least one blocking.

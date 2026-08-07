@@ -512,18 +512,12 @@ def cmd_stamp(argv: list[str]) -> int:
     (`entrylib.stamp_updated` only touches `updated`), never blocking (exit code always 0)."""
     today = datetime.date.today().isoformat()
     staged = "--staged" in argv
-    if staged:
-        r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        files = [f for f in r.stdout.splitlines()
-                 if f.replace("\\", "/").startswith("backlog/")
-                 and os.path.basename(f.replace("\\", "/")) == "STATE.md"]
-    else:
-        files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
+    files, unresolved = entrylib.stamp_targets(
+        ROOT, argv, "backlog/", lambda b: b == "STATE.md")
 
     changed = []
     for f in files:
-        full = f if os.path.isabs(f) else os.path.join(ROOT, f)
+        full = os.path.join(ROOT, f)
         if not os.path.isfile(full):
             continue
         if entrylib.stamp_updated(full, today):
@@ -531,6 +525,8 @@ def cmd_stamp(argv: list[str]) -> int:
             if staged:
                 subprocess.run(["git", "add", "--", f], cwd=ROOT)
     print(f"backlog-check: --stamp — {len(changed)} STATE.md stamped {today}.")
+    for a in unresolved:
+        print(f"backlog-check: --stamp — no such file, skipped: {a}", file=sys.stderr)
     return 0
 
 

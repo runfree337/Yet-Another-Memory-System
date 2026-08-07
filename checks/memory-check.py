@@ -151,20 +151,12 @@ def cmd_stamp(argv) -> int:
     import datetime
     today = datetime.date.today().isoformat()
     staged = "--staged" in argv
-
-    if staged:
-        # cwd=ROOT + ROOT-joined paths, like the two sibling stamps (backlog-check,
-        # feature-map-check) — the script must work from any working directory.
-        r = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        files = [f for f in r.stdout.splitlines()
-                 if f.replace("\\", "/").startswith("memory/") and f.endswith(".md")]
-    else:
-        files = [a for a in argv[argv.index("--stamp") + 1:] if not a.startswith("-")]
+    files, unresolved = entrylib.stamp_targets(
+        ROOT, argv, "memory/", lambda b: b.endswith(".md"))
 
     changed = []
     for f in files:
-        full = f if os.path.isabs(f) else os.path.join(ROOT, f)
+        full = os.path.join(ROOT, f)
         if not os.path.isfile(full):
             continue
         if entrylib.stamp_updated(full, today):
@@ -173,6 +165,8 @@ def cmd_stamp(argv) -> int:
                 subprocess.run(["git", "add", "--", f], cwd=ROOT)
 
     print(f"memory-check: --stamp — {len(changed)} memory/*.md stamped {today}.")
+    for a in unresolved:
+        print(f"memory-check: --stamp — no such file, skipped: {a}", file=sys.stderr)
     return 0
 
 

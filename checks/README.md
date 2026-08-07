@@ -89,6 +89,14 @@ python3 checks/memory-audit.py            # multi-channel tier1 (feature + decis
 > judgment; (3) **never blocking** — if the write fails, the commit still goes through,
 > unstamped, to be fixed next turn.
 >
+> The staged scope is resolved by `entrylib.stamp_targets`, shared by the three `--stamp`
+> commands, and it holds **whatever the framework's depth in the host repo**: `git diff
+> --cached --name-only` prints repo-relative paths, so filtering them on a
+> framework-relative prefix selects nothing at all once the framework is nested — and
+> "nothing selected" printed `0 stamped` and exited `0`, indistinguishable from "nothing
+> to do". Non-blocking must not mean unable to speak: an explicit path that resolves to no
+> file is now named on stderr rather than skipped in silence.
+>
 > ```sh
 > # PreToolUse(Bash), matcher "git commit*", BEFORE the command runs
 > PY=$(command -v python3 || command -v python); [ -z "$PY" ] && exit 0
