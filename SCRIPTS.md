@@ -268,6 +268,52 @@ python3 checks/index-check.py                                    # requires inde
 python3 checks/index-check.py --config index/index-config.json --base .
 ```
 
+### `coverage-check.py`
+**Intent:** recount a **table** against the **enumerated list it claims to cover**, inside the
+same document. The failure it exists for is silent by nature: the table is well-formed, the list
+is well-formed, every other check passes, and one item sits in no row — so the closure gets
+signed on the table's authority ("all N handled") because recounting by hand is the step a
+reader skips. Motivating incident: 17 findings, 5 batches cut by source file, one finding living
+outside every cited file; caught by a human question, by no script.
+
+**Declarative, never inferred.** Guessing which table covers which list would fire on tables
+claiming nothing, and a check that cries wrongly gets ignored — worse than no check. The document
+declares its own sets; the script is silent wherever the markers are absent.
+
+| Marker | Where | Effect |
+|---|---|---|
+| `<!-- coverage-set: <name>[; pattern: <regex>] -->` | before the enumerated list | opens the source set; ids captured from the following lines until the next `coverage-set`. Default pattern = numbered heading (`### 12. …`, `### 0 bis. …`) |
+| `<!-- coverage-check: <name>; column: <header> -->` | before the table | the NEXT markdown table covers that set; the column is found by its header label, cells split on `,` `;` `/` |
+| `<!-- coverage-exempt: <name>; ids: <a, b>[; reason: …] -->` | anywhere in the file | items deliberately out of scope — silences the finding, reported separately in `--json`, never conflated with covered |
+
+The table is parsed **as a table**, not scanned as text: an id sitting in the Subject column must
+not count as coverage, or the gap being looked for is exactly what gets hidden.
+
+| Rule | Severity | What it proves |
+|---|---|---|
+| `R-COVERAGE-GAP` | blocking | an item of the set is in no row and not exempt — both sets are declared, the arithmetic is closed, it cannot be a false positive |
+| `R-COVERAGE-UNKNOWN` | to-confirm | a row cites an id absent from the set (typo, stale row, or an id the list names differently) |
+| `R-COVERAGE-DECL` | to-confirm | a marker that does nothing — unknown set name, no table below, missing/unknown column, unreadable pattern, set covered by nothing. A guard the reader believes is standing |
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `<path…>` | files or folders to scan (`.md` only) | — |
+| `--diff` / `--staged` | what changed / what is about to be committed | — |
+| `--json` | findings **plus the parsed sets** (`items`, `rows`, `covered`, `missing`, `exempt`, `unknown`) | text report |
+
+**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING.
+**Why `--json` returns the sets and not just a verdict:** the question after "is anything
+missing?" is always "what covers what?" — asked by a human, by an agent planning the next batch,
+or by another tool. A check that prints only a verdict forces its caller to re-parse the document
+it just parsed. Regression suite: `checks/tests/test_coverage_check.py`, including a replay of the
+founding incident (must fail on the document as it stood before the gap was caught, pass after).
+
+```bash
+python3 checks/coverage-check.py docs/
+python3 checks/coverage-check.py --diff --staged
+python3 checks/coverage-check.py docs/ --json
+```
+
 ### `entrylib.py`
 **Intent:** **shared library**, NOT a standalone check — an in-house minimal frontmatter
 parser (no yaml dependency) + validation of the common **memory entry** schema
