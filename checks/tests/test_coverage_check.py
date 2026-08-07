@@ -73,6 +73,27 @@ class TestSilenceByDefault(Base):
         self.assertEqual(self.findings(SET_AND_TABLE), [])
 
 
+class TestQuotedMarkersAreNotDeclarations(Base):
+    # Found for real: this check fired on `checks/README.md`, the file that DOCUMENTS the
+    # markers — every example there sits between backticks. A guard that cannot tell its own
+    # documentation from a declaration would make every project describing it non-compliant.
+    def test_marker_in_a_code_span_is_ignored(self):
+        text = "Write `<!-- coverage-set: items -->` before the list.\n"
+        self.assertEqual(self.findings(text), [])
+
+    def test_marker_in_a_fenced_block_is_ignored(self):
+        text = "```\n<!-- coverage-set: items -->\n<!-- coverage-check: items; column: X -->\n```\n"
+        self.assertEqual(self.findings(text), [])
+
+    def test_a_bare_marker_next_to_a_quoted_one_still_counts(self):
+        # The rule must not become an escape hatch: one quoted example on the page does not
+        # disarm a real declaration elsewhere in it.
+        text = "Doc says `<!-- coverage-set: other -->`.\n\n" + SET_AND_TABLE
+        gaps = [f for f in self.findings(text.replace("| 1, 2 |", "| 1 |"))
+                if f.rule == "R-COVERAGE-GAP"]
+        self.assertEqual(len(gaps), 1)
+
+
 class TestGap(Base):
     def test_uncovered_item_is_blocking(self):
         text = SET_AND_TABLE.replace("| 2 | The rest | 1, 2 | done |",

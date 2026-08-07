@@ -278,7 +278,7 @@ outside every cited file; caught by a human question, by no script.
 
 **Declarative, never inferred.** Guessing which table covers which list would fire on tables
 claiming nothing, and a check that cries wrongly gets ignored — worse than no check. The document
-declares its own sets; the script is silent wherever the markers are absent.
+declares its own sets; the script is silent wherever the markers are absent. A marker **quoted as code** — inside backticks or a fenced block — is a citation, not a declaration, so a document explaining the mechanism never triggers it (found the day the check fired on `checks/README.md`).
 
 | Marker | Where | Effect |
 |---|---|---|

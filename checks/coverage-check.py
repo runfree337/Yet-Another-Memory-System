@@ -89,6 +89,12 @@ DEFAULT_ITEM_PATTERN = r"^#{1,6}\s+([^.|]+)\."
 
 MARKER_RE = re.compile(
     r"<!--\s*coverage-(set|check|exempt)\s*:\s*(.*?)\s*-->", re.IGNORECASE)
+# A marker QUOTED rather than posed — inside a code span or a fenced block — is documentation
+# about the mechanism, not a declaration by it. Found the day this check fired on its own
+# `checks/README.md`, where every marker is shown between backticks. A real declaration is
+# posed bare in the document; anything a reader sees as code is a citation.
+CODE_SPAN_RE = re.compile(r"`+[^`]*`+")
+FENCE_RE = re.compile(r"^\s{0,3}(```|~~~)")
 # Markdown emphasis and code ticks around an id in a cell: `**1**`, `` `0 bis` ``.
 STRIP_RE = re.compile(r"^[\s*_`~]+|[\s*_`~]+$")
 CELL_SPLIT_RE = re.compile(r"[,;/]")
@@ -125,6 +131,12 @@ def _is_separator(line: str) -> bool:
     return bool(re.match(r"^\s*\|?[\s:|-]+\|[\s:|-]*$", line)) and "-" in line
 
 
+def _declared_markers(line: str) -> list:
+    """Markers actually POSED on this line — those quoted as code are citations."""
+    bare = CODE_SPAN_RE.sub(lambda m: " " * len(m.group(0)), line)
+    return MARKER_RE.findall(bare)
+
+
 def parse_document(lines: list) -> dict:
     """Extracts every declared set and coverage table. Pure — no I/O, so tests call it
     directly. Returns {name: {...}} plus a `_decl` list of declaration problems."""
@@ -132,8 +144,14 @@ def parse_document(lines: list) -> dict:
 
     # --- pass 1: the sets. A `coverage-set` owns the lines up to the next one.
     open_set = None
+    in_fence = False
     for i, line in enumerate(lines):
-        for kind, raw in MARKER_RE.findall(line):
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for kind, raw in _declared_markers(line):
             kind = kind.lower()
             name, opts = _args(raw)
             if kind == "set":
