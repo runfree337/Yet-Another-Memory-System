@@ -11,6 +11,7 @@
 - **`backlog-check.py`** — integrity of `backlog/` (Backlog channel of the entry template, `ENTRY-TEMPLATE.md`): every doc-backed work item = a `<id>/` folder whose `STATE.md` carries a complete frontmatter (`id/title/status/milestone/after/docs/updated`, validated via `entrylib`) **and a `## Tasks` section** (states `todo/in-progress/blocked/done`, label ≤ 30 words or a `→ working-doc` pointer); `milestone`⟺INDEX group, `after`→real id, `docs`⟺companion docs; soft anti-accumulation guard (STATE.md > 80 lines or a section outside the canon → "durable content living in the state file"). `--board` and `--state <id>` views with task counts, `--json` available. **`--stamp --staged`**: sets `updated = today` on staged STATE.md files + re-stages — **to be wired at PRE-COMMIT**. `--checklist` prints the closure Definition of Done (6 steps); its **Review** step (3) wires the two-tier doctrine stated above into the closure — the standard's tier-1 checks always, the project's review asked unless `closure.review` carries a standing answer.
 - **`feature-map-check.py`** — integrity of the **Feature** channel (one file per entry `features/<slug>.md` + `FEATURE_MAP.md` as index): file↔index concordance, channel frontmatter (`entrylib`), core body keys (one `**Role` line, ≥ 1 code path, ≥ 1 durable reference), existence of cited `D-*` ids, no transient reference (`backlog/`), freshness (`updated` vs. the last commit of cited paths) and granularity as a **soft** signal. Dead-path delegated to `doc-refs-check.py`. `--stamp --staged` on `updated`.
 - **`decisions-check.py`** — integrity of the **Decision** channel: `D-*.md` files ↔ `INDEX.md` lines concordance (D1/D2), channel frontmatter via `entrylib` (D3), canonical body sections (D4), `status` ⟺ Active/Archived section (D5), sound `replaces`/`replaced-by` revocation graph — reciprocity, no cycle (D6), resolved cross-links (D7).
+- **`coverage-check.py`** — **a table that claims to cover an enumerated list is recounted against it**: a document dispatches its items (findings, milestones, requirements) into batches/phases in a table, and one item ends up in no row — the table is well-formed, the list is well-formed, every other check passes, and the closure gets signed on the table's authority. Purely **declarative**: the document marks its own sets (`<!-- coverage-set: <name> -->` before the list, `<!-- coverage-check: <name>; column: <header> -->` before the table, `<!-- coverage-exempt: <name>; ids: … -->` for what is deliberately out of scope), and the check is **silent wherever the markers are absent** — zero false positives by construction, never by tuning. A marker **quoted as code** (inside backticks or a fenced block) is documentation about the mechanism, not a declaration by it: a real declaration is posed bare in the document. Without that, the file describing the markers would be the check's first false positive — which is exactly how the rule was found. The table is parsed **as a table** (header located by label, cells split on `,;/`): an id sitting in another column must not count as coverage, or the gap being looked for is exactly what gets hidden. **R-COVERAGE-GAP** (blocking — the arithmetic is closed, both sets are declared) · **R-COVERAGE-UNKNOWN** (to-confirm — a row cites an unknown id) · **R-COVERAGE-DECL** (to-confirm — a marker that does nothing is a guard the reader believes is standing). `--json` returns the parsed sets themselves (items, per-row coverage, missing, exempt, unknown), because the question after "is anything missing?" is always "what covers what?" — asked by a human, an agent planning the next batch, or another tool.
 - **`memory-check.py`** — integrity of the **Memory** channel: one fact per file + frontmatter (`memory/<slug>.md`), `MEMORY.md` = index. All the logic lives in `entrylib` (channel frontmatter, file↔index concordance, cross-links); `source: external:` without `confidence` → blocking; `confidence: unverified` or `verified` without `ratified` → tier 2 candidate. `--stamp --staged` on `updated`. Follows `TEMPLATE.md` to the letter.
 - **`decisions-audit.py`** — orchestrator for **decisions-journal audits** ("Volume" trigger when the INDEX swells — the only channel that accumulates enough to justify it). `--tier1` chains `decisions-check`/`backlog-check`/`doc-refs-check`/`index-check`; `--plan` splits `decisions/INDEX.md` into balanced batches (offset/limit) to hand a slice to each reviewer; `--merge` aggregates review outputs **with a coverage check** (each decision audited exactly once). Tier 1 (mechanical); tier 2 (judgment: memory↔code drift, redundancy, conflict) follows the review **rubric** in `decisions-audit.md`.
 - **`memory-audit.py`** — **multi-channel** orchestrator (Feature + Decision + Memory): `--tier1` chains `feature-map-check` + `decisions-audit --tier1` + `memory-check`, summarizes per channel. No `--plan`/`--merge` of its own — delegated to `decisions-audit.py` for its only channel that needs one. Tier 2 (judgment, all 3 channels): rubric in `memory-audit.md`.
@@ -25,10 +26,40 @@ python3 checks/feature-map-check.py
 python3 checks/decisions-check.py
 python3 checks/memory-check.py
 python3 checks/doc-refs-check.py
+python3 checks/coverage-check.py .          # recount declared tables against their lists
 python3 checks/index-check.py             # requires index/index-config.json
 python3 checks/decisions-audit.py         # decisions tier1 + journal audit plan
 python3 checks/memory-audit.py            # multi-channel tier1 (feature + decisions + memory)
 ```
+
+## When to declare a coverage set (`coverage-check.py`)
+
+A declarative check has one structural weakness, and pretending otherwise would be the same false
+green it exists to prevent: **an unmarked document is silent — indistinguishable from a compliant
+one.** The markers cannot find their own occasions. So the trigger is written here, once, and the
+places that produce or sign these documents point at this section rather than restating it.
+
+**The trigger, one sentence.** As soon as a document **enumerates** items — findings, requirements,
+milestones, open questions — and a **table in that same document** says how they are dispatched
+(into batches, phases, owners, releases), declare the set. Two jeux, one document, one recount.
+
+The tell is a sentence that will eventually be written on the table's authority: *"all N are
+handled"*. Whoever writes it will not recount by hand — that is the step a reader skips, and the
+whole reason for this check.
+
+**Where it does NOT apply** — a marker with nothing to compare is ceremony, and ceremony teaches
+people to ignore markers:
+- a bare list with no dispatching table (the list *is* the content — nothing claims to cover it);
+- an index of a memory channel (`decisions/INDEX.md`, `FEATURE_MAP.md`, `MEMORY.md`, `backlog/INDEX.md`):
+  file↔index concordance is **already** `entrylib.check_index_concordance`, wired into the channel
+  checks. A second path saying the same thing is a mirror, not a guard;
+- a table whose own text says it is partial ("what is not here is in the git log") — it claims no
+  coverage, so there is nothing to recount.
+
+**What it does not reach.** The two markers must sit in the **same file**. A claim made in one
+document about a set carried by another — a state file signing for its companion docs — is out of
+scope, and so is a claim written in **prose** rather than in a table: neither has two comparable
+sets. Recounting those stays a human act, which is what the review step of the DoD is for.
 
 ## To wire — running automatically
 
@@ -88,6 +119,14 @@ python3 checks/memory-audit.py            # multi-channel tier1 (feature + decis
 > outside the current commit; (2) the touched field is **mechanical** (a date), never a
 > judgment; (3) **never blocking** — if the write fails, the commit still goes through,
 > unstamped, to be fixed next turn.
+>
+> The staged scope is resolved by `entrylib.stamp_targets`, shared by the three `--stamp`
+> commands, and it holds **whatever the framework's depth in the host repo**: `git diff
+> --cached --name-only` prints repo-relative paths, so filtering them on a
+> framework-relative prefix selects nothing at all once the framework is nested — and
+> "nothing selected" printed `0 stamped` and exited `0`, indistinguishable from "nothing
+> to do". Non-blocking must not mean unable to speak: an explicit path that resolves to no
+> file is now named on stderr rather than skipped in silence.
 >
 > ```sh
 > # PreToolUse(Bash), matcher "git commit*", BEFORE the command runs

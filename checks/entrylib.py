@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from collections import namedtuple
 
@@ -324,6 +325,84 @@ def stamp_updated(path: str, date_str: str) -> bool:
                 fh.write("".join(lines))
             return True
     return False
+
+
+def repo_root(start: str = None) -> str:
+    """Absolute path of the enclosing git repository, or `start` when there is no git.
+
+    The framework root is NOT the repo root: a host project may nest this framework in a
+    subdirectory (`docs/`, `tooling/`…). Anything that talks to git needs the repo root,
+    anything that reads framework files needs the framework root — conflating them is the
+    bug `stamp_targets` exists to prevent. Mirrors `doc-refs-check.py`'s resolution, which
+    is why that check was the only one immune.
+    """
+    start = start or os.getcwd()
+    try:
+        out = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=start,
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=10).stdout.strip()
+        return os.path.realpath(out) if out else start
+    except Exception:
+        return start
+
+
+def stamp_targets(framework: str, argv: list, prefix: str, match) -> tuple:
+    """Resolves what `--stamp` should stamp. Returns `(files, unresolved)`, `files` being
+    FRAMEWORK-relative paths (what the callers' stamp loop joins onto their root).
+
+    Two selectors, one contract — every returned path is framework-relative, whatever the
+    caller passed or git printed:
+
+    - `--staged`: staged files under `<framework>/<prefix>` matching `match(basename)`.
+      **`git diff --name-only` prints REPO-relative paths, never cwd-relative** (that
+      needs `--relative`). So the filter has to be applied in repo space and the hits
+      translated back — a `prefix`-only filter run from the framework dir can never match
+      when the framework is nested, and silently selects NOTHING while exiting 0.
+    - explicit paths: accepted framework-relative, repo-relative, or absolute. Anything
+      that resolves to no file lands in `unresolved` so the caller can SAY so — a stamp
+      that cannot select its target must never look like a stamp that found none.
+
+    `unresolved` is always empty for `--staged` (git only ever names existing files).
+    """
+    framework = os.path.realpath(framework)
+    if "--staged" in argv:
+        repo = repo_root(framework)
+        rel = os.path.relpath(framework, repo).replace(os.sep, "/")
+        base = "" if rel in (".", "") else rel + "/"
+        try:
+            out = subprocess.run(["git", "diff", "--cached", "--name-only",
+                                  "--diff-filter=ACM"], cwd=repo, capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace",
+                                 timeout=30).stdout
+        except Exception:
+            return [], []
+        wanted = base + prefix
+        files = []
+        for line in out.splitlines():
+            p = line.strip().replace("\\", "/")
+            if p.startswith(wanted) and match(os.path.basename(p)):
+                files.append(p[len(base):] if base else p)
+        return files, []
+
+    files, unresolved = [], []
+    for a in argv[argv.index("--stamp") + 1:]:
+        if a.startswith("-"):
+            continue
+        p = a.replace("\\", "/")
+        if os.path.isabs(p):
+            cand = [p]
+        else:
+            # Framework-relative FIRST: it is the documented form, and it is what
+            # `--staged` returns — so both selectors feed the loop the same shape.
+            cand = [os.path.join(framework, p),
+                    os.path.join(repo_root(framework), p)]
+        hit = next((c for c in cand if os.path.isfile(c)), None)
+        if hit is None:
+            unresolved.append(a)
+        else:
+            rel = os.path.relpath(os.path.realpath(hit), framework).replace(os.sep, "/")
+            files.append(rel)
+    return files, unresolved
 
 
 DECISION_ID = re.compile(r"^D-\d{4}-\d{2}-\d{2}-\d{2}$")

@@ -32,8 +32,16 @@ def _load_module():
 
 class SymbolTuningBase(unittest.TestCase):
     def setUp(self):
-        # Fresh module each test → pristine module-level config globals.
+        # Fresh module each test → module-level config globals seeded from the HOST repo's
+        # `checks-config.json`, NOT from pristine defaults. They are only pristine in a repo
+        # that configures nothing — which this one is, so the gap is invisible here and fires
+        # in an adopting project. `_scan` already overwrites `SYMBOL_SUFFIXES` /
+        # `IGNORE_SYMBOLS` / `SYMBOL_IGNORE_DIRS` on every call; `GHOST_EXCLUDE` had no such
+        # reset, so a project declaring real `doc-refs.ghost-exclude-patterns` silenced the
+        # very line the "absent config" tests assert on. Neutralize it here —
+        # `_with_patterns` stays the only path that installs patterns.
         self.mod = _load_module()
+        self.mod.GHOST_EXCLUDE = ()
         # Active, deterministic corpus: FooManager exists, the host-API names do not.
         self.mod._CODE_CORPUS = "public class FooManager {}\nclass BarView {}\n"
         # No git: pre-seed the history cache so R-DEAD-PATH never shells out.

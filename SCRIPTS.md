@@ -54,8 +54,8 @@ non-interactive.
 | `--json` | same check, JSON output of findings | disabled |
 | `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
 | `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | acts on the files passed as arguments |
-| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | paths framework-relative, repo-relative or absolute; one that resolves to no file is named on stderr, never swallowed |
+| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit; selection via `entrylib.stamp_targets`, so it holds when the framework is nested |
 | `--checklist [id]` | prints the closure checklist (Definition of Done, 6 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording; the **Review** step substitutes the project's half from `closure.review` | — |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.
@@ -82,7 +82,7 @@ another format is invisible to this check, not validated by it.
 |---|---|---|
 | *(none)* | text report, sorted blocking then to-confirm | — |
 | `--json` | JSON output of findings (5-field `Finding`) | disabled |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited entries | acts on the files passed as arguments |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited entries | paths framework-relative, repo-relative or absolute; an unresolved one is named on stderr |
 | `--stamp --staged` | same effect, but scope = `features/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`FM-FRESH`, `FM-GRAN` — soft)
@@ -268,6 +268,52 @@ python3 checks/index-check.py                                    # requires inde
 python3 checks/index-check.py --config index/index-config.json --base .
 ```
 
+### `coverage-check.py`
+**Intent:** recount a **table** against the **enumerated list it claims to cover**, inside the
+same document. The failure it exists for is silent by nature: the table is well-formed, the list
+is well-formed, every other check passes, and one item sits in no row — so the closure gets
+signed on the table's authority ("all N handled") because recounting by hand is the step a
+reader skips. Motivating incident: 17 findings, 5 batches cut by source file, one finding living
+outside every cited file; caught by a human question, by no script.
+
+**Declarative, never inferred.** Guessing which table covers which list would fire on tables
+claiming nothing, and a check that cries wrongly gets ignored — worse than no check. The document
+declares its own sets; the script is silent wherever the markers are absent. A marker **quoted as code** — inside backticks or a fenced block — is a citation, not a declaration, so a document explaining the mechanism never triggers it (found the day the check fired on `checks/README.md`).
+
+| Marker | Where | Effect |
+|---|---|---|
+| `<!-- coverage-set: <name>[; pattern: <regex>] -->` | before the enumerated list | opens the source set; ids captured from the following lines until the next `coverage-set`. Default pattern = numbered heading (`### 12. …`, `### 0 bis. …`) |
+| `<!-- coverage-check: <name>; column: <header> -->` | before the table | the NEXT markdown table covers that set; the column is found by its header label, cells split on `,` `;` `/` |
+| `<!-- coverage-exempt: <name>; ids: <a, b>[; reason: …] -->` | anywhere in the file | items deliberately out of scope — silences the finding, reported separately in `--json`, never conflated with covered |
+
+The table is parsed **as a table**, not scanned as text: an id sitting in the Subject column must
+not count as coverage, or the gap being looked for is exactly what gets hidden.
+
+| Rule | Severity | What it proves |
+|---|---|---|
+| `R-COVERAGE-GAP` | blocking | an item of the set is in no row and not exempt — both sets are declared, the arithmetic is closed, it cannot be a false positive |
+| `R-COVERAGE-UNKNOWN` | to-confirm | a row cites an id absent from the set (typo, stale row, or an id the list names differently) |
+| `R-COVERAGE-DECL` | to-confirm | a marker that does nothing — unknown set name, no table below, missing/unknown column, unreadable pattern, set covered by nothing. A guard the reader believes is standing |
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `<path…>` | files or folders to scan (`.md` only) | — |
+| `--diff` / `--staged` | what changed / what is about to be committed | — |
+| `--json` | findings **plus the parsed sets** (`items`, `rows`, `covered`, `missing`, `exempt`, `unknown`) | text report |
+
+**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING.
+**Why `--json` returns the sets and not just a verdict:** the question after "is anything
+missing?" is always "what covers what?" — asked by a human, by an agent planning the next batch,
+or by another tool. A check that prints only a verdict forces its caller to re-parse the document
+it just parsed. Regression suite: `checks/tests/test_coverage_check.py`, including a replay of the
+founding incident (must fail on the document as it stood before the gap was caught, pass after).
+
+```bash
+python3 checks/coverage-check.py docs/
+python3 checks/coverage-check.py --diff --staged
+python3 checks/coverage-check.py docs/ --json
+```
+
 ### `entrylib.py`
 **Intent:** **shared library**, NOT a standalone check — an in-house minimal frontmatter
 parser (no yaml dependency) + validation of the common **memory entry** schema
@@ -279,8 +325,24 @@ entry is**, no more regex duplication between checks.
 Public API: `Finding`/`BLOCKING`/`CONFIRM` (the `checks/TEMPLATE.md` template), `CHANNELS`
 (required/optional/enum spec per channel), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
 `check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`,
-`load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global settings file loader —
-absent file = defaults, broken file = an error the caller surfaces as `CFG-INVALID`).
+`repo_root(start)` + `stamp_targets(framework, argv, prefix, match)` (the shared `--stamp`
+selector, see below), `load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global
+settings file loader — absent file = defaults, broken file = an error the caller surfaces as
+`CFG-INVALID`).
+
+**`stamp_targets` — why the three `--stamp` commands share one selector.** They differ only by
+`(prefix, match)`; everything else was copied three times, and the copy carried a defect none of
+the three could see alone. `git diff --cached --name-only` prints **repo-relative** paths, so a
+`startswith("backlog/")` filter applied with `cwd=<framework>` **can never match when the
+framework is nested** in a host subdirectory — the selector returned nothing, the caller printed
+`0 stamped` and exited `0`. A false green, structurally invisible in this repo, where the
+framework sits at the root. `stamp_targets` resolves the repo root (`repo_root`, the same
+`git rev-parse --show-toplevel` that made `doc-refs-check.py` immune), filters in repo space and
+returns **framework-relative** paths for both selectors. It also accepts explicit paths in
+framework-relative, repo-relative or absolute form, and returns what it could NOT resolve so the
+caller names it on stderr — *a stamp that cannot select its target must never look like a stamp
+that found none*. Regression suite: `checks/tests/test_stamp_targets.py`, every case run twice
+(framework at the root **and** nested), since a flat-only test passes against the broken code.
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -324,7 +386,7 @@ No targeting parameter (like `decisions-check.py`, always compares `MEMORY.md` a
 | Parameter | Effect | Default |
 |---|---|---|
 | `--json` | JSON output | disabled |
-| `--stamp [files…]` | **writes** `updated: <today>` on the cited `memory/*.md` files | acts on the files passed as arguments |
+| `--stamp [files…]` | **writes** `updated: <today>` on the cited `memory/*.md` files | paths framework-relative, repo-relative or absolute; an unresolved one is named on stderr |
 | `--stamp --staged` | same effect, but scope = `memory/*.md` files **staged** in git, and **re-stages** after writing | to be wired at pre-commit |
 
 **Exit codes:** `0` clean · `1` only "to-confirm" · `2` at least one blocking.
