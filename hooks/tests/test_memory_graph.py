@@ -159,7 +159,10 @@ class TestCovers(GraphFixture):
 
     def test_doctor_reports_only_unresolved_citations(self):
         # `order-engine` cites two files: one exists on disk, one doesn't —
-        # doctor must name exactly the dead one, with its citing node.
+        # doctor must name exactly the dead one, with its citing node. (The
+        # backlog fixture's declared companion doc must exist too — doctor
+        # checks backlog `docs:` citations like any other cite-path edge.)
+        _write(os.path.join(self.root, "backlog/refacto-x/design.md"), "# design\n")
         _write(os.path.join(self.root, "src/orders/OrderManager.java"), "class OrderManager {}")
         dead = self.mod.cmd_doctor(self.root)
         self.assertEqual([(d[0], d[2]) for d in dead],
