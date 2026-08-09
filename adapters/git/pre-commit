@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Git-native pre-commit hook — delegates to the stamp home (`hooks/stamp-staged.sh`).
+#
+# WHY it exists: the Claude Code adapter (`adapters/claude-code/hooks/pre-commit-stamp.sh`,
+# `PreToolUse | Bash`) only fires when the agent's Bash call CONTAINS `git commit` — a
+# commit made by hand, from an IDE, a script or CI never goes through it. Measured on a
+# real adoption: no git hook installed, and 8 STATE.md out of 15 had drifted — up to 19
+# days — with no check saying so. This hook covers every `git commit`, whoever runs it.
+# It does NOT stamp itself: two scripts that stamp are two scripts that diverge.
+#
+# INSTALLATION — `.git/hooks/` is not versioned, so once per clone/machine:
+#   git config core.hooksPath adapters/git
+# (or copy this file into the active hooks dir — the SessionStart sweep recognizes an
+# up-to-date copy). The absence of either is surfaced at session start by
+# `adapters/claude-code/hooks/session-start-sweep.sh`, as an actionable command — an
+# uninstalled guard that nothing mentions is as mute as the defect it guards against.
+# This file must be ADDED to the index in mode 100755 (`git add --chmod=+x`), not merely
+# be executable on disk: under `core.filemode=false` — the Windows case — git indexes any
+# new file as 100644 whatever its on-disk bit, and then SKIPS the hook on every POSIX
+# clone. Git warns (`advice.ignoredHook`) but the advice is disableable and drowns in a
+# commit's noise; the index mode is re-checked by the session sweep. To fix after the
+# fact: `git update-index --chmod=+x adapters/git/pre-commit`.
+# NESTED INSTALL — a host that vendors this framework in a subdirectory materializes its
+# own copy of this hook and adjusts the single HOME_SCRIPT= line below; everything above
+# and below it holds unchanged.
+#
+# Advisory: never blocks a commit (exit 0). But it SPEAKS: every case where it renounces
+# is announced on stderr — a guard that cannot run and stays silent is the defect this
+# wiring exists to close, not one it may recreate.
+set +e
+
+# PURGE THE GIT ENVIRONMENT FIRST. Git exports `GIT_DIR` to its hooks; under `GIT_DIR`,
+# repository discovery is short-circuited and `git rev-parse --show-toplevel` returns the
+# CWD — including for THIS script's own git calls below. `entrylib.repo_root` purges its
+# own subprocesses since the same defect was measured through it (nested framework: the
+# selector silently selected nothing, three commits in a row with the hook duly called
+# and `updated` never moving); the purge here keeps the bash-level calls honest too.
+# `GIT_INDEX_FILE` is KEPT: it names the index git is about to commit — the one the
+# re-staged stamp must land in.
+unset GIT_DIR GIT_WORK_TREE
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [[ -z "$ROOT" ]]; then
+  echo "updated stamp: repository root not resolvable, nothing stamped" >&2
+  exit 0
+fi
+# The one line a nested install adjusts (e.g. "$ROOT/docs/hooks/stamp-staged.sh").
+HOME_SCRIPT="$ROOT/hooks/stamp-staged.sh"
+if [[ ! -f "$HOME_SCRIPT" ]]; then
+  echo "updated stamp: home script $HOME_SCRIPT not found, nothing stamped" >&2
+  exit 0
+fi
+
+# COMMIT REPLAYING SOMEONE ELSE'S WORK (merge, cherry-pick, revert, conflicted rebase):
+# do not stamp. `git diff --cached` there lists everything that differs from HEAD — every
+# STATE.md brought in from elsewhere — and dating them today would erase the date of
+# their real last update. Automatic merges go through `pre-merge-commit` (absent here,
+# hence mute); the CONFLICTED forms end in a manual `git commit` and would land here
+# without this guard. All four sister heads matter: a conflicted cherry-pick falls back
+# on `pre-commit` too — measured; guarding `MERGE_HEAD` alone only covers the merge.
+# (`rev-parse --verify`, not `-f .git/MERGE_HEAD`: in a worktree, `.git` is a file.)
+# KNOWN HOLE, undetectable: `git merge --squash` writes no sister head — it leaves the
+# index staged and the following `git commit` is indistinguishable from an ordinary one.
+for head in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD REBASE_HEAD; do
+  if git rev-parse --verify --quiet "$head" >/dev/null; then
+    echo "updated stamp: $head commit (work replayed from elsewhere) — nothing stamped, the original date is kept" >&2
+    exit 0
+  fi
+done
+
+# TEMPORARY INDEX (partial commit: `git commit -- <path>`, `-p`, a GUI client's "tick
+# some files" flow): git builds a throwaway index. The stamp would land there, but the
+# REAL index keeps the pre-stamp version — measured: HEAD and disk at the right date,
+# index left at the old one, and the NEXT commit would bring the old date back WITHOUT A
+# WORD. So: do not stamp, and SAY so — a missing-but-announced date beats a mute
+# rollback.
+#
+# The test is a WHITELIST anchored on the git dir: only `index` and `index.lock` inside
+# it are the real index — any other path is throwaway. Three traps already paid for:
+#   - `git rev-parse --git-path index` is useless here: it resolves THROUGH
+#     `GIT_INDEX_FILE` and returns the temporary itself. Anchor on `--absolute-git-dir`.
+#   - a negative test "!= index" is WRONG: `git commit -a` exports `index.lock`, which
+#     BECOMES the real index (git renames it at commit end) — measured, the most common
+#     commit form was being refused.
+#   - a positive test "= next-index-*" only knows the git binary's own names: a GUI
+#     client naming its throwaway index differently would slip through, back to the mute
+#     rollback. The whitelist fails on the SAFE side — it renounces, and says so.
+# Comparison is `-ef` (same device+inode), never string equality: `GIT_INDEX_FILE` may be
+# relative where `--absolute-git-dir` is absolute by definition, and a lexical compare
+# would refuse an ORDINARY commit. `realpath` is no rescue — absent on some machines, and
+# its `-m` does not exist on BSD/macOS, where a silent fallback would reinstate the
+# lexical compare. `-ef` is a bash test, no external tool. (Known inverse degradation: a
+# filesystem reporting `ino = 0` for everything — network share, exFAT under MSYS —
+# makes `-ef` call two distinct files equal, and the mute rollback returns; a normalized
+# path comparison is the fallback if that case ever needs closing.)
+if [[ -n "${GIT_INDEX_FILE:-}" ]]; then
+  gd=$(git rev-parse --absolute-git-dir 2>/dev/null)
+  if [[ -z "$gd" || ( ! "$GIT_INDEX_FILE" -ef "$gd/index" && ! "$GIT_INDEX_FILE" -ef "$gd/index.lock" ) ]]; then
+    echo "updated stamp: temporary index ($GIT_INDEX_FILE) — partial commit, nothing stamped, bump the date by hand if needed" >&2
+    exit 0
+  fi
+fi
+
+# The choice of WHICH copy to run answers "which tree?": in a worktree, `core.hooksPath`
+# resolves against the worktree and $ROOT is the worktree's root, so the home script —
+# and through it `entrylib.repo_root` — operates on the tree whose index is being
+# committed. No second root resolution happens on this path.
+bash "$HOME_SCRIPT"
+exit 0
