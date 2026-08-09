@@ -54,6 +54,15 @@ Rules:
                                   anti-accumulation guard, never blocking).
   E-STATE-SECTION(TO-CONFIRM)    `## …` heading outside the canonical sections
                                   (`Tasks`/`Remaining`) — soft, never blocking.
+  E-STATE-FRESH  (TO-CONFIRM)    frontmatter `updated` older than the last git commit
+                                  touching the STATE.md itself — the pre-commit stamp did
+                                  not run on that commit (hook uninstalled, bypassed with
+                                  `--no-verify`, or absent: e.g. an ephemeral container).
+                                  Same form as `feature-map-check.py`'s `FM-FRESH`; the
+                                  target here is the state file, not cited code paths.
+                                  Soft by design: a host where part of the work happens
+                                  where no hook can run would make a blocking tier noisy
+                                  by construction. Unversioned/uncommitted file -> ignored.
   I-FLAT         (BLOCKING)      flat `.md` file at the top level of `backlog/` (other than
                                   `INDEX.md`/`README.md`/`STATE.template.md`) — abandoned
                                   tier.
@@ -295,6 +304,44 @@ def _norm_milestone(v):
 
 
 # --------------------------------------------------------------------------- #
+# Freshness — E-STATE-FRESH (soft)                                             #
+# --------------------------------------------------------------------------- #
+
+def _git_last_commit_date(relpath: str) -> str | None:
+    try:
+        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", relpath],
+                            cwd=ROOT, env=entrylib.git_env(), capture_output=True,
+                            text=True, encoding="utf-8", errors="replace", timeout=10)
+    except Exception:
+        return None
+    out = r.stdout.strip()
+    return out or None
+
+
+def check_freshness(state_rel: str, meta: dict) -> list[Finding]:
+    """E-STATE-FRESH — `updated` older than the last commit touching the STATE.md.
+
+    The stamp mechanically sets `updated` = commit date on every commit that goes through
+    a pre-commit wiring (`checks/README.md §Pre-commit wiring`); a STATE.md whose last
+    commit postdates its `updated` is a commit the stamp missed. A hook can be
+    uninstalled, bypassed (`--no-verify`) or absent (container): this CHECK is the guard
+    that survives that — same asymmetry `FM-FRESH` already closes on the Feature channel.
+    Tolerant: no/invalid `updated` (already `R-*`) or unversioned file -> ignored.
+    """
+    updated = meta.get("updated")
+    if not updated or not entrylib.DATE_RE.match(str(updated)):
+        return []
+    commit_date = _git_last_commit_date(state_rel)
+    if commit_date and commit_date > str(updated):
+        return [Finding(TO_CONFIRM, "E-STATE-FRESH", state_rel, 1,
+                        f"last commit {commit_date}, frontmatter « updated: {updated} » "
+                        "— the pre-commit stamp did not run on that commit; the date "
+                        "self-heals at the next stamped pass (never rewrite it by hand "
+                        "to today).")]
+    return []
+
+
+# --------------------------------------------------------------------------- #
 # `impacts:` — the impact ledger (filled during work, consumed at closure)     #
 # --------------------------------------------------------------------------- #
 
@@ -345,6 +392,7 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
     findings += entrylib.validate_entry(state_rel, meta, "backlog")
     findings += entrylib.check_links(state_rel, meta, ROOT)
     findings += check_impacts(state_rel, meta)
+    findings += check_freshness(state_rel, meta)
 
     headings, sections = parse_state(text)
 
@@ -523,7 +571,7 @@ def cmd_stamp(argv: list[str]) -> int:
         if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", "--", f], cwd=ROOT)
+                subprocess.run(["git", "add", "--", f], cwd=ROOT, env=entrylib.git_env())
     print(f"backlog-check: --stamp — {len(changed)} STATE.md stamped {today}.")
     for a in unresolved:
         print(f"backlog-check: --stamp — no such file, skipped: {a}", file=sys.stderr)
