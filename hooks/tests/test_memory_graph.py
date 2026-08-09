@@ -148,6 +148,25 @@ class TestCovers(GraphFixture):
                          ["src/orders/", "src/orders/OrderManager.java",
                           "docs/guide v2/intro.md"])
 
+    def test_extract_paths_drops_template_and_placeholder_shapes(self):
+        # `<loc>`, a glob, and a single-alternative `{id}` brace illustrate a
+        # NAMING SCHEME — they never become edges (and never feed doctor).
+        # The comma-bearing brace stays the sibling-files shorthand.
+        body = ("Scheme: `data/<loc>/p.asset`, icons `art/icon_*.png`, one "
+                "`data/locations/{id}.asset`; real: `src/{A,B}.java`.")
+        self.assertEqual(self.mod.extract_paths(body),
+                         ["src/A.java", "src/B.java"])
+
+    def test_doctor_reports_only_unresolved_citations(self):
+        # `order-engine` cites two files: one exists on disk, one doesn't —
+        # doctor must name exactly the dead one, with its citing node.
+        _write(os.path.join(self.root, "src/orders/OrderManager.java"), "class OrderManager {}")
+        dead = self.mod.cmd_doctor(self.root)
+        self.assertEqual([(d[0], d[2]) for d in dead],
+                         [("order-engine", "src/orders/TaxCalculator.java")])
+        _write(os.path.join(self.root, "src/orders/TaxCalculator.java"), "class TaxCalculator {}")
+        self.assertEqual(self.mod.cmd_doctor(self.root), [])
+
     def test_equal_specificity_keeps_ascending_id_order(self):
         # Same citation depth → the old deterministic id order still holds
         # (no behavioral lottery between equally-specific fiches).

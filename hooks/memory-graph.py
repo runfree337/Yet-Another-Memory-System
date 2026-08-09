@@ -53,7 +53,7 @@ from config (`checks-config.json → memory-graph`), never hardcoded:
     correspondence OFF). List the extensions whose basename equals an
     identifier (e.g. `[".java"]` for a Java project) to turn it on.
 
-Three CLI commands (see each `cmd_*` docstring for the exact contract):
+Four CLI commands (see each `cmd_*` docstring for the exact contract):
 
   covers    <path>              — which memories cover this file (exact
                                    containment: equal path, or a repo
@@ -65,6 +65,13 @@ Three CLI commands (see each `cmd_*` docstring for the exact contract):
                                    ids/Role lines — never against body prose.
   neighbors <id> [--depth N]    — the typed neighborhood (outgoing AND
                                    incoming edges) of one node.
+  doctor                        — map integrity: every `cite-path` edge must
+                                   resolve on disk; exit 1 with a DEAD-CITE
+                                   line per failure. Chained into
+                                   `checks/memory-audit.py --tier1` (the
+                                   "graph" channel) so a lying declared map
+                                   is caught by the standing audit, not by a
+                                   hand-run eval.
 
 Two hook adapters share the same core (`--stdin-json --mode covers|match`),
 wired as:
@@ -363,6 +370,8 @@ def extract_paths(text):
         if "{" in token and "}" in token:
             pre, _, rest = token.partition("{")
             alts, _, suf = rest.partition("}")
+            if "," not in alts:
+                continue  # `{id}` is a PLACEHOLDER, not the sibling-files shorthand
             for alt in alts.split(","):
                 alt = alt.strip()
                 if alt:
@@ -377,11 +386,19 @@ def extract_paths(text):
 # Extension-shaped tail of a path's final segment — same 1-16 alnum bound the
 # doc-refs checker uses for a path token's extension.
 _EXT_TAIL_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
+# Template/glob shapes (`<location>`, `item_*.png`, an unexpanded `{`) — the same
+# family doc-refs' TEMPLATE regex exempts: illustrative, never a real citation.
+_TEMPLATE_CHARS_RE = re.compile(r"[*?<>{}…]")
 
 
 def _path_shaped(token):
     """True when a backticked slash-bearing span is actually path-shaped —
-    see the `extract_paths` docstring for the contract and its measured why."""
+    see the `extract_paths` docstring for the contract and its measured why.
+    A template/glob-shaped token (`<loc>`, `*.png`) is prose illustrating a
+    NAMING SCHEME, not a citation: it can never equal a real target (covers
+    is containment-exact) and would only feed `doctor` false positives."""
+    if _TEMPLATE_CHARS_RE.search(token):
+        return False
     if token.endswith("/"):
         return True
     return _EXT_TAIL_RE.search(token.rsplit("/", 1)[-1]) is not None
@@ -769,6 +786,28 @@ def _code_basename_counts(root_abs, ext):
                 if fn.endswith(ext):
                     counts[fn] = counts.get(fn, 0) + 1
     return counts
+
+
+def cmd_doctor(root):
+    """The DECLARED map's own integrity: every `cite-path` edge must resolve
+    to something on disk (file or directory, repo-relative). A fiche/backlog
+    citing a path that resolves to nothing is a map that lies — the exact
+    drift that slips between doc-refs-check (which only sees extension-bearing
+    tokens, so a `dir/` citation is invisible to it) and `covers` (which never
+    complains, it just stays silent on the amputated path). Mechanical and
+    zero-FP by construction: template/placeholder shapes never become edges
+    (`_path_shaped`), so every reported edge is a real citation that fails to
+    resolve. Returns [(node_id, node_path, cited)] sorted for determinism."""
+    nodes, edges = load_graph(root)
+    root_abs = os.path.abspath(root)
+    dead = []
+    for src, etype, dst in edges:
+        if etype != "cite-path":
+            continue
+        if not os.path.exists(os.path.join(root_abs, dst.rstrip("/"))):
+            node = nodes.get(src) or {}
+            dead.append((src, node.get("path", ""), dst))
+    return sorted(set(dead))
 
 
 def cmd_match(root, terms):
@@ -1180,6 +1219,9 @@ def build_argparser():
     p_neighbors.add_argument("id")
     p_neighbors.add_argument("--depth", type=int, default=1)
 
+    sub.add_parser("doctor",
+                   help="map integrity: every cite-path edge must resolve (exit 1 otherwise)")
+
     return ap
 
 
@@ -1203,9 +1245,16 @@ def main():
         for entry in cmd_neighbors(args.root, args.id, args.depth):
             print(format_neighbor_line(entry))
         return 0
-
-    ap.print_help()
-    return 2
+    if args.command == "doctor":
+        dead = cmd_doctor(args.root)
+        for nid, node_path, cited in dead:
+            print("DEAD-CITE   %s  cite-path resolves to nothing: %s (cited by %s)"
+                  % (node_path, cited, nid))
+        if not dead:
+            print("memory-graph doctor: OK — every cite-path edge resolves.")
+            return 0
+        print("\nmemory-graph doctor: %d dead citation(s) — the declared map lies." % len(dead))
+        return 1
 
 
 if __name__ == "__main__":
