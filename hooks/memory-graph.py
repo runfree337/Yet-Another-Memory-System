@@ -153,7 +153,11 @@ CHANNEL_INDEX_FILES = ("FEATURE_MAP.md", "MEMORY.md")
 # (e.g. a Claude Code project keeping its hooks under `.claude/`).
 DEFAULT_SELF_EXTRA_DIRS = ("checks", "hooks", "adapters")
 
-MAX_ENTRIES = 3
+# Display cap for the HOOK notes (covers/match). `cmd_covers` itself returns
+# every hit, ranked — the cap is a presentation concern: the note shows the
+# MAX_ENTRIES best and SAYS how many it cut ("… and N more"), never truncating
+# silently, and points at the CLI (uncapped) for the full answer.
+MAX_ENTRIES = 5
 DECISION_ID_RE = re.compile(r'^D-\d{4}-\d{2}-\d{2}-\d+\.md$')
 FRONTMATTER_RE = re.compile(r'^---\n(.*?)\n---\n?', re.S)
 ROLE_RE = re.compile(r'^\*\*Role\s*:\*\*\s*(.*)$', re.M)
@@ -338,7 +342,19 @@ def extract_paths(text):
     the strip only removes trailing punctuation chars, never interior ones.
     Backtick-anchored (never a substring match into unrelated prose): a path is
     whatever a fiche fences as one, which is exactly how `FEATURE_MAP.md`
-    prescribes citing code paths."""
+    prescribes citing code paths.
+
+    A slash alone is not enough to BE a path: prose routinely backticks
+    alternatives (`switch/case`, `id/name`, `a/b`) and every one of them used
+    to become a phantom `cite-path` edge — harmless to `covers` (no real
+    target ever matches `switch/case`) but decor inflating `neighbors`
+    (measured on an adopting repo: 73 of 446 citations resolved to nothing,
+    two-thirds of them this prose shape). A token is kept only when it is
+    path-SHAPED: its last segment carries a dot-extension (a file), or it
+    ends with `/` (a directory). This is also the citation contract for
+    fiches: cite a directory WITH its trailing slash — an extensionless file
+    citation (`docs/LICENSE`) is the accepted blind spot, cite it with a
+    trailing element or full extension instead."""
     out = []
     for raw in BACKTICK_RE.findall(text or ""):
         token = raw.strip().split(" §", 1)[0].strip().rstrip(".,;:")
@@ -351,11 +367,24 @@ def extract_paths(text):
                 alt = alt.strip()
                 if alt:
                     expanded = (pre + alt + suf).rstrip(".,;:")
-                    if expanded:
+                    if expanded and _path_shaped(expanded):
                         out.append(expanded)
-        else:
+        elif _path_shaped(token):
             out.append(token)
     return out
+
+
+# Extension-shaped tail of a path's final segment — same 1-16 alnum bound the
+# doc-refs checker uses for a path token's extension.
+_EXT_TAIL_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
+
+
+def _path_shaped(token):
+    """True when a backticked slash-bearing span is actually path-shaped —
+    see the `extract_paths` docstring for the contract and its measured why."""
+    if token.endswith("/"):
+        return True
+    return _EXT_TAIL_RE.search(token.rsplit("/", 1)[-1]) is not None
 
 
 def extract_classes(text):
@@ -632,8 +661,10 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
 
     `nodes`, when given, is a pre-loaded graph (caller already parsed it —
     e.g. the `--prefilter-cache` hook path, to avoid a second `load_graph`
-    call); when omitted, this loads the graph itself. Returns up to
-    MAX_ENTRIES (type, id, title) tuples."""
+    call); when omitted, this loads the graph itself. Returns EVERY hit as
+    (type, id, title) tuples, ranked — no cap here: the CLI prints the full
+    answer (a deliberate lookup deserves it), and the hook adapters cap the
+    display at MAX_ENTRIES while saying how many they cut."""
     class_exts = class_exts or set()
     root_abs = os.path.abspath(root).replace("\\", "/")
     target_n = norm_path(target_path, root_abs)
@@ -687,7 +718,7 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
         for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
             add(node, nid)
 
-    return hits[:MAX_ENTRIES]
+    return hits
 
 
 # Directory names never worth walking for the ambiguity guard (VCS/build/deps).
@@ -857,6 +888,23 @@ def format_neighbor_line(entry):
 # Hook adapters (--stdin-json --mode covers|match)
 # ---------------------------------------------------------------------------
 
+def _covers_note(target_n, hits):
+    """The covers note text — SINGLE home for both hook paths (cached and
+    uncached), so the two can never drift apart on wording or on the cap.
+    Shows the MAX_ENTRIES best hits and, when the cap cut something, SAYS so:
+    a silent truncation reads as "this is everything", which is exactly the
+    lie the ranking work exists to prevent."""
+    shown = hits[:MAX_ENTRIES]
+    lines = ["[memory-graph] Memory covering %s:" % target_n]
+    for hit in shown:
+        lines.append("- %s" % format_covers_line(hit))
+    if len(hits) > len(shown):
+        lines.append("… and %d more — `memory-graph.py covers %s` for the full list."
+                     % (len(hits) - len(shown), target_n))
+    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
+    return "\n".join(lines)
+
+
 def build_covers_note(root, root_abs, tool_input, class_exts):
     """Returns (note_text, marker_key) for the `covers` hook mode, or
     ("", "") when nothing should fire (uncovered, self-suppressed, or no
@@ -874,11 +922,7 @@ def build_covers_note(root, root_abs, tool_input, class_exts):
     if not hits:
         return "", ""
 
-    lines = ["[memory-graph] Memory covering %s:" % target_n]
-    for hit in hits:
-        lines.append("- %s" % format_covers_line(hit))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
-    return "\n".join(lines), target_n
+    return _covers_note(target_n, hits), target_n
 
 
 PREFILTER_CACHE_KEYS = ("prefixes", "classes", "tags")
@@ -1022,11 +1066,7 @@ def build_covers_note_prefiltered(root, root_abs, tool_input, class_exts, cache_
     if not hits:
         return "", ""
 
-    lines = ["[memory-graph] Memory covering %s:" % target_n]
-    for hit in hits:
-        lines.append("- %s" % format_covers_line(hit))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
-    return "\n".join(lines), target_n
+    return _covers_note(target_n, hits), target_n
 
 
 def build_match_note(root, root_abs, tool_input):

@@ -86,8 +86,8 @@ class TestCovers(GraphFixture):
 
     def test_exact_citation_outranks_directory_prefix_under_the_cap(self):
         # Three alphabetically-earlier fiches cite the whole `src/` tree; a
-        # fourth, alphabetically LAST, cites the exact file. Under the
-        # MAX_ENTRIES cap the exact citation must survive and rank first —
+        # fourth, alphabetically LAST, cites the exact file. In the note's
+        # MAX_ENTRIES window the exact citation must survive and rank first —
         # the old id-order truncation silently dropped it.
         for name in ("aaa-broad", "bbb-broad", "ccc-broad"):
             _write(os.path.join(self.root, "features/%s.md" % name),
@@ -99,10 +99,32 @@ class TestCovers(GraphFixture):
         hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
         ids = [h[1] for h in hits]
         # Both exact citations (the fixture's `order-engine` + `zzz-exact`)
-        # must survive the cap ahead of every broad `src/` fiche.
-        self.assertEqual(ids[:2], ["order-engine", "zzz-exact"],
-                         "exact-file citations must rank above directory prefixes")
-        self.assertEqual(len(hits), self.mod.MAX_ENTRIES)
+        # must rank ahead of every broad `src/` fiche — and NOTHING is cut at
+        # this level: cmd_covers returns every hit, the cap is the note's.
+        self.assertEqual(ids, ["order-engine", "zzz-exact",
+                               "aaa-broad", "bbb-broad", "ccc-broad"])
+
+    def test_covers_note_says_what_the_cap_cut(self):
+        # More hits than MAX_ENTRIES → the note shows the best ones and SAYS
+        # how many it cut; within the cap → no truncation line at all.
+        for i in range(self.mod.MAX_ENTRIES + 2):
+            _write(os.path.join(self.root, "features/broad-%02d.md" % i),
+                   "---\nid: broad-%02d\nupdated: 2026-07-01\n---\n"
+                   "**Role:** Broad.\n**Code:** `src/`.\n" % i)
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        note, key = self.mod.build_covers_note(
+            self.root, root_abs, {"file_path": "src/orders/OrderManager.java"}, set())
+        self.assertIn("… and 3 more", note,
+                      "a cut cap must say so — silent truncation reads as 'this is all'")
+        self.assertEqual(note.count("\n- "), self.mod.MAX_ENTRIES)
+        # Control: a target covered by ONE fiche only (outside the broad
+        # `src/` cites) gets no truncation line at all.
+        _write(os.path.join(self.root, "features/solo.md"),
+               "---\nid: solo\nupdated: 2026-07-01\n---\n"
+               "**Role:** Solo.\n**Code:** `lib/Solo.java`.\n")
+        note2, _ = self.mod.build_covers_note(
+            self.root, root_abs, {"file_path": "lib/Solo.java"}, set())
+        self.assertNotIn("more —", note2, "no truncation line when nothing was cut")
 
     def test_deeper_directory_prefix_outranks_broader_one(self):
         # `src/orders/` says more about the target than `src/` — segment
@@ -116,6 +138,15 @@ class TestCovers(GraphFixture):
         hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
         ids = [h[1] for h in hits]
         self.assertLess(ids.index("zzz-deep"), ids.index("aaa-shallow"))
+
+    def test_extract_paths_keeps_only_path_shaped_tokens(self):
+        # Prose alternatives (`switch/case`, `id/name`) are not citations; a
+        # file with an extension and a directory with its trailing slash are.
+        body = ("Uses `switch/case` on `id/name`; code in `src/orders/` and "
+                "`src/orders/OrderManager.java`, docs in `docs/guide v2/intro.md`.")
+        self.assertEqual(self.mod.extract_paths(body),
+                         ["src/orders/", "src/orders/OrderManager.java",
+                          "docs/guide v2/intro.md"])
 
     def test_equal_specificity_keeps_ascending_id_order(self):
         # Same citation depth → the old deterministic id order still holds
