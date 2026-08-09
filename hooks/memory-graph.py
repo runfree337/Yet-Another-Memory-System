@@ -601,7 +601,14 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
     """Which memories cover `target_path`. Three EXACT correspondences, in
     priority order (never fuzzy):
     1. a feature/decision/backlog node with a `cite-path` edge whose path is
-       EQUAL to the (repo-relative) target, or a directory prefix of it;
+       EQUAL to the (repo-relative) target, or a directory prefix of it.
+       Path hits are ranked by the SPECIFICITY of the best citation — an
+       exact-file citation before a deep directory prefix before a broad one
+       (measured in path segments; equal specificity keeps ascending id
+       order). Under the MAX_ENTRIES cap this is what decides WHICH hits
+       survive: without it the cap used to truncate on id order alone, and a
+       fiche citing the exact file could be silently crowded out by three
+       alphabetically-earlier fiches citing a whole directory;
     2. (opt-in) for a target whose extension is in `class_exts`, a feature
        whose body cites the basename as a backticked identifier (`classes`
        set — the project's one-symbol-per-file convention makes basename ==
@@ -640,13 +647,21 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
             seen.add(nid)
             hits.append((node["type"], nid, node.get("title", "")))
 
+    path_hits = []
     for nid, node in sorted(nodes.items()):
         if node["type"] == "decision" and node.get("status") != "active":
             continue
-        for cited in node.get("cites", []):
-            if is_contained(target_n, cited):
-                add(node, nid)
-                break
+        # Best (deepest) citation wins for the node's rank: segments of the
+        # matched cite — an exact-file citation has as many segments as the
+        # target itself, a directory prefix strictly fewer, so "cites the
+        # file" always outranks "cites a folder above it".
+        best = max((cited.rstrip("/").count("/") + 1
+                    for cited in node.get("cites", [])
+                    if is_contained(target_n, cited)), default=0)
+        if best:
+            path_hits.append((best, nid, node))
+    for _depth, nid, node in sorted(path_hits, key=lambda h: (-h[0], h[1])):
+        add(node, nid)
 
     base = os.path.basename(target_n)
     _, ext = os.path.splitext(base)

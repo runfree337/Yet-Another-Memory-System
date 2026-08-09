@@ -84,6 +84,49 @@ class TestCovers(GraphFixture):
         self.assertIn("order-engine", ids)          # #1 path
         self.assertIn("D-2026-07-11-02", ids)         # #3 active decision via tag
 
+    def test_exact_citation_outranks_directory_prefix_under_the_cap(self):
+        # Three alphabetically-earlier fiches cite the whole `src/` tree; a
+        # fourth, alphabetically LAST, cites the exact file. Under the
+        # MAX_ENTRIES cap the exact citation must survive and rank first —
+        # the old id-order truncation silently dropped it.
+        for name in ("aaa-broad", "bbb-broad", "ccc-broad"):
+            _write(os.path.join(self.root, "features/%s.md" % name),
+                   "---\nid: %s\nupdated: 2026-07-01\n---\n"
+                   "**Role:** Broad coverage.\n**Code:** `src/`.\n" % name)
+        _write(os.path.join(self.root, "features/zzz-exact.md"),
+               "---\nid: zzz-exact\nupdated: 2026-07-01\n---\n"
+               "**Role:** Exact coverage.\n**Code:** `src/orders/OrderManager.java`.\n")
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
+        ids = [h[1] for h in hits]
+        # Both exact citations (the fixture's `order-engine` + `zzz-exact`)
+        # must survive the cap ahead of every broad `src/` fiche.
+        self.assertEqual(ids[:2], ["order-engine", "zzz-exact"],
+                         "exact-file citations must rank above directory prefixes")
+        self.assertEqual(len(hits), self.mod.MAX_ENTRIES)
+
+    def test_deeper_directory_prefix_outranks_broader_one(self):
+        # `src/orders/` says more about the target than `src/` — segment
+        # depth, not id order, decides the ranking between directory cites.
+        _write(os.path.join(self.root, "features/aaa-shallow.md"),
+               "---\nid: aaa-shallow\nupdated: 2026-07-01\n---\n"
+               "**Role:** Shallow.\n**Code:** `src/`.\n")
+        _write(os.path.join(self.root, "features/zzz-deep.md"),
+               "---\nid: zzz-deep\nupdated: 2026-07-01\n---\n"
+               "**Role:** Deep.\n**Code:** `src/orders/`.\n")
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
+        ids = [h[1] for h in hits]
+        self.assertLess(ids.index("zzz-deep"), ids.index("aaa-shallow"))
+
+    def test_equal_specificity_keeps_ascending_id_order(self):
+        # Same citation depth → the old deterministic id order still holds
+        # (no behavioral lottery between equally-specific fiches).
+        _write(os.path.join(self.root, "features/aaa-same.md"),
+               "---\nid: aaa-same\nupdated: 2026-07-01\n---\n"
+               "**Role:** Same depth.\n**Code:** `src/orders/OrderManager.java`.\n")
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
+        ids = [h[1] for h in hits]
+        self.assertLess(ids.index("aaa-same"), ids.index("order-engine"))
+
     def test_archived_decision_never_covers(self):
         self._set_config({"class-file-extensions": [".java"]})
         exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
