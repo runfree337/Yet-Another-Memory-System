@@ -156,6 +156,44 @@ class TestNegWords(SymbolTuningBase):
         self.assertIn("R-DEAD-SYMBOL", self._rules("le module `IAudioProvider` gère le son"))
 
 
+class TestArrowContactExemption(SymbolTuningBase):
+    """The arrows left NEG (line-level) and became a token-level contact exemption:
+    only a target flanking an arrow — the "old → new" rename shape — is skipped."""
+
+    def test_rename_shape_stays_exempt(self):
+        # The exact pattern the old exemption was built for: both sides of the
+        # arrow are dead paths, neither is flagged.
+        finds = self._scan("moved: `old/dir/gone.py` → `new/dir/target.py`\n")
+        self.assertEqual([f for f in finds if f[3] == "R-DEAD-PATH"], [])
+
+    def test_ascii_arrow_rename_shape_stays_exempt(self):
+        finds = self._scan("renommage : `old/dir/gone.py` -> `new/dir/target.py`\n")
+        self.assertEqual([f for f in finds if f[3] == "R-DEAD-PATH"], [])
+
+    def test_arrow_elsewhere_on_the_line_no_longer_disarms(self):
+        # Routing punctuation: the arrow points at prose, the dead path sits
+        # several words away — the line-level exemption used to swallow this.
+        finds = self._scan("Le chemin `dead/path/nowhere.py` est décrit là : "
+                           "modèle complet → la doc d'architecture\n")
+        self.assertIn("R-DEAD-PATH", {f[3] for f in finds})
+
+    def test_dead_symbol_far_from_arrow_is_flagged(self):
+        # Same contract for R-DEAD-SYMBOL: contact exempts, distance doesn't.
+        self.assertIn("R-DEAD-SYMBOL",
+                      self._rules("`GhostThing` gère le rendu ; détail → la doc\n"))
+        self.assertNotIn("R-DEAD-SYMBOL",
+                         self._rules("`GhostThing` → `FooManager`\n"))
+
+    def test_neg_words_can_restore_line_level_arrows(self):
+        # A project that wants the old behavior re-adds the arrows via
+        # `doc-refs.neg-words` (additive) — the escape hatch stays open.
+        self.mod.NEG_RE = re.compile(
+            "|".join(re.escape(w) for w in self.mod.NEG + ("→", "->")))
+        finds = self._scan("Le chemin `dead/path/nowhere.py` est décrit là : "
+                           "modèle complet → la doc d'architecture\n")
+        self.assertEqual([f for f in finds if f[3] == "R-DEAD-PATH"], [])
+
+
 class TestGhostAbsenceProximity(SymbolTuningBase):
     # `FooManager` exists in the corpus (SymbolTuningBase). R-GHOST-ABSENCE must fire only
     # when a ghost word shares a SEGMENT with it, not merely the line.

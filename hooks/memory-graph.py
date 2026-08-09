@@ -53,7 +53,7 @@ from config (`checks-config.json → memory-graph`), never hardcoded:
     correspondence OFF). List the extensions whose basename equals an
     identifier (e.g. `[".java"]` for a Java project) to turn it on.
 
-Three CLI commands (see each `cmd_*` docstring for the exact contract):
+Four CLI commands (see each `cmd_*` docstring for the exact contract):
 
   covers    <path>              — which memories cover this file (exact
                                    containment: equal path, or a repo
@@ -65,6 +65,14 @@ Three CLI commands (see each `cmd_*` docstring for the exact contract):
                                    ids/Role lines — never against body prose.
   neighbors <id> [--depth N]    — the typed neighborhood (outgoing AND
                                    incoming edges) of one node.
+  doctor                        — map integrity: every `cite-path` edge must
+                                   resolve on disk; exit 2 (BLOCKING tier —
+                                   zero-FP by construction) with a DEAD-CITE
+                                   line per failure. Chained into
+                                   `checks/memory-audit.py --tier1` (the
+                                   "graph" channel) so a lying declared map
+                                   is caught by the standing audit, not by a
+                                   hand-run eval.
 
 Two hook adapters share the same core (`--stdin-json --mode covers|match`),
 wired as:
@@ -153,7 +161,11 @@ CHANNEL_INDEX_FILES = ("FEATURE_MAP.md", "MEMORY.md")
 # (e.g. a Claude Code project keeping its hooks under `.claude/`).
 DEFAULT_SELF_EXTRA_DIRS = ("checks", "hooks", "adapters")
 
-MAX_ENTRIES = 3
+# Display cap for the HOOK notes (covers/match). `cmd_covers` itself returns
+# every hit, ranked — the cap is a presentation concern: the note shows the
+# MAX_ENTRIES best and SAYS how many it cut ("… and N more"), never truncating
+# silently, and points at the CLI (uncapped) for the full answer.
+MAX_ENTRIES = 5
 DECISION_ID_RE = re.compile(r'^D-\d{4}-\d{2}-\d{2}-\d+\.md$')
 FRONTMATTER_RE = re.compile(r'^---\n(.*?)\n---\n?', re.S)
 ROLE_RE = re.compile(r'^\*\*Role\s*:\*\*\s*(.*)$', re.M)
@@ -169,7 +181,7 @@ TAG_RE = re.compile(r'\[([A-Za-z0-9][\w\-]*)\](?!\()')
 # full path. The optional suffix is restricted to an extension-shaped token
 # (lowercase, ≤5 chars) so a MEMBER reference (`Invoice.RefreshTotals`,
 # `Foo.OnClick`) is NOT read as citing the class — that would inflate coverage
-# and, under the 3-hit cap, crowd out lower-priority (decision/tag) hits.
+# and, under the note's MAX_ENTRIES cap, crowd out lower-priority (decision/tag) hits.
 # Used only when `class-file-extensions` is configured (opt-in).
 IDENT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]{2,})(?:\.[a-z][a-z0-9]{0,4})?$')
 
@@ -338,7 +350,19 @@ def extract_paths(text):
     the strip only removes trailing punctuation chars, never interior ones.
     Backtick-anchored (never a substring match into unrelated prose): a path is
     whatever a fiche fences as one, which is exactly how `FEATURE_MAP.md`
-    prescribes citing code paths."""
+    prescribes citing code paths.
+
+    A slash alone is not enough to BE a path: prose routinely backticks
+    alternatives (`switch/case`, `id/name`, `a/b`) and every one of them used
+    to become a phantom `cite-path` edge — harmless to `covers` (no real
+    target ever matches `switch/case`) but decor inflating `neighbors`
+    (measured on an adopting repo: 73 of 446 citations resolved to nothing,
+    two-thirds of them this prose shape). A token is kept only when it is
+    path-SHAPED: its last segment carries a dot-extension (a file), or it
+    ends with `/` (a directory). This is also the citation contract for
+    fiches: cite a directory WITH its trailing slash — an extensionless file
+    citation (`docs/LICENSE`) is the accepted blind spot, cite it with a
+    trailing element or full extension instead."""
     out = []
     for raw in BACKTICK_RE.findall(text or ""):
         token = raw.strip().split(" §", 1)[0].strip().rstrip(".,;:")
@@ -347,15 +371,38 @@ def extract_paths(text):
         if "{" in token and "}" in token:
             pre, _, rest = token.partition("{")
             alts, _, suf = rest.partition("}")
+            if "," not in alts:
+                continue  # `{id}` is a PLACEHOLDER, not the sibling-files shorthand
             for alt in alts.split(","):
                 alt = alt.strip()
                 if alt:
                     expanded = (pre + alt + suf).rstrip(".,;:")
-                    if expanded:
+                    if expanded and _path_shaped(expanded):
                         out.append(expanded)
-        else:
+        elif _path_shaped(token):
             out.append(token)
     return out
+
+
+# Extension-shaped tail of a path's final segment — same 1-16 alnum bound the
+# doc-refs checker uses for a path token's extension.
+_EXT_TAIL_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
+# Template/glob shapes (`<location>`, `item_*.png`, an unexpanded `{`) — the same
+# family doc-refs' TEMPLATE regex exempts: illustrative, never a real citation.
+_TEMPLATE_CHARS_RE = re.compile(r"[*?<>{}…]")
+
+
+def _path_shaped(token):
+    """True when a backticked slash-bearing span is actually path-shaped —
+    see the `extract_paths` docstring for the contract and its measured why.
+    A template/glob-shaped token (`<loc>`, `*.png`) is prose illustrating a
+    NAMING SCHEME, not a citation: it can never equal a real target (covers
+    is containment-exact) and would only feed `doctor` false positives."""
+    if _TEMPLATE_CHARS_RE.search(token):
+        return False
+    if token.endswith("/"):
+        return True
+    return _EXT_TAIL_RE.search(token.rsplit("/", 1)[-1]) is not None
 
 
 def extract_classes(text):
@@ -601,7 +648,14 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
     """Which memories cover `target_path`. Three EXACT correspondences, in
     priority order (never fuzzy):
     1. a feature/decision/backlog node with a `cite-path` edge whose path is
-       EQUAL to the (repo-relative) target, or a directory prefix of it;
+       EQUAL to the (repo-relative) target, or a directory prefix of it.
+       Path hits are ranked by the SPECIFICITY of the best citation — an
+       exact-file citation before a deep directory prefix before a broad one
+       (measured in path segments; equal specificity keeps ascending id
+       order). Under the MAX_ENTRIES cap this is what decides WHICH hits
+       survive: without it the cap used to truncate on id order alone, and a
+       fiche citing the exact file could be silently crowded out by three
+       alphabetically-earlier fiches citing a whole directory;
     2. (opt-in) for a target whose extension is in `class_exts`, a feature
        whose body cites the basename as a backticked identifier (`classes`
        set — the project's one-symbol-per-file convention makes basename ==
@@ -625,8 +679,10 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
 
     `nodes`, when given, is a pre-loaded graph (caller already parsed it —
     e.g. the `--prefilter-cache` hook path, to avoid a second `load_graph`
-    call); when omitted, this loads the graph itself. Returns up to
-    MAX_ENTRIES (type, id, title) tuples."""
+    call); when omitted, this loads the graph itself. Returns EVERY hit as
+    (type, id, title) tuples, ranked — no cap here: the CLI prints the full
+    answer (a deliberate lookup deserves it), and the hook adapters cap the
+    display at MAX_ENTRIES while saying how many they cut."""
     class_exts = class_exts or set()
     root_abs = os.path.abspath(root).replace("\\", "/")
     target_n = norm_path(target_path, root_abs)
@@ -640,13 +696,21 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
             seen.add(nid)
             hits.append((node["type"], nid, node.get("title", "")))
 
+    path_hits = []
     for nid, node in sorted(nodes.items()):
         if node["type"] == "decision" and node.get("status") != "active":
             continue
-        for cited in node.get("cites", []):
-            if is_contained(target_n, cited):
-                add(node, nid)
-                break
+        # Best (deepest) citation wins for the node's rank: segments of the
+        # matched cite — an exact-file citation has as many segments as the
+        # target itself, a directory prefix strictly fewer, so "cites the
+        # file" always outranks "cites a folder above it".
+        best = max((cited.rstrip("/").count("/") + 1
+                    for cited in node.get("cites", [])
+                    if is_contained(target_n, cited)), default=0)
+        if best:
+            path_hits.append((best, nid, node))
+    for _depth, nid, node in sorted(path_hits, key=lambda h: (-h[0], h[1])):
+        add(node, nid)
 
     base = os.path.basename(target_n)
     _, ext = os.path.splitext(base)
@@ -672,7 +736,7 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
         for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
             add(node, nid)
 
-    return hits[:MAX_ENTRIES]
+    return hits
 
 
 # Directory names never worth walking for the ambiguity guard (VCS/build/deps).
@@ -725,13 +789,39 @@ def _code_basename_counts(root_abs, ext):
     return counts
 
 
+def cmd_doctor(root):
+    """The DECLARED map's own integrity: every `cite-path` edge must resolve
+    to something on disk (file or directory, repo-relative). A fiche/backlog
+    citing a path that resolves to nothing is a map that lies — the exact
+    drift that slips between doc-refs-check (which only sees extension-bearing
+    tokens, so a `dir/` citation is invisible to it) and `covers` (which never
+    complains, it just stays silent on the amputated path). Mechanical and
+    zero-FP by construction: template/placeholder shapes never become edges
+    (`_path_shaped`), so every reported edge is a real citation that fails to
+    resolve. Returns [(node_id, node_path, cited)] sorted for determinism."""
+    nodes, edges = load_graph(root)
+    root_abs = os.path.abspath(root)
+    dead = []
+    for src, etype, dst in edges:
+        if etype != "cite-path":
+            continue
+        target = os.path.join(root_abs, dst.rstrip("/"))
+        alive = os.path.isdir(target) if dst.endswith("/") else os.path.exists(target)
+        if not alive:
+            node = nodes.get(src) or {}
+            dead.append((src, node.get("path", ""), dst))
+    return sorted(set(dead))
+
+
 def cmd_match(root, terms):
     """Lexical, case/accent-insensitive match of `terms` against decision
     ids/short-titles/tags and feature ids/Role lines (memory and backlog
     nodes are out of scope for `match` — the spec names only decisions and
     features). Terms shorter than 4 characters are ignored (too noisy).
-    Requires at least one surviving term to actually hit; returns up to
-    MAX_ENTRIES (score, id, node) tuples, highest score first. Ties break
+    Requires at least one surviving term to actually hit; returns EVERY hit
+    as (score, id, node) tuples, highest score first — no cap here (same
+    contract as `cmd_covers`: the CLI prints the full answer, the hook note
+    caps at MAX_ENTRIES and says what it cut). Ties break
     toward the LIVING memory: active section before archived/revoked, then
     most recent id first (decision ids are dated, so lexicographic descent =
     chronology) — an old amended decision must never outrank the current one
@@ -760,14 +850,14 @@ def cmd_match(root, terms):
         return (-score, section_rank, _desc_key(nid))
 
     scored.sort(key=sort_key)
-    return scored[:MAX_ENTRIES]
+    return scored
 
 
 def _desc_key(nid):
     """Descending-order key for an id: dated decision ids sort newest-first,
     everything else (feature slugs…) keeps plain ascending alphabetical order
     after them — deterministic without pretending slugs have a chronology."""
-    if re.match(r"^D-\d{4}-\d{2}-\d{2}-\d{2}$", nid):
+    if re.match(r"^D-\d{4}-\d{2}-\d{2}-\d+$", nid):
         return (0, "".join(chr(0x10FFFF - ord(c)) for c in nid))
     return (1, nid)
 
@@ -842,6 +932,46 @@ def format_neighbor_line(entry):
 # Hook adapters (--stdin-json --mode covers|match)
 # ---------------------------------------------------------------------------
 
+def _script_ref():
+    """How a note names THIS script so the command it suggests actually runs:
+    the real file, relative to the cwd the hook was invoked from — an adopting
+    repo vendors the engine under another name/path (e.g. a Claude Code skill's
+    `graph.py`), and a hardcoded `memory-graph.py` would send the reader to a
+    file that does not exist (exactly the wrong-command drift this engine's
+    own doctor exists to catch). Falls back to the basename when the file is
+    not under the cwd."""
+    try:
+        rel = os.path.relpath(os.path.abspath(__file__), os.getcwd())
+        rel = rel.replace(os.sep, "/")
+        return os.path.basename(__file__) if rel.startswith("..") else rel
+    except Exception:
+        return os.path.basename(__file__)
+
+
+def _more_line(cut, command):
+    """The said-truncation line — SINGLE home for both note kinds (covers and
+    match): a silent cut reads as "this is everything", the exact lie the
+    ranking work exists to prevent."""
+    return "… and %d more — `%s` for the full list." % (cut, command)
+
+
+def _covers_note(target_n, hits):
+    """The covers note text — SINGLE home for both hook paths (cached and
+    uncached), so the two can never drift apart on wording or on the cap.
+    Shows the MAX_ENTRIES best hits and, when the cap cut something, SAYS so
+    (`_more_line`)."""
+    shown = hits[:MAX_ENTRIES]
+    script = _script_ref()
+    lines = ["[memory-graph] Memory covering %s:" % target_n]
+    for hit in shown:
+        lines.append("- %s" % format_covers_line(hit))
+    if len(hits) > len(shown):
+        lines.append(_more_line(len(hits) - len(shown),
+                                "%s covers %s" % (script, target_n)))
+    lines.append("Derived graph, recomputed on demand — `%s neighbors <id>` to dig." % script)
+    return "\n".join(lines)
+
+
 def build_covers_note(root, root_abs, tool_input, class_exts):
     """Returns (note_text, marker_key) for the `covers` hook mode, or
     ("", "") when nothing should fire (uncovered, self-suppressed, or no
@@ -859,11 +989,7 @@ def build_covers_note(root, root_abs, tool_input, class_exts):
     if not hits:
         return "", ""
 
-    lines = ["[memory-graph] Memory covering %s:" % target_n]
-    for hit in hits:
-        lines.append("- %s" % format_covers_line(hit))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
-    return "\n".join(lines), target_n
+    return _covers_note(target_n, hits), target_n
 
 
 PREFILTER_CACHE_KEYS = ("prefixes", "classes", "tags")
@@ -1007,11 +1133,7 @@ def build_covers_note_prefiltered(root, root_abs, tool_input, class_exts, cache_
     if not hits:
         return "", ""
 
-    lines = ["[memory-graph] Memory covering %s:" % target_n]
-    for hit in hits:
-        lines.append("- %s" % format_covers_line(hit))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
-    return "\n".join(lines), target_n
+    return _covers_note(target_n, hits), target_n
 
 
 def build_match_note(root, root_abs, tool_input):
@@ -1031,10 +1153,15 @@ def build_match_note(root, root_abs, tool_input):
         return "", ""
 
     top_id = results[0][1]
+    script = _script_ref()
+    shown = results[:MAX_ENTRIES]
     lines = ["[memory-graph] Memory related to these search terms:"]
-    for entry in results:
+    for entry in shown:
         lines.append("- %s" % format_match_line(entry))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors %s` to dig." % top_id)
+    if len(results) > len(shown):
+        lines.append(_more_line(len(results) - len(shown),
+                                "%s match %s" % (script, " ".join(terms))))
+    lines.append("Derived graph, recomputed on demand — `%s neighbors %s` to dig." % (script, top_id))
     return "\n".join(lines), top_id
 
 
@@ -1125,6 +1252,9 @@ def build_argparser():
     p_neighbors.add_argument("id")
     p_neighbors.add_argument("--depth", type=int, default=1)
 
+    sub.add_parser("doctor",
+                   help="map integrity: every cite-path edge must resolve (exit 2 otherwise)")
+
     return ap
 
 
@@ -1148,9 +1278,16 @@ def main():
         for entry in cmd_neighbors(args.root, args.id, args.depth):
             print(format_neighbor_line(entry))
         return 0
-
-    ap.print_help()
-    return 2
+    if args.command == "doctor":
+        dead = cmd_doctor(args.root)
+        for nid, node_path, cited in dead:
+            print("DEAD-CITE   %s  cite-path resolves to nothing: %s (cited by %s)"
+                  % (node_path, cited, nid))
+        if not dead:
+            print("memory-graph doctor: OK — every cite-path edge resolves.")
+            return 0
+        print("\nmemory-graph doctor: %d dead citation(s) — the declared map lies." % len(dead))
+        return 2  # BLOCKING tier: zero-FP by construction, never mere to-confirm
 
 
 if __name__ == "__main__":
