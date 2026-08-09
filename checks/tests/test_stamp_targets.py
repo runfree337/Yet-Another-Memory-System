@@ -149,5 +149,80 @@ class TestRepoRoot(unittest.TestCase):
         self.assertIsInstance(entrylib.repo_root(d), str)
 
 
+class TestGitHookEnvironment(StampTargetsBase):
+    """The stamp chain under a git hook's EXPORTED environment.
+
+    Git exports `GIT_DIR` to its hooks; under `GIT_DIR`, repository discovery is
+    short-circuited and `git rev-parse --show-toplevel` returns the CWD. Called from a
+    nested framework dir, `repo_root` then took that dir for the repo root and the
+    `--staged` selector silently selected NOTHING — the original mute selector,
+    resurrected by the environment (measured: three commits in a row, hook duly called,
+    `updated` never moving). `entrylib.git_env` purges `GIT_DIR`/`GIT_WORK_TREE` from
+    the subprocesses so no caller has to remember the discipline.
+    """
+    SUB = "docs"
+
+    def setUp(self):
+        super().setUp()
+        self._saved = {k: os.environ.get(k) for k in ("GIT_DIR", "GIT_WORK_TREE")}
+        os.environ["GIT_DIR"] = os.path.join(self.repo, ".git")
+
+        def _restore():
+            for k, v in self._saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        self.addCleanup(_restore)
+
+    def test_repo_root_ignores_exported_git_dir(self):
+        # Under GIT_DIR, discovery from the nested dir would return the CWD (the nested
+        # dir itself) instead of the repo root.
+        self.assertEqual(entrylib.repo_root(self.fw), self.repo)
+
+    def test_staged_selection_holds_under_exported_git_dir(self):
+        rel = self.stage("backlog/notation/STATE.md")
+        files, unresolved = self.staged("backlog/", lambda b: b == "STATE.md")
+        self.assertEqual((files, unresolved), ([rel], []))
+
+    def test_git_env_keeps_index_file(self):
+        # GIT_INDEX_FILE names the index being committed (`git commit -a` exports
+        # `index.lock`, which BECOMES the real index) — purging it would make the stamp
+        # read/write the wrong index.
+        os.environ["GIT_INDEX_FILE"] = "somewhere"
+        self.addCleanup(lambda: os.environ.pop("GIT_INDEX_FILE", None))
+        env = entrylib.git_env()
+        self.assertNotIn("GIT_DIR", env)
+        self.assertNotIn("GIT_WORK_TREE", env)
+        self.assertEqual(env.get("GIT_INDEX_FILE"), "somewhere")
+
+
+class TestSelectorSpeaksOnFailure(unittest.TestCase):
+    def test_git_exception_is_said_on_stderr(self):
+        # `stamp_targets` used to swallow ANY exception of its git call and return
+        # `[], []` without a word — a selector regression would be silent again, since
+        # the callers print their count on stdout, which every hook redirects.
+        import contextlib
+        import io
+        d = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        real_run = entrylib.subprocess.run
+
+        def _boom(cmd, **kwargs):
+            if cmd[:2] == ["git", "diff"]:
+                raise OSError("git unreachable")
+            return real_run(cmd, **kwargs)
+
+        entrylib.subprocess.run = _boom
+        self.addCleanup(lambda: setattr(entrylib.subprocess, "run", real_run))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            files, unresolved = entrylib.stamp_targets(
+                d, ["--stamp", "--staged"], "backlog/", lambda b: True)
+        self.assertEqual((files, unresolved), ([], []))
+        self.assertIn("staged selection failed", err.getvalue())
+        self.assertIn("git unreachable", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -327,6 +327,24 @@ def stamp_updated(path: str, date_str: str) -> bool:
     return False
 
 
+def git_env() -> dict:
+    """Environment for the stamp chain's git subprocesses: `GIT_DIR`/`GIT_WORK_TREE`
+    purged, everything else (notably `GIT_INDEX_FILE`) kept.
+
+    Git exports `GIT_DIR` to its hooks, and under `GIT_DIR` repository discovery is
+    short-circuited: `git rev-parse --show-toplevel` returns the CWD. Called from a
+    nested framework dir (`docs/`…), `repo_root` would then take that dir for the repo
+    root and the `--staged` selector would silently select NOTHING — the exact mute
+    `stamp_targets` exists to prevent, resurrected by the environment. Purging here
+    rather than in every caller means no caller has to remember the discipline.
+    `GIT_INDEX_FILE` is KEPT on purpose: under a pre-commit hook it names the index
+    being committed — the one `git diff --cached` must read and the re-stage `git add`
+    must write to (`git commit -a` exports `index.lock`, which BECOMES the real index).
+    """
+    return {k: v for k, v in os.environ.items()
+            if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+
+
 def repo_root(start: str = None) -> str:
     """Absolute path of the enclosing git repository, or `start` when there is no git.
 
@@ -334,11 +352,13 @@ def repo_root(start: str = None) -> str:
     subdirectory (`docs/`, `tooling/`…). Anything that talks to git needs the repo root,
     anything that reads framework files needs the framework root — conflating them is the
     bug `stamp_targets` exists to prevent. Mirrors `doc-refs-check.py`'s resolution, which
-    is why that check was the only one immune.
+    is why that check was the only one immune. Runs git under `git_env()` so the answer
+    holds inside a git hook too (exported `GIT_DIR` short-circuits discovery).
     """
     start = start or os.getcwd()
     try:
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=start,
+                             env=git_env(),
                              capture_output=True, text=True, encoding="utf-8",
                              errors="replace", timeout=10).stdout.strip()
         return os.path.realpath(out) if out else start
@@ -363,6 +383,11 @@ def stamp_targets(framework: str, argv: list, prefix: str, match) -> tuple:
       that cannot select its target must never look like a stamp that found none.
 
     `unresolved` is always empty for `--staged` (git only ever names existing files).
+
+    A git call that THROWS is said on stderr before returning empty: a selector that
+    cannot select must never look like a selector that found nothing to do — the callers
+    print their count on stdout, which every reasonable hook redirects, so a silent
+    `[], []` here would make a selector regression invisible again.
     """
     framework = os.path.realpath(framework)
     if "--staged" in argv:
@@ -371,10 +396,13 @@ def stamp_targets(framework: str, argv: list, prefix: str, match) -> tuple:
         base = "" if rel in (".", "") else rel + "/"
         try:
             out = subprocess.run(["git", "diff", "--cached", "--name-only",
-                                  "--diff-filter=ACM"], cwd=repo, capture_output=True,
+                                  "--diff-filter=ACM"], cwd=repo, env=git_env(),
+                                 capture_output=True,
                                  text=True, encoding="utf-8", errors="replace",
                                  timeout=30).stdout
-        except Exception:
+        except Exception as e:
+            print(f"stamp: staged selection failed ({e.__class__.__name__}: {e}) "
+                  "— nothing selected, nothing stamped.", file=sys.stderr)
             return [], []
         wanted = base + prefix
         files = []

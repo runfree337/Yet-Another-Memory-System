@@ -163,7 +163,8 @@ def check_index() -> list[Finding]:
 def _git_last_commit_date(relpath: str) -> str | None:
     try:
         r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", relpath],
-                            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
+                            cwd=ROOT, env=entrylib.git_env(), capture_output=True,
+                            text=True, encoding="utf-8", errors="replace", timeout=10)
     except Exception:
         return None
     out = r.stdout.strip()
@@ -279,7 +280,7 @@ def cmd_stamp(argv: list[str]) -> int:
         if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", "--", f], cwd=ROOT)
+                subprocess.run(["git", "add", "--", f], cwd=ROOT, env=entrylib.git_env())
     print(f"feature-map-check: --stamp — {len(changed)} entrie(s) stamped {today}.")
     for a in unresolved:
         print(f"feature-map-check: --stamp — no such file, skipped: {a}", file=sys.stderr)

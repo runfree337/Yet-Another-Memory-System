@@ -162,7 +162,7 @@ def cmd_stamp(argv) -> int:
         if entrylib.stamp_updated(full, today):
             changed.append(f)
             if staged:
-                subprocess.run(["git", "add", "--", f], cwd=ROOT)
+                subprocess.run(["git", "add", "--", f], cwd=ROOT, env=entrylib.git_env())
 
     print(f"memory-check: --stamp — {len(changed)} memory/*.md stamped {today}.")
     for a in unresolved:
