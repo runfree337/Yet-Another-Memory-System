@@ -170,6 +170,38 @@ class TestCovers(GraphFixture):
         _write(os.path.join(self.root, "src/orders/TaxCalculator.java"), "class TaxCalculator {}")
         self.assertEqual(self.mod.cmd_doctor(self.root), [])
 
+    def test_doctor_dir_citation_must_be_a_directory(self):
+        # A `dir/` citation that resolves to a FILE is a lying citation, not
+        # a live one — `os.path.exists` alone would wave it through.
+        _write(os.path.join(self.root, "backlog/refacto-x/design.md"), "# design\n")
+        _write(os.path.join(self.root, "src/orders/OrderManager.java"), "class OrderManager {}")
+        _write(os.path.join(self.root, "src/orders/TaxCalculator.java"), "class TaxCalculator {}")
+        _write(os.path.join(self.root, "features/dir-as-file.md"),
+               "---\nid: dir-as-file\nupdated: 2026-07-01\n---\n"
+               "**Role:** Cites a file as a directory.\n**Code:** `src/orders/OrderManager.java/`.\n")
+        dead = self.mod.cmd_doctor(self.root)
+        self.assertEqual([(d[0], d[2]) for d in dead],
+                         [("dir-as-file", "src/orders/OrderManager.java/")])
+
+    def test_notes_name_the_real_script_and_match_says_its_cut(self):
+        # The suggested command must be the file that actually exists (an
+        # adopting repo vendors the engine under another name) — never a
+        # hardcoded `memory-graph.py`. And the match note, like covers, says
+        # what its cap cut instead of silently truncating.
+        script = self.mod._script_ref()
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        note, _ = self.mod.build_covers_note(
+            self.root, root_abs, {"file_path": "src/orders/OrderManager.java"}, set())
+        self.assertIn("`%s neighbors <id>`" % script, note)
+        for i in range(self.mod.MAX_ENTRIES + 1):
+            _write(os.path.join(self.root, "features/order-extra-%02d.md" % i),
+                   "---\nid: order-extra-%02d\nupdated: 2026-07-01\n---\n"
+                   "**Role:** Extra order coverage fiche.\n**Code:** `src/orders/`.\n" % i)
+        note, _ = self.mod.build_match_note(
+            self.root, root_abs, {"pattern": "order"})
+        self.assertIn("more — `%s match order`" % script, note)
+        self.assertEqual(note.count("\n- "), self.mod.MAX_ENTRIES)
+
     def test_equal_specificity_keeps_ascending_id_order(self):
         # Same citation depth → the old deterministic id order still holds
         # (no behavioral lottery between equally-specific fiches).

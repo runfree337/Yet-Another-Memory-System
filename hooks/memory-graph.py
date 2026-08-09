@@ -66,7 +66,8 @@ Four CLI commands (see each `cmd_*` docstring for the exact contract):
   neighbors <id> [--depth N]    — the typed neighborhood (outgoing AND
                                    incoming edges) of one node.
   doctor                        — map integrity: every `cite-path` edge must
-                                   resolve on disk; exit 1 with a DEAD-CITE
+                                   resolve on disk; exit 2 (BLOCKING tier —
+                                   zero-FP by construction) with a DEAD-CITE
                                    line per failure. Chained into
                                    `checks/memory-audit.py --tier1` (the
                                    "graph" channel) so a lying declared map
@@ -180,7 +181,7 @@ TAG_RE = re.compile(r'\[([A-Za-z0-9][\w\-]*)\](?!\()')
 # full path. The optional suffix is restricted to an extension-shaped token
 # (lowercase, ≤5 chars) so a MEMBER reference (`Invoice.RefreshTotals`,
 # `Foo.OnClick`) is NOT read as citing the class — that would inflate coverage
-# and, under the 3-hit cap, crowd out lower-priority (decision/tag) hits.
+# and, under the note's MAX_ENTRIES cap, crowd out lower-priority (decision/tag) hits.
 # Used only when `class-file-extensions` is configured (opt-in).
 IDENT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]{2,})(?:\.[a-z][a-z0-9]{0,4})?$')
 
@@ -804,7 +805,9 @@ def cmd_doctor(root):
     for src, etype, dst in edges:
         if etype != "cite-path":
             continue
-        if not os.path.exists(os.path.join(root_abs, dst.rstrip("/"))):
+        target = os.path.join(root_abs, dst.rstrip("/"))
+        alive = os.path.isdir(target) if dst.endswith("/") else os.path.exists(target)
+        if not alive:
             node = nodes.get(src) or {}
             dead.append((src, node.get("path", ""), dst))
     return sorted(set(dead))
@@ -815,8 +818,10 @@ def cmd_match(root, terms):
     ids/short-titles/tags and feature ids/Role lines (memory and backlog
     nodes are out of scope for `match` — the spec names only decisions and
     features). Terms shorter than 4 characters are ignored (too noisy).
-    Requires at least one surviving term to actually hit; returns up to
-    MAX_ENTRIES (score, id, node) tuples, highest score first. Ties break
+    Requires at least one surviving term to actually hit; returns EVERY hit
+    as (score, id, node) tuples, highest score first — no cap here (same
+    contract as `cmd_covers`: the CLI prints the full answer, the hook note
+    caps at MAX_ENTRIES and says what it cut). Ties break
     toward the LIVING memory: active section before archived/revoked, then
     most recent id first (decision ids are dated, so lexicographic descent =
     chronology) — an old amended decision must never outrank the current one
@@ -845,14 +850,14 @@ def cmd_match(root, terms):
         return (-score, section_rank, _desc_key(nid))
 
     scored.sort(key=sort_key)
-    return scored[:MAX_ENTRIES]
+    return scored
 
 
 def _desc_key(nid):
     """Descending-order key for an id: dated decision ids sort newest-first,
     everything else (feature slugs…) keeps plain ascending alphabetical order
     after them — deterministic without pretending slugs have a chronology."""
-    if re.match(r"^D-\d{4}-\d{2}-\d{2}-\d{2}$", nid):
+    if re.match(r"^D-\d{4}-\d{2}-\d{2}-\d+$", nid):
         return (0, "".join(chr(0x10FFFF - ord(c)) for c in nid))
     return (1, nid)
 
@@ -927,20 +932,43 @@ def format_neighbor_line(entry):
 # Hook adapters (--stdin-json --mode covers|match)
 # ---------------------------------------------------------------------------
 
+def _script_ref():
+    """How a note names THIS script so the command it suggests actually runs:
+    the real file, relative to the cwd the hook was invoked from — an adopting
+    repo vendors the engine under another name/path (e.g. a Claude Code skill's
+    `graph.py`), and a hardcoded `memory-graph.py` would send the reader to a
+    file that does not exist (exactly the wrong-command drift this engine's
+    own doctor exists to catch). Falls back to the basename when the file is
+    not under the cwd."""
+    try:
+        rel = os.path.relpath(os.path.abspath(__file__), os.getcwd())
+        rel = rel.replace(os.sep, "/")
+        return os.path.basename(__file__) if rel.startswith("..") else rel
+    except Exception:
+        return os.path.basename(__file__)
+
+
+def _more_line(cut, command):
+    """The said-truncation line — SINGLE home for both note kinds (covers and
+    match): a silent cut reads as "this is everything", the exact lie the
+    ranking work exists to prevent."""
+    return "… and %d more — `%s` for the full list." % (cut, command)
+
+
 def _covers_note(target_n, hits):
     """The covers note text — SINGLE home for both hook paths (cached and
     uncached), so the two can never drift apart on wording or on the cap.
-    Shows the MAX_ENTRIES best hits and, when the cap cut something, SAYS so:
-    a silent truncation reads as "this is everything", which is exactly the
-    lie the ranking work exists to prevent."""
+    Shows the MAX_ENTRIES best hits and, when the cap cut something, SAYS so
+    (`_more_line`)."""
     shown = hits[:MAX_ENTRIES]
+    script = _script_ref()
     lines = ["[memory-graph] Memory covering %s:" % target_n]
     for hit in shown:
         lines.append("- %s" % format_covers_line(hit))
     if len(hits) > len(shown):
-        lines.append("… and %d more — `memory-graph.py covers %s` for the full list."
-                     % (len(hits) - len(shown), target_n))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors <id>` to dig.")
+        lines.append(_more_line(len(hits) - len(shown),
+                                "%s covers %s" % (script, target_n)))
+    lines.append("Derived graph, recomputed on demand — `%s neighbors <id>` to dig." % script)
     return "\n".join(lines)
 
 
@@ -1125,10 +1153,15 @@ def build_match_note(root, root_abs, tool_input):
         return "", ""
 
     top_id = results[0][1]
+    script = _script_ref()
+    shown = results[:MAX_ENTRIES]
     lines = ["[memory-graph] Memory related to these search terms:"]
-    for entry in results:
+    for entry in shown:
         lines.append("- %s" % format_match_line(entry))
-    lines.append("Derived graph, recomputed on demand — `memory-graph.py neighbors %s` to dig." % top_id)
+    if len(results) > len(shown):
+        lines.append(_more_line(len(results) - len(shown),
+                                "%s match %s" % (script, " ".join(terms))))
+    lines.append("Derived graph, recomputed on demand — `%s neighbors %s` to dig." % (script, top_id))
     return "\n".join(lines), top_id
 
 
@@ -1220,7 +1253,7 @@ def build_argparser():
     p_neighbors.add_argument("--depth", type=int, default=1)
 
     sub.add_parser("doctor",
-                   help="map integrity: every cite-path edge must resolve (exit 1 otherwise)")
+                   help="map integrity: every cite-path edge must resolve (exit 2 otherwise)")
 
     return ap
 
@@ -1254,7 +1287,7 @@ def main():
             print("memory-graph doctor: OK — every cite-path edge resolves.")
             return 0
         print("\nmemory-graph doctor: %d dead citation(s) — the declared map lies." % len(dead))
-        return 1
+        return 2  # BLOCKING tier: zero-FP by construction, never mere to-confirm
 
 
 if __name__ == "__main__":

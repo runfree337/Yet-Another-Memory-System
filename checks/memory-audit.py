@@ -115,17 +115,27 @@ def _repo_root() -> str:
 # by a hand-run eval once, chained here so the standing audit catches the next
 # one. The engine is `hooks/memory-graph.py` in the canonical layout; a host
 # that vendors it elsewhere declares `memory-audit.graph-engine`
-# (repo-root-relative path, e.g. a Claude Code skill dir). Engine absent at
-# the resolved path -> channel not chained (agnostic: the framework never
-# guesses a host's vendoring layout).
-_GRAPH_ENGINE = entrylib.cfg_get(_CFG, ("memory-audit", "graph-engine"), "")
+# (repo-root-relative path, e.g. a Claude Code skill dir). Only the
+# UNDECLARED default may be silently absent (agnostic: the framework never
+# guesses a host's vendoring layout) — a DECLARED engine that resolves to
+# nothing fails LOUD as a blocking row: a config the user believes active is
+# never silently ignored (same contract as doc-refs' CFG-INVALID), and a
+# permanent check that unhooks itself without a word is exactly the false
+# all-clear the graph channel exists to prevent.
+_GRAPH_ENGINE_CFG = entrylib.cfg_get(_CFG, ("memory-audit", "graph-engine"), "")
 _GRAPH_ROOT = _repo_root()
-if isinstance(_GRAPH_ENGINE, str) and _GRAPH_ENGINE.strip():
-    _GRAPH_ENGINE = os.path.join(_GRAPH_ROOT, _GRAPH_ENGINE.strip())
+_GRAPH_DECLARED = isinstance(_GRAPH_ENGINE_CFG, str) and _GRAPH_ENGINE_CFG.strip()
+if _GRAPH_DECLARED:
+    _GRAPH_ENGINE = os.path.join(_GRAPH_ROOT, _GRAPH_ENGINE_CFG.strip())
 else:
     _GRAPH_ENGINE = os.path.join(ROOT, "hooks", "memory-graph.py")
 if os.path.isfile(_GRAPH_ENGINE):
     TIER1.append(("graph", [PY, _GRAPH_ENGINE, "--root", _GRAPH_ROOT, "doctor"]))
+elif _GRAPH_DECLARED:
+    _GRAPH_MSG = ("CFG-INVALID memory-audit.graph-engine points to a missing file: %s"
+                  % _GRAPH_ENGINE)
+    TIER1.append(("graph", [PY, "-c",
+                            "import sys; print(%r); sys.exit(2)" % _GRAPH_MSG]))
 
 # Optional fine counters per channel — a channel absent from this table (e.g.
 # "decisions", already aggregated by decisions-audit.py) is simply not enriched. Keys =
