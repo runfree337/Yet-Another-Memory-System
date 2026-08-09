@@ -60,6 +60,12 @@ Exemptions (apply identically to all four rules above):
   - `NEG` word list — a line already marked "deleted/renamed/to create/…" is not flagged
     as dead by R-DEAD-PATH/R-DEAD-DECISION/R-DEAD-SYMBOL (would be redundant with the
     prose). R-GHOST-ABSENCE is the deliberate exception (see above).
+  - arrows (`→`, `->`) — TOKEN-level, not line-level: only a path/decision/symbol in
+    CONTACT with an arrow (glue of ≤4 whitespace/punctuation chars between them — the
+    "old → new" rename shape) is exempted; the rest of the line stays verified. The
+    arrows used to sit in `NEG` and silenced whole lines, which disarmed the check on
+    every doc corpus that routes with arrows as ordinary punctuation (see the ARROW_RE
+    comment). Re-adding them to `doc-refs.neg-words` restores the old line-level reach.
   - `doc-refs.ignore-prefixes` (`checks-config.json`, optional, default empty) — project
     -declared prefixes for tokens that LOOK like repo paths but never are (a runtime API
     joined to a filename, e.g. `Runtime.dataDir/…`). R-DEAD-PATH only.
@@ -135,10 +141,46 @@ TEMPLATE = re.compile(r"[<>{}*…]|Xxx|YYYY|AAAA|XXXX|MM-|/\.\.\.")
 # never drop the French forms even once the English ones land).
 NEG = ("n'existe", "nexiste", "supprim", "à créer", "a creer", "à porter", "a porter",
        "renomm", "à venir", "a venir", "exemple", "example", "template", "gabarit",
-       "placeholder", "→", "->", "n'est pas", "plus tard", "déplacé", "deplace", "futur",
+       "placeholder", "n'est pas", "plus tard", "déplacé", "deplace", "futur",
        "deleted", "removed", "to create", "to port", "renamed", "upcoming", "later",
        "moved", "future", "does not exist", "doesn't exist", "not yet", "not created",
        "planned")
+# The arrows (`→`, `->`) used to sit in NEG, intended for the "old → new" rename
+# pattern — but as a LINE-level exemption they disarmed the check far beyond it: in a
+# doc corpus that uses the arrow as ordinary routing punctuation ("effect → zone",
+# "full model → that doc"), every path/decision/symbol sharing a line with an arrow
+# went unverified (measured on an adopting repo: 17% of all path citations, dozens of
+# them dead). The arrow is now a TOKEN-level exemption instead: only a target in
+# CONTACT with an arrow (nothing but whitespace/punctuation glue between them, at most
+# ARROW_GLUE_MAX chars — exactly the "old → new" shape) is skipped; the rest of the
+# line stays verified. A project that wants the old line-level behavior back can
+# re-add the arrows via `doc-refs.neg-words` (additive, see the Exemptions above).
+ARROW_RE = re.compile(r"→|->")
+ARROW_GLUE_RE = re.compile(r"^[\s`'\")(\],.:;]*$")
+ARROW_GLUE_MAX = 4
+
+
+def arrow_adjacent(line, token):
+    """True when an occurrence of `token` in `line` touches an arrow — the
+    "old → new" pattern: between the token and the nearest arrow there is
+    nothing but glue (whitespace, backticks, quotes, brackets, punctuation)
+    and at most ARROW_GLUE_MAX characters of it."""
+    arrows = list(ARROW_RE.finditer(line))
+    if not arrows:
+        return False
+    for m in re.finditer(re.escape(token), line):
+        for am in arrows:
+            if am.start() >= m.end():
+                gap = line[m.end():am.start()]
+            elif am.end() <= m.start():
+                gap = line[am.end():m.start()]
+            else:
+                continue
+            if len(gap) <= ARROW_GLUE_MAX and ARROW_GLUE_RE.match(gap):
+                return True
+    return False
+
+
 # Same membership test, one compiled alternation instead of 37 substring scans per line
 # (measured ~0.14 s on a 355-file corpus — the single hottest spot of a clean run). Rebuilt
 # once below if `doc-refs.neg-words` adds project-language vocabulary (empty default = as is).
@@ -497,6 +539,8 @@ def scan_file(path):
                 if TEMPLATE.search(tok) or "://" in tok or exists_somewhere(tok, file_dir) \
                         or any(tok.startswith(p) for p in IGNORE_PREFIXES):
                     continue
+                if arrow_adjacent(line, tok):
+                    continue  # "old → new" shape: the token flanks an arrow
                 rescue = _space_rescue(span, at, tok) if span is not None else []
                 if any(exists_somewhere(c, file_dir) for c in rescue):
                     continue  # the real directory name contains a space; reference alive
@@ -509,7 +553,7 @@ def scan_file(path):
         # duplicating decisions-check.py's own file<->index concordance rule).
         if not neg and os.path.isdir(DECISIONS_DIR) and not is_decisions_index:
             for did in DECISION_RE.findall(line):
-                if not decision_exists(did):
+                if not decision_exists(did) and not arrow_adjacent(line, did):
                     findings.append(("BLOCKING", path, i, "R-DEAD-DECISION",
                                      f"decision id with no decisions/{did}.md file: {did}"))
 
@@ -519,7 +563,8 @@ def scan_file(path):
             seen = set()
             for m in CODE_SPAN_RE.finditer(line):
                 sym = _candidate_symbol(m.group(1))
-                if sym and sym not in seen and sym not in corpus:
+                if sym and sym not in seen and sym not in corpus \
+                        and not arrow_adjacent(line, m.group(1)):
                     seen.add(sym)
                     findings.append(("TO-CONFIRM", path, i, "R-DEAD-SYMBOL",
                                      f"symbol not found under the configured code roots: {sym}"))
