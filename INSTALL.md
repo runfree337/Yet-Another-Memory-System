@@ -205,7 +205,11 @@ flowchart TD
    wrapper** (output = tokens injected → nothing on a clean state, one terse line per drift;
    see `checks/README.md §To wire`, skeleton included). Possible targets, pick any:
    - **Claude Code**: `SessionStart` (post-merge drift — start clean) · `Stop` (end of turn);
-   - **git**: `pre-commit`;
+   - **git**: `pre-commit` — **ready-made**: `adapters/git/pre-commit`, activated with
+     `git config core.hooksPath adapters/git` (once per clone; the `SessionStart` sweep
+     surfaces the missing install as an actionable command). This is the **primary** wiring
+     for the `updated` stamp: it covers every `git commit`, not just the agent's — see
+     `checks/README.md §Pre-commit wiring` and `adapters/git/README.md`;
    - **CI**: a job that fails if a check exits ≠ 0;
    - **manual**: nothing wired, run by hand before closing a work item.
    > **Don't forget the SKILL layer.** The adapter also ships the semantic-audit entry
@@ -218,8 +222,10 @@ flowchart TD
    > entry point — measured on a real adoption.
    *Installer:* for Claude Code, **ready-made** hooks already exist in
    `adapters/claude-code/hooks/` (`SessionStart` sweep, `Stop` report, security guards,
-   `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook **now stamps all three channels**
-   `backlog/<id>/STATE.md`, `features/*.md`, `memory/*.md` before the commit goes out — and the
+   `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook delegates to the stamp home
+   `hooks/stamp-staged.sh`, which **stamps all three channels**
+   `backlog/<id>/STATE.md`, `features/*.md`, `memory/*.md` before the commit goes out
+   (catch-up net: the primary wiring is the git-native `adapters/git/pre-commit` above) — and the
    **index-usage metrics pair** `index-usage-tracker.sh`/`index-usage-flush.sh`, which measures
    per session whether the cartography is consulted before sweeping a covered zone — a
    *targeted* single-file search never counts as a bypass, and consulting any channel index
@@ -231,8 +237,10 @@ flowchart TD
    `memory-graph.py --mode covers`, surfacing the fiche/decision that governs a file *before*
    it's edited) and, chained onto the same `PostToolUse(Grep|Glob)` trigger as index-nudge, its
    `--mode match` half (which decisions/features match the search terms)): the
-   installer **references** them in `settings.json` instead of regenerating them from scratch. For `pre-commit` (git)
-   or CI, it generates the **glue fragment specific to the detected host** — never wiring imposed.
+   installer **references** them in `settings.json` instead of regenerating them from scratch. For `pre-commit` (git),
+   it points `core.hooksPath` at `adapters/git` (or copies the ready-made hook into the active
+   hooks dir); for CI, it generates the **glue fragment specific to the detected host** — never
+   wiring imposed.
 
 5. **Semantic audit trigger — the user chooses WHEN.** The `memory-audit` audit (tier 2,
    all 3 channels — Feature/Decision/Memory, memory↔code) **is not a hook** (it costs an agent,

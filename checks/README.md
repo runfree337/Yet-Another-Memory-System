@@ -128,16 +128,36 @@ sets. Recounting those stays a human act, which is what the review step of the D
 > to do". Non-blocking must not mean unable to speak: an explicit path that resolves to no
 > file is now named on stderr rather than skipped in silence.
 >
-> ```sh
-> # PreToolUse(Bash), matcher "git commit*", BEFORE the command runs
-> PY=$(command -v python3 || command -v python); [ -z "$PY" ] && exit 0
-> "$PY" checks/backlog-check.py --stamp --staged >/dev/null 2>&1
-> exit 0   # never blocks — the fix is silent, git commit sees the stamp
-> ```
+> **One home, two callers.** The stamp commands are listed in exactly ONE script —
+> `hooks/stamp-staged.sh` (stdout silenced, stderr kept) — and every pre-commit wiring
+> delegates to it; two callers that each carried the list would silently diverge at the
+> first change. The **primary wiring is the git-native hook** `adapters/git/pre-commit`
+> (`git config core.hooksPath adapters/git`, or a copy in the active hooks dir): it covers
+> every `git commit` — by hand, from an IDE, a script, CI — where an agent-side
+> `PreToolUse` hook only ever sees the agent's own commits (measured on a real adoption:
+> no git hook installed, 8 STATE.md out of 15 drifted, up to 19 days, nothing said). The
+> agent adapter `adapters/claude-code/hooks/pre-commit-stamp.sh` remains as a catch-up
+> net for machines where the git hook is not (yet) installed.
 >
-> Embedded implementation: `adapters/claude-code/hooks/pre-commit-stamp.sh`.
+> Three things the git-native path must get right, all paid for at the bench (details in
+> the hook's own header): **purge `GIT_DIR`/`GIT_WORK_TREE`, keep `GIT_INDEX_FILE`**
+> (exported `GIT_DIR` short-circuits discovery and resurrects the mute selector —
+> `entrylib.git_env` also purges its own subprocesses so no caller has to remember);
+> **renounce on a sister head** (`MERGE_HEAD`/`CHERRY_PICK_HEAD`/`REVERT_HEAD`/
+> `REBASE_HEAD` — replayed work keeps its original date) **and on a temporary index**
+> (partial commits — whitelist `index`/`index.lock` anchored on `--absolute-git-dir`,
+> compared with `-ef`), saying so on stderr each time; and the hook file must be **indexed
+> in mode 100755** (`git add --chmod=+x` — under `core.filemode=false` git indexes new
+> files 100644 and then silently skips the hook on POSIX clones). Installation itself is
+> guarded: the `SessionStart` sweep checks that the `pre-commit` git would actually run is
+> ours, executable, and indexed 100755 — an uninstalled guard that nothing mentions is as
+> mute as the defect it guards against. The check-side relay is `E-STATE-FRESH`
+> (`backlog-check.py`): a hook can be uninstalled, bypassed (`--no-verify`) or absent
+> (container); the check survives that.
+>
 > Generalizable to any check that would gain a `--stamp` mode on a similar
-> mechanical field (e.g. an equivalent freshness date elsewhere) — same triple safeguard.
+> mechanical field (e.g. an equivalent freshness date elsewhere) — same triple safeguard,
+> same single home.
 
 **Semantic — agent, memory↔code:** the `memory-audit` audit (tier 2, all 3 channels) **is not a hook** — it requires *retrieve-then-verify* judgment and can't run silently every session. Its regime: **Volume trigger** (on the Decision side, the only channel that swells enough for it), **or scheduled**, **or on demand**. For scheduled *while away*, the report loop (see `INSTALL.md` step 5): an **OS cron** runs `decisions-audit.py --report` → writes a **deterministic** report (tier 1, **no LLM**, 0 tokens) to `$YAMS_MEMORY_REPORT_DIR` (default `.memory-reports/`, **to be gitignored**); the `SessionStart` sweep above **detects and surfaces** it; the agent **asks**, the user **decides** whether to wake up tier 2 (LLM, on demand — `memory-audit.py --tier1` first if the Feature/Memory channels are also in doubt). In every case it **reports**; pruning stays **ratified by a human** — a cron never fixes anything on its own.
 

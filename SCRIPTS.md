@@ -40,6 +40,14 @@ check, it may name a doc to create at closure) or one of the channel keywords
 vocabulary; `E-IMPACT-EMPTY` (to-confirm) fires only once every task is `done` and the ledger
 is still empty ("ready to close with no declared durable impact?") — silent while work is open.
 
+`E-STATE-FRESH` (to-confirm) is the Backlog channel's freshness relay, same form as
+`FM-FRESH`: the frontmatter `updated` is older than the last git commit touching the
+STATE.md itself — the pre-commit stamp did not run on that commit (hook uninstalled,
+`--no-verify`, or absent, e.g. an ephemeral container). Soft by design (a host where part
+of the work happens where no hook can run would make a blocking tier noisy by
+construction), silent on unversioned files, and it never asks for a hand-bump: a drifted
+date self-heals at the next stamped pass.
+
 `closure.review` (global settings file) answers, once and for all or not at all, the **Review**
 step of the DoD (step 3): a non-empty string is printed in place of the generic project half
 (what "reviewing" means in this project), `false` prints the step as explicitly waived, an
@@ -55,7 +63,7 @@ non-interactive.
 | `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
 | `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
 | `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | paths framework-relative, repo-relative or absolute; one that resolves to no file is named on stderr, never swallowed |
-| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | to be wired at pre-commit; selection via `entrylib.stamp_targets`, so it holds when the framework is nested |
+| `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | wired at pre-commit via the stamp home `hooks/stamp-staged.sh` (callers: `adapters/git/pre-commit`, `adapters/claude-code/hooks/pre-commit-stamp.sh`); selection via `entrylib.stamp_targets`, so it holds when the framework is nested |
 | `--checklist [id]` | prints the closure checklist (Definition of Done, 6 steps); with `<id>`, the **Durable** step enumerates the item's declared `impacts:` (`update/migrate: … ; record: …`) instead of the generic wording; the **Review** step substitutes the project's half from `closure.review` | — |
 
 **Exit codes:** `0` clean · `1` only TO-CONFIRM (`--state` with no hit also returns `1`) · `2` at least one BLOCKING-AUTO.

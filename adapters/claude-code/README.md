@@ -18,7 +18,7 @@
 |---|---|---|
 | `hooks/session-start-sweep.sh` | `checks/*.py` (6 structural checks), aggregated | `SessionStart` |
 | `hooks/stop-check.sh <check-name>` | one `checks/<check-name>.py`, in detail | `Stop` (one hook per desired check) |
-| `hooks/pre-commit-stamp.sh` | `checks/backlog-check.py --stamp --staged` | `PreToolUse(Bash)`, before `git commit` |
+| `hooks/pre-commit-stamp.sh` | `hooks/stamp-staged.sh` (the stamp home — shared with `adapters/git/pre-commit`, the primary wiring) | `PreToolUse(Bash)`, before `git commit` |
 | `hooks/security-guards.sh` | `hooks/poisoning-scan.py`, `hooks/secret-scan.py`, `hooks/destructive-guard.py`, `hooks/normative-write-guard.py` | `PreToolUse(Write\|Edit\|Bash)` |
 | `hooks/index-usage-tracker.sh` | none — logs raw `Read`/`Grep`/`Glob` calls to a session-scoped tmp file | `PreToolUse(Read\|Grep\|Glob)` |
 | `hooks/index-usage-flush.sh` | `index/index-config.json` (`roots`, `manifest`) | `Stop` | <!-- template -->

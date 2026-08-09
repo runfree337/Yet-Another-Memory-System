@@ -32,10 +32,21 @@ backlog.
 - **Opening** a doc-backed work item = `mkdir <id>/` + a `STATE.md` copied from
   `STATE.template.md` (frontmatter + `## Tasks` + `## Remaining`) + its line in `INDEX.md`
   (no badge).
-- `updated`: **auto-stamped at pre-commit** — a hook (`backlog-check.py --stamp --staged`, wired to
-  **pre-commit**: a git `pre-commit` hook or your tool's equivalent) sets `updated = commit date`
-  on indexed STATE.md files, **mechanically** (no manual bump, no staleness — via
-  `entrylib.stamp_updated`).
+- `updated`: **auto-stamped at pre-commit** — the stamp home `hooks/stamp-staged.sh` (the ONE
+  script that runs `backlog-check.py --stamp --staged` and its two channel siblings) sets
+  `updated = commit date` on staged STATE.md files, **mechanically** (no manual bump, no
+  staleness — via `entrylib.stamp_updated`). Two callers, one home: the **git-native hook**
+  `adapters/git/pre-commit` (covers every `git commit`, whoever runs it — install:
+  `git config core.hooksPath adapters/git`, surfaced at session start when missing) and the
+  Claude Code `PreToolUse` adapter (catch-up net for machines without the git hook). **Exact
+  scope and known holes live here, once** — scripts point at this statement instead of
+  recopying it: a commit replaying someone else's work (merge/cherry-pick/revert/rebase, any
+  sister head) is NOT stamped, keeping the original date; a **partial commit** (`git commit --
+  <path>`, `-p`, temporary index) is not stamped and says so; `git merge --squash` leaves no
+  signal and stamps like an ordinary commit (accepted hole); `--no-verify` bypasses the hook.
+  A drifted date is **never rewritten to today** (that would fake freshness) — it self-heals
+  at the next pass made where the hook runs, and the drift is visible meanwhile via
+  `E-STATE-FRESH` (a check survives an uninstalled/bypassed/absent hook).
 
 ## The `## Tasks` section — the canonical line format
 
