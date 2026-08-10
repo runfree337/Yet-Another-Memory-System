@@ -41,6 +41,12 @@ Rules (stable ids — API, do not rename):
   D11 Blockquote (banner) lines > `sizes.decision-banner-max-lines` (default 20) —
       to-confirm: the amendment / "what died, what survives" notes are protocol, but a
       banner that outgrows its budget is analysis in disguise.
+  D12 One canonical SECTION > `sizes.decision-section-max-lines` written lines
+      (default 20) — to-confirm. D9 bounds the whole body and tells you nothing about
+      what to cut; D12 names the section, and each has its own remedy: an oversized
+      `**Decision**` is doing design work, an oversized `**Why**` is the analysis that
+      belongs in the durable doc it motivates. Only D4-compliant bodies are split
+      (the three markers are blocking-mandatory, so the cut is exact, never guessed).
   D10 `INDEX.md` entry (bullet + its wrapped lines, `[…]` tokens excluded) >
       `sizes.decisions-index-entry-max-words` words (default 80) — to-confirm: the
       line is id + title + one-line invariant; anything more lives in the `D-….md`
@@ -81,6 +87,8 @@ _CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
 DECISION_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "decision-entry-max-lines"), 80)
 DECISION_BANNER_MAX_LINES = entrylib.cfg_get(
     _CFG, ("sizes", "decision-banner-max-lines"), 20)
+DECISION_SECTION_MAX_LINES = entrylib.cfg_get(
+    _CFG, ("sizes", "decision-section-max-lines"), 20)
 INDEX_ENTRY_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "decisions-index-entry-max-words"), 80)
 
 
@@ -151,6 +159,28 @@ def rule_d1_d2() -> list:
 # --------------------------------------------------------------------------- #
 # D4 — canonical sections present in the body.                                #
 # --------------------------------------------------------------------------- #
+
+def _section_lines(body: str) -> list:
+    """`[(marker, written-line count)]` for the three canonical sections.
+
+    Cut on the D4 markers, which are blocking-mandatory — so the split is exact and never
+    guessed. Blank lines, table separators and blockquotes are excluded (same filter as D9:
+    banner lines belong to D11, not to a section's prose budget). Returns `[]` when a marker
+    is missing — D4 already reports that, and a second signal on the same cause is noise.
+    """
+    idx = [(body.find(m), m) for m in CANONICAL_HEADINGS]
+    if any(i < 0 for i, _ in idx):
+        return []
+    idx.sort()
+    bounds = [(idx[0][1], idx[0][0], idx[1][0]),
+              (idx[1][1], idx[1][0], idx[2][0]),
+              (idx[2][1], idx[2][0], len(body))]
+    out = []
+    for name, a, b in bounds:
+        seg = entrylib.useful_body_lines(body[a:b])
+        out.append((name, len([l for l in seg if not l.lstrip().startswith(">")])))
+    return out
+
 
 def rule_d4(path: str, body: str) -> list:
     missing = [h for h in CANONICAL_HEADINGS if h not in body]
@@ -361,6 +391,17 @@ def audit() -> list:
                                          "a decision states Decision/Why/Invariant; long analysis "
                                          "belongs in the durable doc it motivates, referenced "
                                          "from the body."))
+            # D12 — per-section granularity. D4 makes the three markers mandatory and
+            # BLOCKING, so splitting on them is exact: a body that reached here has them
+            # all. The `**Invariant**` segment runs to the end of file — trailing sections
+            # (`## Scope`, `## Files`) are prose too and count against it.
+            for name, count in _section_lines(body):
+                if count > DECISION_SECTION_MAX_LINES:
+                    findings.append(Finding(TO_CONFIRM, "D12", p, 1,
+                                             f"section {name} is {count} written lines "
+                                             f"(> {DECISION_SECTION_MAX_LINES}) — state the "
+                                             "decision, keep the reason short, and move the "
+                                             "analysis to the durable doc it motivates."))
             if len(banner) > DECISION_BANNER_MAX_LINES:
                 findings.append(Finding(TO_CONFIRM, "D11", p, 1,
                                          f"{len(banner)} banner lines "

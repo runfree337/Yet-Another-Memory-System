@@ -10,7 +10,7 @@
     "pending-stale-days": 30
   },
 
-  "_sizes": "Granularity signals (TO-CONFIRM, never blocking): an oversized entry is a hint that its content belongs in the durable doc, not a fault. Units: lines of useful content (blank lines and |--- table separators excluded), words for labels and index entries. The three *-index-entry-max-words keys bound one INDEX entry = a top-level bullet plus its wrapped/indented lines, `[…]` tokens (badges, tags, link texts) excluded from the count — an index line stays title + target + gist, detail and history live in the entry's own file (backlog: I-ENTRY-LEN; decisions: D10; memory: M-INDEX-LEN). decision-entry-max-lines is the Decision channel's body-size mirror of feature/memory (D9) and counts WRITTEN lines only — blockquote (banner) lines carry the revocation protocol the author may not cut, so they get their own budget, decision-banner-max-lines (D11); charging them to D9 would penalise the decisions that were amended, i.e. the ones still in use.",
+  "_sizes": "Granularity signals (TO-CONFIRM, never blocking): an oversized entry is a hint that its content belongs in the durable doc, not a fault. Units: lines of useful content (blank lines and |--- table separators excluded), words for labels and index entries. The three *-index-entry-max-words keys bound one INDEX entry = a top-level bullet plus its wrapped/indented lines, `[…]` tokens (badges, tags, link texts) excluded from the count — an index line stays title + target + gist, detail and history live in the entry's own file (backlog: I-ENTRY-LEN; decisions: D10; memory: M-INDEX-LEN). decision-entry-max-lines is the Decision channel's body-size mirror of feature/memory (D9) and counts WRITTEN lines only — blockquote (banner) lines carry the revocation protocol the author may not cut, so they get their own budget, decision-banner-max-lines (D11); charging them to D9 would penalise the decisions that were amended, i.e. the ones still in use. decision-section-max-lines (D12) bounds each canonical section on its own: a whole-body total says nothing about what to cut, whereas a named section does — an oversized **Decision** is doing design work, an oversized **Why** is the analysis that belongs in the durable doc it motivates. Prose expands to fill whatever budget it is given; per-section is the budget that pushes back.",
   "sizes": {
     "feature-entry-max-lines": 60,
     "memory-entry-max-lines": 40,
@@ -20,7 +20,8 @@
     "decisions-index-entry-max-words": 80,
     "memory-index-entry-max-words": 60,
     "decision-entry-max-lines": 80,
-    "decision-banner-max-lines": 20
+    "decision-banner-max-lines": 20,
+    "decision-section-max-lines": 20
   },
 
   "_guards": "EXTENSION-ONLY, fail-closed: a repo-local config can ADD surveillance (extra instruction files for the poisoning scan, extra path-regex allowlist entries for the secret scan) but can never disable a guard or remove a built-in pattern — otherwise poisoned content could switch off the alarm by editing this file. An invalid entry (bad regex) is skipped, the guard keeps running.",

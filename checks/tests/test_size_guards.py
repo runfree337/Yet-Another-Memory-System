@@ -155,6 +155,34 @@ class DecisionsSizeGuards(unittest.TestCase):
         self.assertIn("D9", rules)
         self.assertIn("D11", rules)
 
+    def test_oversized_section_fires_d12_and_names_it(self):
+        """Le signal DÉSIGNE la section — c'est tout l'intérêt par rapport à D9,
+        qui rend un total dont on ne sait que faire."""
+        _write(self.repo, "decisions/D-2026-01-01-01.md",
+               VALID_FRONTMATTER + "\n**Decision**\nd\n\n**Why**\n"
+               + "\n".join(f"raison {i}" for i in range(40))
+               + "\n\n**Invariant**\ni\n")
+        _write(self.repo, "decisions/INDEX.md",
+               "## Active\n\n- [D-2026-01-01-01](D-2026-01-01-01.md) — gist\n")
+        f = [x for x in self.mod.audit() if x.rule == "D12"]
+        self.assertTrue(f)
+        self.assertIn("**Why**", f[0].msg)
+
+    def test_sections_within_budget_are_silent(self):
+        rules = self._rules()
+        self.assertNotIn("D12", rules)
+
+    def test_banner_lines_do_not_count_against_a_section(self):
+        """Une bannière vit dans un tronçon sans lui être facturée — même raison
+        que pour D9 : c'est du protocole, pas de la prose."""
+        _write(self.repo, "decisions/D-2026-01-01-01.md",
+               VALID_FRONTMATTER + "\n**Decision**\nd\n\n**Why**\n"
+               + "\n".join(f"> note {i}" for i in range(40))
+               + "\nraison\n\n**Invariant**\ni\n")
+        _write(self.repo, "decisions/INDEX.md",
+               "## Active\n\n- [D-2026-01-01-01](D-2026-01-01-01.md) — gist\n")
+        self.assertNotIn("D12", [x.rule for x in self.mod.audit()])
+
     def test_oversized_index_entry_fires_d10(self):
         rules = self._rules(index_gist=" ".join(["mot"] * 90))
         self.assertIn("D10", rules)
