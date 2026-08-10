@@ -31,10 +31,16 @@ Rules (stable ids — API, do not rename):
       citation can be legitimate): update the reference or reconsider the archival.
       Other decisions (`replaces`/`replaced-by`) and `decisions/INDEX.md` don't count —
       that's the legitimate revocation record / the registry.
-  D9  Body > `sizes.decision-entry-max-lines` useful lines (`checks-config.json`,
+  D9  Body > `sizes.decision-entry-max-lines` WRITTEN lines (`checks-config.json`,
       default 80) — to-confirm, never blocking: a decision states Decision/Why/
       Invariant; long analysis belongs in the durable doc it motivates, referenced
       from the body. The Decision channel's mirror of `FM-GRAN`/`M-GRAN`.
+      Blockquote lines are EXCLUDED and budgeted by D11 — they carry the revocation
+      protocol, which the author may not cut; charging them here would penalise the
+      decisions that were amended, i.e. the ones still in use.
+  D11 Blockquote (banner) lines > `sizes.decision-banner-max-lines` (default 20) —
+      to-confirm: the amendment / "what died, what survives" notes are protocol, but a
+      banner that outgrows its budget is analysis in disguise.
   D10 `INDEX.md` entry (bullet + its wrapped lines, `[…]` tokens excluded) >
       `sizes.decisions-index-entry-max-words` words (default 80) — to-confirm: the
       line is id + title + one-line invariant; anything more lives in the `D-….md`
@@ -73,6 +79,8 @@ CANONICAL_HEADINGS = ("**Decision**", "**Why**", "**Invariant**")
 # as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
 _CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
 DECISION_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "decision-entry-max-lines"), 80)
+DECISION_BANNER_MAX_LINES = entrylib.cfg_get(
+    _CFG, ("sizes", "decision-banner-max-lines"), 20)
 INDEX_ENTRY_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "decisions-index-entry-max-words"), 80)
 
 
@@ -338,12 +346,29 @@ def audit() -> list:
         # R-NO-FRONTMATTER; `body` is unreliable then — no double signal).
         if meta:
             useful = entrylib.useful_body_lines(body)
-            if len(useful) > DECISION_MAX_LINES:
+            # Banner lines (Markdown blockquotes) carry the REVOCATION PROTOCOL — the
+            # amendment notes and "what died / what survives" markers that a partially
+            # revoked decision MUST keep. Counting them against the prose budget punishes
+            # the decisions that were maintained: an untouched decision has none, one
+            # amended twice carries dozens. They are measured on their own budget (D11)
+            # so that D9 keeps measuring what it claims to — the length of the analysis.
+            banner = [l for l in useful if l.lstrip().startswith(">")]
+            written = len(useful) - len(banner)
+            if written > DECISION_MAX_LINES:
                 findings.append(Finding(TO_CONFIRM, "D9", p, 1,
-                                         f"{len(useful)} useful lines (> {DECISION_MAX_LINES}) — "
+                                         f"{written} written lines (> {DECISION_MAX_LINES}, "
+                                         f"{len(banner)} banner line(s) excluded) — "
                                          "a decision states Decision/Why/Invariant; long analysis "
                                          "belongs in the durable doc it motivates, referenced "
                                          "from the body."))
+            if len(banner) > DECISION_BANNER_MAX_LINES:
+                findings.append(Finding(TO_CONFIRM, "D11", p, 1,
+                                         f"{len(banner)} banner lines "
+                                         f"(> {DECISION_BANNER_MAX_LINES}) — amendment and "
+                                         "revocation notes are protocol, but a banner that outgrows "
+                                         "its budget is analysis in disguise: state what died and "
+                                         "what survives, and move the reasoning to the body or to "
+                                         "the durable doc."))
 
     # D6 — revocation graph, cross-file scope.
     findings += rule_d6(by_id)

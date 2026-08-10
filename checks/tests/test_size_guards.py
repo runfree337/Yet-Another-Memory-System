@@ -125,6 +125,36 @@ class DecisionsSizeGuards(unittest.TestCase):
         rules = self._rules(body_extra=filler)
         self.assertNotIn("D9", rules)
 
+    def test_banner_lines_do_not_count_against_d9(self):
+        """Le protocole de révocation ne se facture pas au budget de prose.
+
+        90 lignes de bannière — le volume qu'une décision plusieurs fois amendée
+        accumule — ne doivent pas déclencher D9 : l'auteur n'a pas le droit de les
+        couper, les compter punirait les décisions ENTRETENUES."""
+        banner = "\n".join(f"> note d'amendement {i}" for i in range(90))
+        rules = self._rules(body_extra=banner)
+        self.assertNotIn("D9", rules)
+
+    def test_banner_over_budget_fires_d11(self):
+        banner = "\n".join(f"> note d'amendement {i}" for i in range(90))
+        rules = self._rules(body_extra=banner)
+        self.assertIn("D11", rules)
+
+    def test_banner_within_budget_is_silent(self):
+        banner = "\n".join(f"> note d'amendement {i}" for i in range(15))
+        rules = self._rules(body_extra=banner)
+        self.assertNotIn("D11", rules)
+        self.assertNotIn("D9", rules)
+
+    def test_written_lines_still_fire_d9_despite_banners(self):
+        """Une bannière ne blanchit pas un corps bavard : les deux budgets sont
+        indépendants, et un fichier peut déclencher les deux."""
+        body = "\n".join(f"ligne {i}" for i in range(90))
+        banner = "\n".join(f"> note {i}" for i in range(30))
+        rules = self._rules(body_extra=body + "\n" + banner)
+        self.assertIn("D9", rules)
+        self.assertIn("D11", rules)
+
     def test_oversized_index_entry_fires_d10(self):
         rules = self._rules(index_gist=" ".join(["mot"] * 90))
         self.assertIn("D10", rules)
