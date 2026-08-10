@@ -27,11 +27,12 @@ Rule table (id -> severity -> what it proves):
 | `R-VERIFIED-NOT-RATIFIED`     | TO-CONFIRM    | `confidence: verified` with no `ratified` field — human ratification not tracked. |
 | `R-DEAD-LINK` (to-confirm)    | TO-CONFIRM    | `links:` cites an entry slug not found in `memory/`/`features/`/`backlog/` — the target channel might just not be populated yet. |
 | `M-GRAN`                      | TO-CONFIRM    | entry body > `sizes.memory-entry-max-lines` useful lines (`checks-config.json`, default 40) — granularity hint: one fact per file, long detail belongs in the durable doc (cf. `MEMORY.md`), never blocking. |
+| `M-INDEX-LEN`                 | TO-CONFIRM    | `MEMORY.md` entry (bullet + its wrapped lines, `[…]` tokens excluded) > `sizes.memory-index-entry-max-words` words (default 60) — the index line is a one-line pointer; the detail lives in `memory/<slug>.md` (engine: `entrylib.check_index_entry_len`). |
 
 These ids are the channel's API — stable, grep-able, cited by `checks/memory-audit.md`
 and the docs. Each rule's detail is defined once in `checks/entrylib.py`; this file never
-redefines them (`M-GRAN` is the one rule local to this script — no channel elsewhere had
-a size signal on memory entries).
+redefines them (`M-GRAN` and `M-INDEX-LEN` are the two rules local to this script — the
+channel's size signals, entry body and index line).
 
 Read-only by default. Fixes nothing — flags. `--stamp` is the only write (see below),
 scoped to the `updated` field.
@@ -69,6 +70,7 @@ MEMORY_DIR = os.path.join(ROOT, "memory")
 # as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
 _CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
 GRAN_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "memory-entry-max-lines"), 40)
+INDEX_ENTRY_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "memory-index-entry-max-words"), 60)
 
 # A memory entry has no rigid id grammar (unlike `D-YYYY-MM-DD-NN` on the decisions side)
 # — a bare `.md` isn't enough to prove a reference (`MEMORY.md` mentions
@@ -92,11 +94,9 @@ def check_config() -> list:
     return []
 
 
-def _useful_body_lines(body: str) -> list[str]:
-    """Same filter as `feature-map-check.py`'s FM-GRAN rule: blank lines and Markdown
-    table separator rows (`|---`) don't count as "content" — keeps the two channels'
-    line count directly comparable."""
-    return [l for l in body.splitlines() if l.strip() and not l.strip().startswith("|---")]
+# Body-line filter for M-GRAN: shared home `entrylib.useful_body_lines` (one filter,
+# read by FM-GRAN / M-GRAN / D9 — the channels' line counts stay directly comparable).
+_useful_body_lines = entrylib.useful_body_lines
 
 
 # --------------------------------------------------------------------------- #
@@ -138,6 +138,13 @@ def audit_index_concordance() -> list:
     return [f._replace(path=rel(f.path)) for f in findings]
 
 
+def audit_index_entry_len() -> list:
+    """M-INDEX-LEN — the `MEMORY.md` line is a one-line pointer, nothing more."""
+    return entrylib.check_index_entry_len(
+        MEMORY_MD, ROOT, INDEX_ENTRY_MAX_WORDS, "M-INDEX-LEN",
+        "the index line is a one-line pointer; the detail lives in `memory/<slug>.md`.")
+
+
 # --------------------------------------------------------------------------- #
 # --stamp — same triple safeguard as backlog-check.py: staged scope,          #
 # mechanical field (`updated`) alone, never blocking.                        #
@@ -177,7 +184,8 @@ def main(argv) -> int:
 
     as_json = "--json" in argv
 
-    findings = check_config() + audit_memory_dir() + audit_index_concordance()
+    findings = (check_config() + audit_memory_dir() + audit_index_concordance()
+                + audit_index_entry_len())
 
     # Same convention as feature-map-check.py: an empty or absent channel is SAID, never
     # summarized as a bare 0-finding report a reader would take for a verified channel.

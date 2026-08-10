@@ -296,6 +296,76 @@ def check_index_concordance(index_path: str, entries_dir: str, id_pattern) -> li
 
 
 # --------------------------------------------------------------------------- #
+# Index entries & size guards — shared engine of the granularity signals      #
+# (`I-ENTRY-LEN` / `D9` / `D10` / `M-GRAN` / `M-INDEX-LEN` / `FM-GRAN`).      #
+# One place defines what an "entry" is and what counts as content.            #
+# --------------------------------------------------------------------------- #
+
+BRACKETED_RE = re.compile(r"\[[^\]]*\]")
+
+
+def useful_body_lines(body: str) -> list:
+    """Lines that count as CONTENT for the body-size signals: blank lines and Markdown
+    table separator rows (`|---`) excluded — keeps the channels' line counts directly
+    comparable (`FM-GRAN` / `M-GRAN` / `D9` all read this one filter)."""
+    return [l for l in body.splitlines() if l.strip() and not l.strip().startswith("|---")]
+
+
+def index_entries(text: str) -> list:
+    """Splits an index file into its ENTRIES: a top-level `- ` bullet plus every
+    following indented, non-blank line (wrapped prose or nested detail), ended by a
+    blank line, a heading, or the next top-level bullet. Returns
+    `[(lineno of the bullet, folded text)]`.
+
+    An indented bullet is CONTINUATION — nested detail counts against its host entry —
+    and a file whose bullets are all indented yields nothing: zero-FP over recall."""
+    entries, cur = [], None
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if line.startswith("- "):
+            if cur:
+                entries.append(tuple(cur))
+            cur = [lineno, line]
+        elif cur and line[:1] in (" ", "\t") and line.strip():
+            cur[1] += " " + line.strip()
+        else:
+            if cur:
+                entries.append(tuple(cur))
+            cur = None
+    if cur:
+        entries.append(tuple(cur))
+    return entries
+
+
+def entry_prose_words(entry_text: str) -> int:
+    """Word count of an index entry, `[…]` tokens excluded — status badges (`[todo]`),
+    tag blocks (`[combat]`) and link texts (`[D-…](D-….md)`) are machine labels, not
+    the prose the size guards bound."""
+    return len(BRACKETED_RE.sub(" ", entry_text).split())
+
+
+def check_index_entry_len(index_path: str, root: str, max_words: int, rule: str,
+                          what: str) -> list:
+    """TO-CONFIRM size guard over every entry of an index file — an index line stays
+    factual and short (title + target + gist); detail and history belong elsewhere.
+    `what` names, per channel, where the overflow content lives. Missing index ->
+    no findings (the concordance rules already own that case)."""
+    if not os.path.isfile(index_path):
+        return []
+    with open(index_path, encoding="utf-8") as fh:
+        text = fh.read()
+    relpath = os.path.relpath(index_path, root)
+    findings = []
+    for lineno, entry in index_entries(text):
+        words = entry_prose_words(entry)
+        if words > max_words:
+            findings.append(Finding(TO_CONFIRM, rule, relpath, lineno,
+                                     f"{words}-word entry (> {max_words}, `[…]` tokens "
+                                     f"excluded) — an index line stays factual and short; "
+                                     f"{what}"))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
 # Stamp — rewrites `updated` and nothing else.                                #
 # --------------------------------------------------------------------------- #
 
@@ -635,6 +705,40 @@ def _selftest() -> int:
         check(sum(1 for f in fs if f.severity == BLOCKING) == 2,
               "check_links: dead id/path are blocking")
         check(sum(1 for f in fs if f.rule == "R-DEAD-LINK") == 3, "check_links: R-DEAD-LINK rule")
+
+    # useful_body_lines — blanks and table separators excluded
+    check(useful_body_lines("a\n\n|---|\n| b |\n") == ["a", "| b |"],
+          "useful_body_lines: blanks and |--- rows excluded")
+
+    # index_entries — folding, terminators, nested bullets
+    idx_text = ("# T\n"
+                "- one two three\n"
+                "  four five\n"
+                "\n"
+                "prose outside any entry\n"
+                "- [todo] six `x/`\n"
+                "  - nested seven\n"
+                "## H\n"
+                "- eight\n")
+    ents = index_entries(idx_text)
+    check([ln for ln, _ in ents] == [2, 6, 9], "index_entries: bullet linenos, terminators honored")
+    check(ents[0][1] == "- one two three four five", "index_entries: continuation folded in")
+    check("nested seven" in ents[1][1], "index_entries: nested bullet folds into its host")
+
+    # entry_prose_words — bracketed tokens excluded
+    check(entry_prose_words("- [todo] a b [tag] c") == 4,
+          "entry_prose_words: badges/tags excluded from the count")
+
+    # check_index_entry_len — only the oversized entry, at its bullet line
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "IDX.md")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("- short one\n- " + " ".join(["w"] * 61) + "\n")
+        fs = check_index_entry_len(p, td, 60, "X-LEN", "detail lives elsewhere.")
+        check([(f.rule, f.line, f.severity) for f in fs] == [("X-LEN", 2, TO_CONFIRM)],
+              "check_index_entry_len: one finding, oversized bullet's line, to-confirm")
+        check(check_index_entry_len(os.path.join(td, "absent.md"), td, 60, "X", "y") == [],
+              "check_index_entry_len: missing index -> no findings")
 
     if failures:
         print(f"entrylib --selftest: {len(failures)} failure(s):")

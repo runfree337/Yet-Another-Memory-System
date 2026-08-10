@@ -248,7 +248,9 @@ def check_entry(fname: str) -> list[Finding]:
             findings.append(Finding(BLOCKING, "FM-DECISION", rel(path), 1,
                                      f"id « {d} » cited in the body but decisions/{d}.md not found."))
 
-    useful = [l for l in body_lines if l.strip() and not l.strip().startswith("|---")]
+    # Body-line filter: shared home `entrylib.useful_body_lines` (one filter, read by
+    # FM-GRAN / M-GRAN / D9 — the channels' line counts stay directly comparable).
+    useful = entrylib.useful_body_lines("\n".join(body_lines))
     if len(useful) > GRAN_MAX_LINES:
         findings.append(Finding(TO_CONFIRM, "FM-GRAN", rel(path), 1,
                                  f"{len(useful)} useful lines (> {GRAN_MAX_LINES}) -> consider "

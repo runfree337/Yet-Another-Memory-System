@@ -10,12 +10,16 @@
     "pending-stale-days": 30
   },
 
-  "_sizes": "Granularity signals (TO-CONFIRM, never blocking): an oversized entry is a hint that its content belongs in the durable doc, not a fault. Units: lines of useful content, words for labels.",
+  "_sizes": "Granularity signals (TO-CONFIRM, never blocking): an oversized entry is a hint that its content belongs in the durable doc, not a fault. Units: lines of useful content (blank lines and |--- table separators excluded), words for labels and index entries. The three *-index-entry-max-words keys bound one INDEX entry = a top-level bullet plus its wrapped/indented lines, `[…]` tokens (badges, tags, link texts) excluded from the count — an index line stays title + target + gist, detail and history live in the entry's own file (backlog: I-ENTRY-LEN; decisions: D10; memory: M-INDEX-LEN). decision-entry-max-lines is the Decision channel's body-size mirror of feature/memory (D9).",
   "sizes": {
     "feature-entry-max-lines": 60,
     "memory-entry-max-lines": 40,
     "backlog-state-max-lines": 80,
-    "backlog-task-label-max-words": 30
+    "backlog-task-label-max-words": 30,
+    "backlog-index-entry-max-words": 60,
+    "decisions-index-entry-max-words": 80,
+    "memory-index-entry-max-words": 60,
+    "decision-entry-max-lines": 80
   },
 
   "_guards": "EXTENSION-ONLY, fail-closed: a repo-local config can ADD surveillance (extra instruction files for the poisoning scan, extra path-regex allowlist entries for the secret scan) but can never disable a guard or remove a built-in pattern — otherwise poisoned content could switch off the alarm by editing this file. An invalid entry (bad regex) is skipped, the guard keeps running.",

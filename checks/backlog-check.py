@@ -72,6 +72,12 @@ Rules:
   I-CHECKBOX     (BLOCKING)      Markdown checkbox `- [ ]`/`- [x]` in `INDEX.md` (done =
                                   removed; status = frontmatter for doc-backed items, badge
                                   for the others).
+  I-ENTRY-LEN    (TO-CONFIRM)    `INDEX.md` entry (bullet + its wrapped lines, `[…]`
+                                  tokens excluded) > `sizes.backlog-index-entry-max-words`
+                                  words (`checks-config.json`, default 60) — the line is
+                                  title + target + one-sentence gist; detail and history
+                                  live in the work item's folder and `git log`, never in
+                                  the index (engine: `entrylib.check_index_entry_len`).
 
 Views: `--board` (work items by milestone, status + task counts by state) · `--state <id>`
 (one work item, tasks unrolled, `impacts:` listed). Both accept `--json`. `--checklist [<id>]`
@@ -130,6 +136,7 @@ KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TASK_STATES = {"todo", "in-progress", "blocked", "done"}
 TASK_LABEL_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "backlog-task-label-max-words"), 30)
 STATE_SIZE_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "backlog-state-max-lines"), 80)
+INDEX_ENTRY_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "backlog-index-entry-max-words"), 60)
 CANON_SECTIONS = {"Tasks", "Remaining"}
 
 
@@ -546,6 +553,12 @@ def check_index(work_items, index_text) -> list[Finding]:
             findings.append(Finding(BLOCKING, "I-CHECKBOX", rel(INDEX_PATH), lineno,
                                      "Markdown checkbox in the INDEX — remove `[ ]`/`[x]` (done = "
                                      "removed; status = frontmatter or inline badge)."))
+
+    # I-ENTRY-LEN — the line is title + target + one-sentence gist, nothing more.
+    findings += entrylib.check_index_entry_len(
+        INDEX_PATH, ROOT, INDEX_ENTRY_MAX_WORDS, "I-ENTRY-LEN",
+        "the line is title + target + one-sentence gist; detail and history live in "
+        "the work item's folder (STATE.md / companion docs) and `git log`.")
     return findings
 
 

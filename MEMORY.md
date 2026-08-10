@@ -38,7 +38,8 @@ the Decision/Backlog channels).
   ---
   <the rule itself, in free prose>
   ```
-- **This index (`MEMORY.md`)** — one line per file, never the detail, in the template's uniform
+- **This index (`MEMORY.md`)** — one line per file (bounded mechanically:
+  `sizes.memory-index-entry-max-words`, default 60, rule `M-INDEX-LEN`), never the detail, in the template's uniform
   format (`ENTRY-TEMPLATE.md §The principle`):
   ```
   - [<id>](memory/<slug>.md) — <summary ≤ 1 line>

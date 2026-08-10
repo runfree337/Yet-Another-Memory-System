@@ -29,8 +29,12 @@ memory entry template) — every doc-backed work item has a `STATE.md` with a co
 consistent frontmatter (`id/title/status/milestone/after/docs/updated`, validated via `entrylib.validate_entry`)
 and a mandatory `## Tasks` section (one line per task, state `todo/in-progress/blocked/done`,
 label ≤ 30 words or a `→ working-doc.md` pointer). The size thresholds read the global
-settings file: `sizes.backlog-state-max-lines` (default 80) and
-`sizes.backlog-task-label-max-words` (default 30).
+settings file: `sizes.backlog-state-max-lines` (default 80),
+`sizes.backlog-task-label-max-words` (default 30) and
+`sizes.backlog-index-entry-max-words` (default 60) — the last one bounds an `INDEX.md`
+entry (bullet + wrapped lines, `[…]` tokens excluded, rule `I-ENTRY-LEN`, to-confirm):
+the line is title + target + one-sentence gist, detail and history live in the work
+item's folder and `git log`.
 
 `impacts:` is an optional frontmatter key — the **impact ledger**: filled in during work as
 soon as a durable doc/memory is known to need updating, consumed at closure instead of relying
@@ -106,8 +110,9 @@ python3 checks/feature-map-check.py --stamp --staged   # pre-commit only
 
 ### `decisions-check.py`
 **Intent:** integrity of the **Decision** channel (instance of `ENTRY-TEMPLATE.md`, see
-`decisions/README.md`) — eight rules, from file↔INDEX concordance to the revocation graph.
-Imports `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `check_links`).
+`decisions/README.md`) — ten rules, from file↔INDEX concordance to the revocation graph
+and the channel's size signals. Imports `entrylib` (frontmatter, `validate_entry`,
+`check_index_concordance`, `check_links`, `check_index_entry_len`).
 
 | Rule | Severity | What it proves |
 |---|---|---|
@@ -119,6 +124,9 @@ Imports `entrylib` (frontmatter, `validate_entry`, `check_index_concordance`, `c
 | `D6` | blocking | sound revocation graph: `replaced-by`/`replaces` resolved, reciprocal, no cycle |
 | `D7` (`R-DEAD-LINK`) | blocking/to-confirm | cross-channel `links:` resolved (`entrylib.check_links`) |
 | `D8` | to-confirm | `archived`/`revoked` decision **still referenced** by a living entry — `links:` in `memory/`, `features/`, `backlog/<id>/STATE.md`, or a `D-id` mention in a feature body. One finding per (decision, referencing file) pair; the decisions' own `replaces`/`replaced-by` graph and `INDEX.md` are excluded by construction (archival record, not stale references). Never blocking: a living historical citation can be legitimate — the finding asks a human to update the reference or reconsider the archival. |
+| `D9` | to-confirm | body > `sizes.decision-entry-max-lines` useful lines (default 80) — a decision states Decision/Why/Invariant; long analysis belongs in the durable doc it motivates. The channel's mirror of `FM-GRAN`/`M-GRAN`. |
+| `D10` | to-confirm | `INDEX.md` entry (bullet + wrapped lines, `[…]` tokens excluded) > `sizes.decisions-index-entry-max-words` words (default 80) — the line is id + title + one-line invariant; anything more lives in the `D-….md` file. |
+| `CFG-INVALID` | blocking | `checks-config.json` present at the repo root but broken — never silently ignored (same convention as the sibling checks). |
 
 | Parameter | Effect | Default |
 |---|---|---|
@@ -371,11 +379,14 @@ python3 -c "import sys; sys.path.insert(0, 'checks'); import entrylib"   # no si
 **Intent:** integrity of the **Memory** channel — "one fact per file + frontmatter" format
 (`memory/<slug>.md`), `MEMORY.md` = index. Instance of `ENTRY-TEMPLATE.md`: all the logic
 (frontmatter, file↔index concordance, cross-links) lives in `checks/entrylib.py` — this
-script calls `entrylib` with the `"memory"` channel and aggregates; its only local rule is
-`M-GRAN` (to-confirm, never blocking): an entry whose body exceeds
-`sizes.memory-entry-max-lines` useful lines (default 40, global settings file) is flagged as
-detail to move into the durable doc, keeping the entry as a pointer — the Memory-channel
-mirror of `FM-GRAN`, closing the gap where `memory/*.md` had no size signal at all. An
+script calls `entrylib` with the `"memory"` channel and aggregates; its local rules are
+the channel's two size signals (to-confirm, never blocking): `M-GRAN` — an entry whose
+body exceeds `sizes.memory-entry-max-lines` useful lines (default 40, global settings
+file) is flagged as detail to move into the durable doc, keeping the entry as a pointer
+— the Memory-channel mirror of `FM-GRAN`; and `M-INDEX-LEN` — a `MEMORY.md` entry
+(bullet + wrapped lines, `[…]` tokens excluded) over
+`sizes.memory-index-entry-max-words` words (default 60): the index line is a one-line
+pointer, the detail lives in `memory/<slug>.md`. An
 **absent or empty channel is said explicitly** (text mode), same convention as
 `feature-map-check.py` — never a bare 0-finding report on a channel the check couldn't see.
 

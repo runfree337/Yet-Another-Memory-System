@@ -4,10 +4,13 @@
 The Decision channel is an instance of `ENTRY-TEMPLATE.md` (cf. `decisions/README.md`): a
 common frontmatter (`entrylib.CHANNELS["decision"]`) above three prose sections
 (Decision/Why/Invariant), one `INDEX.md` line per file, revocation/archival = a `status`
-transition + `replaces`/`replaced-by` links. This script verifies the EIGHT mechanical
+transition + `replaces`/`replaced-by` links. This script verifies the TEN mechanical
 invariants — fixes NOTHING, **flags**.
 
 Rules (stable ids — API, do not rename):
+  CFG-INVALID  `checks-config.json` present at the repo root but broken (unreadable,
+      malformed JSON, non-object top level) — surfaced once per run, never silently
+      ignored (same convention as the sibling channel checks).
   D1  Every `D-YYYY-MM-DD-NN.md` file has a `D-YYYY-MM-DD-NN` line in INDEX.md.
   D2  Every `D-…` id cited in INDEX.md has a `D-….md` file.
   D3  Complete, valid frontmatter for the "decision" channel (via `entrylib.validate_entry`,
@@ -28,6 +31,14 @@ Rules (stable ids — API, do not rename):
       citation can be legitimate): update the reference or reconsider the archival.
       Other decisions (`replaces`/`replaced-by`) and `decisions/INDEX.md` don't count —
       that's the legitimate revocation record / the registry.
+  D9  Body > `sizes.decision-entry-max-lines` useful lines (`checks-config.json`,
+      default 80) — to-confirm, never blocking: a decision states Decision/Why/
+      Invariant; long analysis belongs in the durable doc it motivates, referenced
+      from the body. The Decision channel's mirror of `FM-GRAN`/`M-GRAN`.
+  D10 `INDEX.md` entry (bullet + its wrapped lines, `[…]` tokens excluded) >
+      `sizes.decisions-index-entry-max-words` words (default 80) — to-confirm: the
+      line is id + title + one-line invariant; anything more lives in the `D-….md`
+      file (engine: `entrylib.check_index_entry_len`).
 
 Exit code (`checks/TEMPLATE.md`): 2 if >=1 blocking, 1 if only to-confirm, 0 otherwise.
 
@@ -57,6 +68,20 @@ INDEX = os.path.join(DEC, "INDEX.md")
 
 ID_RE = re.compile(r"D-\d{4}-\d{2}-\d{2}-\d{2}")
 CANONICAL_HEADINGS = ("**Decision**", "**Why**", "**Invariant**")
+
+# Global settings (checks-config.json, optional) — loaded once. `_CFG_ERR` is surfaced
+# as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
+_CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
+DECISION_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "decision-entry-max-lines"), 80)
+INDEX_ENTRY_MAX_WORDS = entrylib.cfg_get(_CFG, ("sizes", "decisions-index-entry-max-words"), 80)
+
+
+def check_config() -> list:
+    """CFG-INVALID — `checks-config.json` present but broken. Same convention as the
+    sibling channel checks: a broken config never silently falls back to defaults."""
+    if _CFG_ERR:
+        return [Finding(BLOCKING, "CFG-INVALID", entrylib.CHECKS_CONFIG_NAME, 1, _CFG_ERR)]
+    return []
 
 
 def rel(path: str) -> str:
@@ -283,7 +308,7 @@ def rule_d8(by_id: dict) -> list:
 # --------------------------------------------------------------------------- #
 
 def audit() -> list:
-    findings = list(rule_d1_d2())
+    findings = check_config() + list(rule_d1_d2())
 
     files = _decision_files()
     by_id = {}
@@ -309,11 +334,26 @@ def audit() -> list:
         findings += rule_d5(meta.get("id"), p, meta, actives_ids, archived_ids)
         # D7 — cross-channel references (findings surfaced as-is).
         findings += entrylib.check_links(p, meta, ROOT)
+        # D9 — body granularity. Skipped when the frontmatter is broken (already
+        # R-NO-FRONTMATTER; `body` is unreliable then — no double signal).
+        if meta:
+            useful = entrylib.useful_body_lines(body)
+            if len(useful) > DECISION_MAX_LINES:
+                findings.append(Finding(TO_CONFIRM, "D9", p, 1,
+                                         f"{len(useful)} useful lines (> {DECISION_MAX_LINES}) — "
+                                         "a decision states Decision/Why/Invariant; long analysis "
+                                         "belongs in the durable doc it motivates, referenced "
+                                         "from the body."))
 
     # D6 — revocation graph, cross-file scope.
     findings += rule_d6(by_id)
     # D8 — retired decision still referenced by a living entry, cross-channel scope.
     findings += rule_d8(by_id)
+    # D10 — the INDEX line is id + title + one-line invariant, nothing more.
+    findings += entrylib.check_index_entry_len(
+        INDEX, ROOT, INDEX_ENTRY_MAX_WORDS, "D10",
+        "the line is id + title + one-line invariant; anything more lives in the "
+        "decision's own `D-….md` file.")
 
     return findings
 

@@ -28,7 +28,10 @@ backlog.
 - `status: todo | in-progress` (in the frontmatter for a doc-backed item, the badge for an inline
   one). Done → **removed** (no accumulating "done" status — a work item never turns
   `status: done`, it leaves the backlog). The `INDEX.md` line for a doc-backed item carries only
-  title + target + gist (status lives in the frontmatter).
+  title + target + gist (status lives in the frontmatter). Bounded mechanically: an entry
+  (bullet + wrapped lines, `[…]` tokens excluded) over `sizes.backlog-index-entry-max-words`
+  words (default 60) is flagged `I-ENTRY-LEN` (to-confirm) — detail and history live in the work
+  item's folder and `git log`, never in the index.
 - **Opening** a doc-backed work item = `mkdir <id>/` + a `STATE.md` copied from
   `STATE.template.md` (frontmatter + `## Tasks` + `## Remaining`) + its line in `INDEX.md`
   (no badge).
