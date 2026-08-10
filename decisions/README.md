@@ -38,7 +38,9 @@ memory entry — one file + one index line, common frontmatter). What follows on
    `D-*.md` file, and the body itself stays a statement, not an essay (long analysis belongs in
    the durable doc it motivates). Bounded mechanically, to-confirm: entry over
    `sizes.decisions-index-entry-max-words` words (default 80, `[…]` tokens excluded) → `D10`;
-   body over `sizes.decision-entry-max-lines` useful lines (default 80) → `D9`.
+   any canonical section over `sizes.decision-section-max-lines` written lines (default 20) → `D12`,
+   which names the offending section; banner lines have their own budget (`D11`) and are charged to
+   neither.
 3. **Format of a `D-*.md`** — a frontmatter above three free-prose sections:
 
    ```

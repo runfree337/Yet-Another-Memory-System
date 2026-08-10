@@ -8,7 +8,7 @@
 # (granularity hints, `checks-config.example.json §_sizes`), engine shared in
 # `entrylib.check_index_entry_len` — one place defines what an entry is.
 #
-# Covered: `I-ENTRY-LEN` (backlog-check), `D9`/`D10` (decisions-check),
+# Covered: `I-ENTRY-LEN` (backlog-check), `D10`/`D11`/`D12` (decisions-check),
 # `M-INDEX-LEN` (memory-check) — each wired end to end through its check's own runner,
 # not just the entrylib engine (already covered by `entrylib --selftest`).
 import importlib.util
@@ -113,27 +113,15 @@ class DecisionsSizeGuards(unittest.TestCase):
 
     def test_compliant_decision_is_silent(self):
         rules = self._rules()
-        self.assertNotIn("D9", rules)
+        self.assertNotIn("D12", rules)
         self.assertNotIn("D10", rules)
 
-    def test_oversized_body_fires_d9(self):
-        rules = self._rules(body_extra="\n".join(f"ligne {i}" for i in range(90)))
-        self.assertIn("D9", rules)
 
     def test_blank_and_table_separator_lines_do_not_count(self):
-        filler = "\n".join(f"ligne {i}\n\n|---|" for i in range(35))  # 35 useful lines
+        filler = "\n".join(f"ligne {i}\n\n|---|" for i in range(15))  # 15 useful lines
         rules = self._rules(body_extra=filler)
-        self.assertNotIn("D9", rules)
+        self.assertNotIn("D12", rules)
 
-    def test_banner_lines_do_not_count_against_d9(self):
-        """Le protocole de révocation ne se facture pas au budget de prose.
-
-        90 lignes de bannière — le volume qu'une décision plusieurs fois amendée
-        accumule — ne doivent pas déclencher D9 : l'auteur n'a pas le droit de les
-        couper, les compter punirait les décisions ENTRETENUES."""
-        banner = "\n".join(f"> note d'amendement {i}" for i in range(90))
-        rules = self._rules(body_extra=banner)
-        self.assertNotIn("D9", rules)
 
     def test_banner_over_budget_fires_d11(self):
         banner = "\n".join(f"> note d'amendement {i}" for i in range(90))
@@ -144,16 +132,8 @@ class DecisionsSizeGuards(unittest.TestCase):
         banner = "\n".join(f"> note d'amendement {i}" for i in range(15))
         rules = self._rules(body_extra=banner)
         self.assertNotIn("D11", rules)
-        self.assertNotIn("D9", rules)
+        self.assertNotIn("D12", rules)
 
-    def test_written_lines_still_fire_d9_despite_banners(self):
-        """Une bannière ne blanchit pas un corps bavard : les deux budgets sont
-        indépendants, et un fichier peut déclencher les deux."""
-        body = "\n".join(f"ligne {i}" for i in range(90))
-        banner = "\n".join(f"> note {i}" for i in range(30))
-        rules = self._rules(body_extra=body + "\n" + banner)
-        self.assertIn("D9", rules)
-        self.assertIn("D11", rules)
 
     def test_oversized_section_fires_d12_and_names_it(self):
         """Le signal DÉSIGNE la section — c'est tout l'intérêt par rapport à D9,

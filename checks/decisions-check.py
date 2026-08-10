@@ -4,7 +4,7 @@
 The Decision channel is an instance of `ENTRY-TEMPLATE.md` (cf. `decisions/README.md`): a
 common frontmatter (`entrylib.CHANNELS["decision"]`) above three prose sections
 (Decision/Why/Invariant), one `INDEX.md` line per file, revocation/archival = a `status`
-transition + `replaces`/`replaced-by` links. This script verifies the TEN mechanical
+transition + `replaces`/`replaced-by` links. This script verifies the mechanical
 invariants — fixes NOTHING, **flags**.
 
 Rules (stable ids — API, do not rename):
@@ -31,19 +31,20 @@ Rules (stable ids — API, do not rename):
       citation can be legitimate): update the reference or reconsider the archival.
       Other decisions (`replaces`/`replaced-by`) and `decisions/INDEX.md` don't count —
       that's the legitimate revocation record / the registry.
-  D9  Body > `sizes.decision-entry-max-lines` WRITTEN lines (`checks-config.json`,
-      default 80) — to-confirm, never blocking: a decision states Decision/Why/
-      Invariant; long analysis belongs in the durable doc it motivates, referenced
-      from the body. The Decision channel's mirror of `FM-GRAN`/`M-GRAN`.
-      Blockquote lines are EXCLUDED and budgeted by D11 — they carry the revocation
-      protocol, which the author may not cut; charging them here would penalise the
-      decisions that were amended, i.e. the ones still in use.
+  D9  RETIRED — superseded by D12. It bounded the WHOLE body, mirroring `FM-GRAN`/
+      `M-GRAN`, which is the right instrument for the Feature and Memory channels
+      because their bodies are free prose. A decision's body is NOT free: D4 makes
+      three sections mandatory and blocking. Measuring a total over a structured body
+      ignores the structure we made compulsory, and the total names nothing to cut —
+      measured on a real corpus, 8 flagged decisions survived three agents' worth of
+      rewriting. The id is retired, never reused (`sizes.decision-entry-max-lines`
+      is now inert; hosts may drop the key).
   D11 Blockquote (banner) lines > `sizes.decision-banner-max-lines` (default 20) —
       to-confirm: the amendment / "what died, what survives" notes are protocol, but a
       banner that outgrows its budget is analysis in disguise.
   D12 One canonical SECTION > `sizes.decision-section-max-lines` written lines
-      (default 20) — to-confirm. D9 bounds the whole body and tells you nothing about
-      what to cut; D12 names the section, and each has its own remedy: an oversized
+      (default 20) — to-confirm. Successor of the retired D9: a whole-body total names
+      nothing to cut; D12 names the section, and each has its own remedy: an oversized
       `**Decision**` is doing design work, an oversized `**Why**` is the analysis that
       belongs in the durable doc it motivates. Only D4-compliant bodies are split
       (the three markers are blocking-mandatory, so the cut is exact, never guessed).
@@ -84,7 +85,6 @@ CANONICAL_HEADINGS = ("**Decision**", "**Why**", "**Invariant**")
 # Global settings (checks-config.json, optional) — loaded once. `_CFG_ERR` is surfaced
 # as a BLOCKING CFG-INVALID finding by `check_config()`, never silently ignored.
 _CFG, _CFG_ERR = entrylib.load_checks_config(ROOT)
-DECISION_MAX_LINES = entrylib.cfg_get(_CFG, ("sizes", "decision-entry-max-lines"), 80)
 DECISION_BANNER_MAX_LINES = entrylib.cfg_get(
     _CFG, ("sizes", "decision-banner-max-lines"), 20)
 DECISION_SECTION_MAX_LINES = entrylib.cfg_get(
@@ -164,8 +164,8 @@ def _section_lines(body: str) -> list:
     """`[(marker, written-line count)]` for the three canonical sections.
 
     Cut on the D4 markers, which are blocking-mandatory — so the split is exact and never
-    guessed. Blank lines, table separators and blockquotes are excluded (same filter as D9:
-    banner lines belong to D11, not to a section's prose budget). Returns `[]` when a marker
+    guessed. Blank lines, table separators and blockquotes are excluded — banner lines
+    belong to D11, not to a section's prose budget. Returns `[]` when a marker
     is missing — D4 already reports that, and a second signal on the same cause is noise.
     """
     idx = [(body.find(m), m) for m in CANONICAL_HEADINGS]
@@ -372,25 +372,16 @@ def audit() -> list:
         findings += rule_d5(meta.get("id"), p, meta, actives_ids, archived_ids)
         # D7 — cross-channel references (findings surfaced as-is).
         findings += entrylib.check_links(p, meta, ROOT)
-        # D9 — body granularity. Skipped when the frontmatter is broken (already
+        # Body granularity. Skipped when the frontmatter is broken (already
         # R-NO-FRONTMATTER; `body` is unreliable then — no double signal).
         if meta:
-            useful = entrylib.useful_body_lines(body)
             # Banner lines (Markdown blockquotes) carry the REVOCATION PROTOCOL — the
             # amendment notes and "what died / what survives" markers that a partially
-            # revoked decision MUST keep. Counting them against the prose budget punishes
-            # the decisions that were maintained: an untouched decision has none, one
-            # amended twice carries dozens. They are measured on their own budget (D11)
-            # so that D9 keeps measuring what it claims to — the length of the analysis.
-            banner = [l for l in useful if l.lstrip().startswith(">")]
-            written = len(useful) - len(banner)
-            if written > DECISION_MAX_LINES:
-                findings.append(Finding(TO_CONFIRM, "D9", p, 1,
-                                         f"{written} written lines (> {DECISION_MAX_LINES}, "
-                                         f"{len(banner)} banner line(s) excluded) — "
-                                         "a decision states Decision/Why/Invariant; long analysis "
-                                         "belongs in the durable doc it motivates, referenced "
-                                         "from the body."))
+            # revoked decision MUST keep. Charging them to a prose budget punishes the
+            # decisions that were maintained: an untouched one has none, one amended
+            # twice carries dozens. They get their own budget, D11.
+            banner = [l for l in entrylib.useful_body_lines(body)
+                      if l.lstrip().startswith(">")]
             # D12 — per-section granularity. D4 makes the three markers mandatory and
             # BLOCKING, so splitting on them is exact: a body that reached here has them
             # all. The `**Invariant**` segment runs to the end of file — trailing sections
