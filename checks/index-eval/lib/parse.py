@@ -5,24 +5,56 @@
 # instead of `parse_subindex` — this parser is kept for ad hoc markdown fixtures/tests.
 import re
 
-# English-only stopword list — YAMS is an English-language framework (see the root
-# CLAUDE.md), so manifest intents are expected in English. If a project's intents use
-# a different vocabulary, extend this set rather than special-casing a language switch.
-_STOPWORDS = {
+from . import config
+
+# English default — YAMS is an English-language framework, so intents are expected in
+# English. A project whose intents are written in another language ADDS its own function
+# words through `eval-stopwords` in `index/index-config.json`; it never edits this set.
+# The difference is not cosmetic: an unlisted function word is counted as CONTENT, so two
+# unrelated French intents sharing "des"/"les" look similar to `lexsim`, and a query
+# sharing them with its source intent looks contaminated to `guard`. Both failures inflate
+# a number rather than raising, which is why the vocabulary belongs in config and not in
+# a fork of this file.
+_DEFAULT_STOPWORDS = frozenset({
     "the", "a", "an", "of", "and", "or", "if", "to", "in", "on", "by", "for", "that",
     "which", "is", "are", "with", "without", "this", "its", "from", "into", "when",
     "each", "all",
-}
+})
+_STOPWORDS = set(_DEFAULT_STOPWORDS)
 _ENTRY = re.compile(r'^\s*-\s+`([^`]+)`\s*[—-]\s*(.+?)\s*$')
 _SECTION = re.compile(r'^\s*##\s+(.+?)\s*$')
+
+
+def extend_stopwords(words):
+    """Add a project's own function words to the shared set (idempotent)."""
+    _STOPWORDS.update(w.lower() for w in words if w)
+
+
+def set_stopwords(words):
+    """Back to the English default plus `words` — used when a caller loads a config
+    other than the default one, so a second load does not stack onto the first."""
+    _STOPWORDS.clear()
+    _STOPWORDS.update(_DEFAULT_STOPWORDS)
+    extend_stopwords(words)
 
 
 def content_tokens(s):
     """Lowercase content words of `s`: split on non-alphanumeric separators, drop
     short tokens (<= 2 chars) and stopwords. Backbone of the pairwise lexical
-    similarity (`lexsim.py`) and the anti-leakage guard (`guard.py`)."""
-    toks = re.split(r'[^0-9A-Za-z]+', s.lower())
+    similarity (`lexsim.py`) and the anti-leakage guard (`guard.py`).
+
+    The separator class keeps Latin-1 letters, so an accented word stays ONE token —
+    without it `réécrire` splits into `r` + `crire`, two tokens that match nothing. This
+    costs English nothing: no English word carries a character in that range."""
+    toks = re.split(r'[^0-9A-Za-zÀ-ÿ]+', s.lower())
     return {t for t in toks if len(t) > 2 and t not in _STOPWORDS}
+
+
+# Seeded here rather than at an entry point: the LLM-judged pass imports `lib.guard` /
+# `lib.lexsim` directly and never runs `prefilter.py`, so a vocabulary installed by the
+# prefilter would silently not apply to the guard.
+_cfg, _ = config.load()
+extend_stopwords((_cfg or {}).get("eval-stopwords") or [])
 
 
 def parse_subindex(text):

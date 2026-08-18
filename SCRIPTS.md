@@ -250,6 +250,11 @@ directories) and flags which groups are lexically confusable — near-duplicate 
 (`checks/index-eval/lib/lexsim.py`, pairwise Jaccard) — worth spending an LLM-judged routing
 pass on. **Inactive without configuration**, like `index-check.py`.
 
+A project whose intents are not in English declares its function words in the same config,
+under `eval-stopwords` (`checks/index-eval/lib/parse.py` seeds itself from it at import, so the
+guard used by the LLM pass gets them too). Leaving them out does not raise — it counts `des` and
+`les` as content, which inflates both the pairwise similarity and the anti-leakage ratio.
+
 | Parameter | Effect | Default |
 |---|---|---|
 | `group prefix…` | limits the prefilter to these path prefixes | `eval-groups` from the config, else derived from the manifest |
@@ -641,7 +646,7 @@ runner turns each into an explicit failure.
 **Exit codes:** `0` every suite green · `1` at least one failed or collected 0 tests.
 
 ```bash
-python3 run-tests.py         # 95 unit tests / 3 suites + 1 embedded selftest
+python3 run-tests.py         # every suite, one line each + 1 embedded selftest
 python3 run-tests.py -v
 ```
 
@@ -650,6 +655,15 @@ Suites run: `checks/tests/` (doc-refs, decisions) · `hooks/tests/` (memory-grap
 `checks/entrylib.py --selftest` (the shared validator, one case per rule). Discovery runs
 under `-W error::ResourceWarning`, so a file handle left unclosed in a script under test
 fails the run rather than printing a warning nobody reads.
+
+One case in `checks/tests/` guards the harness itself: `test_scripts_loadable.py` loads every
+`checks/*.py` in a **fresh interpreter**, from an unrelated working directory. Check filenames
+carry a hyphen, so tests reach them through `importlib` by path — which does not seed
+`sys.path` with the script's own directory. A check missing its `sys.path.insert` therefore
+dies at load, and dies **quietly**: its whole suite errors in `setUp`, unless an
+alphabetically earlier test already loaded a sibling and left the checks directory on the
+shared `sys.path`. That is not a corner case — it is how `doc-refs-check.py` kept 31 dead
+cases behind a green full run. A fresh interpreter per script removes the neighbour to lean on.
 
 ## What does NOT belong here
 

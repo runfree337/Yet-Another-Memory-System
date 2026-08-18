@@ -1,6 +1,7 @@
 # tests/test_parse.py
 import unittest
 
+from lib import parse
 from lib.parse import content_tokens, parse_subindex
 
 SAMPLE = """# Index — Orders
@@ -39,6 +40,40 @@ class TestParse(unittest.TestCase):
         self.assertIn("item", toks)
         self.assertNotIn("the", toks)
         self.assertNotIn("and", toks)
+
+
+class TestTokenizerVocabulary(unittest.TestCase):
+    """The tokenizer must serve a project whose intents are NOT in English. Both cases
+    below fail SILENTLY when unhandled — they inflate a similarity or a contamination
+    ratio rather than raising, so nothing but an assertion catches them."""
+
+    def tearDown(self):
+        parse.set_stopwords([])  # back to the English default for the next test
+
+    def test_accented_word_stays_one_token(self):
+        # Without Latin-1 in the separator class, `réécrire` splits into `r` + `crire`:
+        # the real word is gone and the fragment matches nothing.
+        self.assertIn("réécrire", content_tokens("Réécrire la ligne"))
+
+    def test_project_stopwords_extend_the_english_default(self):
+        parse.set_stopwords(["la", "les", "des"])
+        toks = content_tokens("Applique les effets des cartes de la main")
+        self.assertNotIn("les", toks)
+        self.assertNotIn("des", toks)
+        self.assertIn("applique", toks)
+        self.assertIn("cartes", toks)
+        self.assertNotIn("the", toks, "the English default must survive the extension")
+
+    def test_set_stopwords_does_not_stack_across_loads(self):
+        parse.set_stopwords(["alpha"])
+        parse.set_stopwords(["beta"])
+        toks = content_tokens("alpha beta")
+        self.assertIn("alpha", toks, "the first config's words must not linger")
+        self.assertNotIn("beta", toks)
+
+    def test_extend_is_case_insensitive(self):
+        parse.extend_stopwords(["Pour"])
+        self.assertNotIn("pour", content_tokens("Pour chaque carte"))
 
 
 if __name__ == "__main__":

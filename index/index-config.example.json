@@ -8,5 +8,7 @@
   "hub": null,
   "_hub": "Optional — path to a file (e.g. 'index/INDEX.md') carrying a '> Last updated: ...' line that `manifest.py stamp` will maintain (date + short commit). null = stamp disabled, no-op.",
   "eval-groups": null,
-  "_eval-groups": "Optional — array of manifest path prefixes (e.g. ['src/orders/', 'src/ui/']) that checks/index-eval/prefilter.py evaluates as groups. null/absent = groups derive from the manifest's own first-level directories."
+  "_eval-groups": "Optional — array of manifest path prefixes (e.g. ['src/orders/', 'src/ui/']) that checks/index-eval/prefilter.py evaluates as groups. null/absent = groups derive from the manifest's own first-level directories.",
+  "eval-stopwords": null,
+  "_eval-stopwords": "Optional — extra function words for the index-eval tokenizer, ADDED to its English default. Fill this in when the manifest's intents are not written in English: an unlisted function word counts as CONTENT, so two unrelated intents sharing 'des'/'les' look similar to the lexical prefilter and a query sharing them with its source intent looks contaminated to the anti-leakage guard. Both inflate a number instead of raising. Lowercase, no accents stripped (e.g. ['le','la','les','des','est','pour'])."
 }

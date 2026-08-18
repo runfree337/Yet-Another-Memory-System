@@ -23,6 +23,7 @@ import json
 import os
 import sys
 
+from lib import config, parse
 from lib.lexsim import decide_flag, pairwise
 
 # Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
@@ -30,19 +31,14 @@ for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
-FRAMEWORK = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_CONFIG = os.path.join(FRAMEWORK, "index", "index-config.json")
+DEFAULT_CONFIG = config.DEFAULT_PATH
 
 
 def load_config(path):
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except OSError:
-        return None
-    except json.JSONDecodeError as e:
-        print(f"index-eval: unreadable config ({e}).", file=sys.stderr)
-        return None
+    cfg, err = config.load(path)
+    if err:
+        print(f"index-eval: {err}.", file=sys.stderr)
+    return cfg
 
 
 def load_manifest(path):
@@ -113,6 +109,11 @@ def main(argv):
         print("  -> copy/fill in index/index-config.example.json "
               "(manifest path + optional eval-groups).")
         return 0
+
+    # `parse` already seeded itself from the DEFAULT config at import. Re-seed from the
+    # one actually in use, so `--config` picks the vocabulary of the config it names
+    # instead of stacking it on top of the default's.
+    parse.set_stopwords(cfg.get("eval-stopwords") or [])
 
     base = cfg.get("base") or "."
     manifest_path = os.path.join(base, cfg.get("manifest", "index/manifest.tsv"))
