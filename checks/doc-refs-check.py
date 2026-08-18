@@ -112,6 +112,10 @@ import re
 import subprocess
 import sys
 
+# Same line as every sibling check: without it `entrylib` only resolves when Python seeds
+# sys.path from this script's own directory — true when the file is RUN, false when a test
+# loads it by path through importlib. This was the lone check missing it.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import entrylib
 
 # Windows consoles default to cp1252: non-cp1252 output (→, ⨯…) would crash print().
