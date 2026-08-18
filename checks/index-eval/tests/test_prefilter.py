@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
+from lib import parse
 from prefilter import (derive_groups, entries_for_prefix, evaluate_group, load_config,
                         load_manifest, main)
 
@@ -110,6 +111,32 @@ class TestPrefilter(unittest.TestCase):
         self.assertEqual(code, 0)
         out = json.loads(buf.getvalue())
         self.assertEqual([r["group"] for r in out], ["src/"])
+
+    def test_config_stopwords_reach_the_similarity(self):
+        """The config's vocabulary must land on the TOKENIZER, not just be parsed.
+        Five intents sharing only French function words are five UNRELATED intents; left
+        unlisted, those words count as content and the group is flagged as confusable —
+        an inflated number, never an error, so only an assertion catches it."""
+        rows = [(f"src/{c}.py", f"Applique les effets des {w} de la main")
+                for c, w in zip("ABCDE", ["cartes", "runes", "statuts", "combos", "dés"])]
+        manifest_path = self._manifest(rows)
+        fd, config_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+
+        def run(stopwords):
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump({"manifest": manifest_path, "base": ".",
+                           "eval-stopwords": stopwords}, f)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["prefilter.py", "--config", config_path, "src/"])
+            return json.loads(buf.getvalue())[0]
+
+        self.addCleanup(parse.set_stopwords, [])
+        self.assertTrue(run([])["flagged"],
+                        "unlisted function words must inflate the similarity")
+        self.assertFalse(run(["les", "des", "la", "applique", "effets", "main"])["flagged"],
+                         "declared function words must be dropped before the Jaccard")
 
 
 if __name__ == "__main__":

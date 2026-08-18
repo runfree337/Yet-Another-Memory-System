@@ -250,6 +250,11 @@ directories) and flags which groups are lexically confusable — near-duplicate 
 (`checks/index-eval/lib/lexsim.py`, pairwise Jaccard) — worth spending an LLM-judged routing
 pass on. **Inactive without configuration**, like `index-check.py`.
 
+A project whose intents are not in English declares its function words in the same config,
+under `eval-stopwords` (`checks/index-eval/lib/parse.py` seeds itself from it at import, so the
+guard used by the LLM pass gets them too). Leaving them out does not raise — it counts `des` and
+`les` as content, which inflates both the pairwise similarity and the anti-leakage ratio.
+
 | Parameter | Effect | Default |
 |---|---|---|
 | `group prefix…` | limits the prefilter to these path prefixes | `eval-groups` from the config, else derived from the manifest |

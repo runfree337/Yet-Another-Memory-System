@@ -59,7 +59,8 @@ manual, human-reviewed edit via `index/manifest.py set`.
 ## Configuration — `index/index-config.json` <!-- template -->
 
 Same file as `checks/index-check.py` / `index/manifest.py` (schema:
-`index/index-config.example.json`), two keys read by `prefilter.py`:
+`index/index-config.example.json`), three keys read here — the first two by
+`prefilter.py`, the third by `lib/parse.py`:
 
 - **`manifest`** (default `index/manifest.tsv`) — same key/default as `index-check.py`. <!-- template -->
 - **`eval-groups`** (optional array of path prefixes, e.g. `["src/orders/", "src/ui/"]`)
@@ -68,6 +69,16 @@ Same file as `checks/index-check.py` / `index/manifest.py` (schema:
   prefixes actually present in the manifest (`prefilter.derive_groups` — e.g.
   `src/foo/bar.py` yields group `src/`, in first-seen order, deduplicated). A manifest <!-- template -->
   with root-level files only (no directory structure) yields no group either way.
+- **`eval-stopwords`** (optional array of words) — the project's own function words,
+  **added to** the tokenizer's English default. Fill this in when the manifest's intents
+  are not written in English. An unlisted function word counts as **content**, so five
+  unrelated French intents that share `des`/`les` look similar to the lexical prefilter,
+  and a query that shares them with its source intent looks contaminated to the guard.
+  Both failures **inflate a number instead of raising** — nothing surfaces them but the
+  numbers being wrong. Seeded in `lib/parse.py` itself, not at the prefilter's entry
+  point, because the LLM-judged pass imports `lib/guard.py` directly and never runs the
+  prefilter. The tokenizer keeps Latin-1 letters, so an accented word stays one token
+  (`réécrire`, not `r` + `crire`); English is unaffected either way.
 
 Without a config file at all, there is nothing to evaluate (the project hasn't opted
 into per-file index evaluation) → `prefilter.py` prints a clear message and exits `0`
@@ -101,7 +112,11 @@ it resolves the manifest relative to the config's `base`.
   markdown/tests. In flat-manifest mode (the normal path), entries instead come from
   `entries_for_prefix` (no section, `dup` always `False`). `content_tokens(s)` — the
   shared tokenizer (lowercase, drop stopwords, drop tokens <= 2 chars) used by both
-  the guard and the lexical similarity.
+  the guard and the lexical similarity. `extend_stopwords(words)` /
+  `set_stopwords(words)` — add the project's function words to the English default, or
+  replace the previous addition (`set_` is what `--config` uses, so a second config's
+  vocabulary does not stack onto the first's). Seeded automatically at import from
+  `eval-stopwords` (see Configuration).
 - **`lib/guard.py`** → `is_contaminated(query, source_intent, threshold=0.5)` → `bool`
   (true if >= 50% of the query's content words are already in the source intent).
 - **`lib/scorer.py`** → `score_group(truth, route_names, route_name_intent, n_files,
