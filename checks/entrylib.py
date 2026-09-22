@@ -415,6 +415,74 @@ def git_env() -> dict:
             if k not in ("GIT_DIR", "GIT_WORK_TREE")}
 
 
+_IS_SHALLOW = None
+
+
+def is_shallow(cwd: str = None) -> bool:
+    """True when the enclosing clone has a TRUNCATED history (`git clone --depth=N`).
+
+    Why every git-reading rule must ask this first: under a shallow clone the boundary
+    commit has no visible parent, so git answers questions about history with confident
+    LIES rather than with an error. Two shapes, measured 2026-09-22 on a synthetic repo:
+
+      * `git log -1 --format=%cs -- <path>` on a file untouched since before the
+        boundary returns the BOUNDARY's date, not the file's — git treats that commit
+        as having introduced every file in its tree. A file last touched 2026-01-15
+        reported 2026-09-22. This is what makes `*-FRESH` rules cry wolf (measured on
+        a real repo: 15 phantom findings out of 18).
+      * `git log --all -- <path>` on a file genuinely created then deleted before the
+        boundary returns NOTHING — "never existed" is indistinguishable from "deleted".
+        This one is worse: it silently DOWNGRADES a severity that depends on history.
+
+    Neither is a git bug: a shallow clone simply does not carry the answer. The defect
+    is a check that cannot tell "no" from "I cannot see". `git clone --depth=1` is the
+    default of `actions/checkout` and of several hosted agent sandboxes, so this is the
+    common case in CI, not an exotic one.
+
+    Cached: the answer cannot change within a run, and every rule asks.
+    """
+    global _IS_SHALLOW
+    if _IS_SHALLOW is None:
+        try:
+            r = subprocess.run(["git", "rev-parse", "--is-shallow-repository"],
+                               cwd=cwd, env=git_env(), capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=10)
+            _IS_SHALLOW = r.stdout.strip() == "true"
+        except Exception:
+            _IS_SHALLOW = False   # no git at all: the git-reading rules already no-op
+    return _IS_SHALLOW
+
+
+SHALLOW_NOTICE = ("note: the clone is SHALLOW — history-dependent rules are degraded "
+                  "(see `entrylib.is_shallow`). Deepen it (`git fetch --unshallow`, or "
+                  "`--shallow-since=<date>`) before trusting this run on those rules.")
+
+
+def git_last_commit_date(relpath: str, cwd: str = None) -> str | None:
+    """Date (`%cs`) of the last commit touching `relpath`, or None when unknowable.
+
+    Returns None on a SHALLOW clone: the answer git would give is the boundary commit's
+    date (see `is_shallow`), and a freshness rule fed that date reports every untouched
+    file as stale. Callers already treat None as "unversioned -> skip the rule", so the
+    truncated clone lands in the branch that stays quiet instead of the one that lies.
+
+    Single home on purpose: this function was written TWICE, byte for byte, in
+    `backlog-check.py` (E-STATE-FRESH) and `feature-map-check.py` (FM-FRESH). Two copies
+    of one question is a feature with no home — and the guard above would have had to be
+    written twice, which is exactly how the two channels drift apart again.
+    """
+    if is_shallow(cwd):
+        return None
+    try:
+        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", relpath],
+                           cwd=cwd, env=git_env(), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=10)
+    except Exception:
+        return None
+    out = r.stdout.strip()
+    return out or None
+
+
 def repo_root(start: str = None) -> str:
     """Absolute path of the enclosing git repository, or `start` when there is no git.
 

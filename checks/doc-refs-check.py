@@ -392,6 +392,23 @@ def _historical_paths():
     return _HISTORICAL_PATHS
 
 
+def history_is_blind() -> bool:
+    """True when `had_history` cannot tell "never existed" from "cannot see".
+
+    On a SHALLOW clone `git log --all -- <path>` returns nothing for a file created and
+    deleted before the boundary (measured 2026-09-22: 2 commits on a full clone, 0 on a
+    `--depth=50` one). `had_history` then answers False, and the caller reads that as
+    "never created" -> TO-CONFIRM where a full clone says BLOCKING.
+
+    The leniency itself is KEPT — crying BLOCKING on a path one cannot prove ever existed
+    would block commits over planned-but-unbuilt files, which is the very false positive
+    the exact-path rule was narrowed to avoid. What is fixed is the SILENCE: a run that
+    cannot decide severity now says so, instead of handing back a clean-looking
+    to-confirm list that may be hiding a blocking finding.
+    """
+    return entrylib.is_shallow(REPO)
+
+
 def had_history(token):
     # EXACT path only: a homonymous file (same basename) that disappeared elsewhere does
     # NOT make this reference dead. The `*/basename` glob produced false BLOCKING — it was
@@ -638,10 +655,18 @@ def main():
     blocking = [x for x in findings if x[0] == "BLOCKING"]
     for sev, path, line, rule, msg in findings:
         print(f"{sev:11} {path}:{line}  {rule:15} {msg}")
+    blind = history_is_blind()
     if not findings:
         print("doc-refs: OK — no dead references.")
+        if blind:
+            print(entrylib.SHALLOW_NOTICE)
         return 0
     print(f"\ndoc-refs: {len(blocking)} blocking, {len(findings) - len(blocking)} to-confirm.")
+    if blind:
+        print(entrylib.SHALLOW_NOTICE)
+        print("      R-DEAD-PATH severity is NOT decidable here: a path deleted before "
+              "the clone boundary looks never-created, so a BLOCKING finding reads as "
+              "to-confirm. Deepen before reading this list as complete.")
     return 2 if blocking else 1
 
 

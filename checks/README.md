@@ -67,7 +67,7 @@ sets. Recounting those stays a human act, which is what the review step of the D
 
 **Structural — deterministic, hookable:**
 - **Claude Code**: `SessionStart` (post-merge / inter-session drift — start clean) and/or `Stop` (end of turn).
-- **CI**: a job that fails if a check exits ≠ 0.
+- **CI**: a job that fails if a check exits ≠ 0 — and that checks out the history, `fetch-depth: 0`. `actions/checkout` clones at `--depth=1` by default, and a shallow clone makes git answer history questions with confident wrong answers rather than an error: the freshness rules flag every untouched entry, and `R-DEAD-PATH` silently drops from blocking to to-confirm. The checks now SAY when they are degraded (`entrylib.is_shallow`) instead of reporting as if they had run, but saying it is not seeing it — deepen the clone.
 - **Otherwise**: by hand before closing a work item.
 
 > **The silence rule — otherwise it gets expensive.** A `SessionStart` hook's output is **injected into the context** = tokens, paid for the whole session. A check hook must therefore be **silent on success** (nothing printed → 0 tokens) and emit only **one terse line per drift**. Key off the **exit code** or an **ASCII marker** (not parsing localized/accented headers — fragile across locales), never dump the full report.

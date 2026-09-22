@@ -50,7 +50,10 @@ STATE.md itself — the pre-commit stamp did not run on that commit (hook uninst
 `--no-verify`, or absent, e.g. an ephemeral container). Soft by design (a host where part
 of the work happens where no hook can run would make a blocking tier noisy by
 construction), silent on unversioned files, and it never asks for a hand-bump: a drifted
-date self-heals at the next stamped pass.
+date self-heals at the next stamped pass. Silent too on a **shallow clone**, where the date
+git would give is the boundary commit's and every untouched entry would look stale
+(`entrylib.is_shallow`, below); the report then carries `SHALLOW_NOTICE`, so a skipped rule is
+not mistaken for a passed one.
 
 `closure.review` (global settings file) answers, once and for all or not at all, the **Review**
 step of the DoD (step 3): a non-empty string is printed in place of the generic project half
@@ -146,7 +149,9 @@ python3 checks/decisions-check.py --json
 ### `doc-refs-check.py`
 **Intent:** dead/drifted references in the docs. Four rules: **R-DEAD-PATH** (a file path
 cited in a `.md` that no longer/never existed — git heuristic: existed then vanished =
-blocking, never created = to-confirm; the "existed" lookup runs on **one** cached
+blocking, never created = to-confirm — a severity the check declares **undecidable** on a
+shallow clone, where a path deleted before the boundary is indistinguishable from one never
+created (`history_is_blind`, see `entrylib.is_shallow`); the "existed" lookup runs on **one** cached
 `git log --all --name-only` dump per run, never one `git log` per token — hookable even on a
 large history. A path to an existing **directory** counts as alive, same reach as a git
 pathspec. Backticked spans are scanned **in place**: a fragment that looks dead only because
@@ -349,7 +354,8 @@ Public API: `Finding`/`BLOCKING`/`CONFIRM` (the `checks/TEMPLATE.md` template), 
 (required/optional/enum spec per channel), `parse_frontmatter(text)`, `validate_entry(path, meta, channel)`,
 `check_index_concordance(index_path, entries_dir, id_pattern)`, `stamp_updated(path, date_str)`,
 `repo_root(start)` + `stamp_targets(framework, argv, prefix, match)` (the shared `--stamp`
-selector, see below), `load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global
+selector, see below), `is_shallow(cwd)` + `SHALLOW_NOTICE` + `git_last_commit_date(relpath, cwd)`
+(the shared history guard, see below), `load_checks_config(root)` + `cfg_get(cfg, path, default)` (the global
 settings file loader — absent file = defaults, broken file = an error the caller surfaces as
 `CFG-INVALID`).
 
@@ -366,6 +372,36 @@ framework-relative, repo-relative or absolute form, and returns what it could NO
 caller names it on stderr — *a stamp that cannot select its target must never look like a stamp
 that found none*. Regression suite: `checks/tests/test_stamp_targets.py`, every case run twice
 (framework at the root **and** nested), since a flat-only test passes against the broken code.
+
+**`is_shallow` / `git_last_commit_date` — why a truncated clone must be asked about first.**
+Under `git clone --depth=N` git does not ERROR on a question about the history it does not
+carry: it answers something plausible and **wrong**, in two opposite directions, neither
+visible in the output. (1) `git log -1 --format=%cs -- <path>` returns the **boundary**
+commit's date for every file untouched since — the boundary has no visible parent, so git
+treats it as having introduced its whole tree — and the freshness rules then flag every
+untouched entry as stale (measured on a real host repo: **15 phantom findings out of 18**).
+(2) `git log --all -- <path>` returns **nothing** for a file created *and* deleted before the
+boundary, which `doc-refs-check.had_history` reads as "never created" and silently
+**downgrades** `R-DEAD-PATH` from blocking to to-confirm. The second is the dangerous one: a
+blocking finding reads as a to-confirm nobody re-reads. `--depth=1` is the default of
+`actions/checkout`, so this is the ordinary CI case, not an exotic one.
+
+What is fixed is the **silence**, not the leniency. `git_last_commit_date` returns `None` on a
+shallow clone, and its callers already treat `None` as "unversioned -> skip the rule", so a
+degraded clone lands in the branch that stays quiet instead of the one that lies;
+`doc-refs-check.history_is_blind()` keeps the lenient severity (crying blocking over a path one
+cannot prove ever existed is the very false positive the exact-path rule was narrowed to avoid)
+and **says** that the severity is not decidable here. `SHALLOW_NOTICE` is appended to both
+branches of every affected render, **`OK.` included** — an unqualified "OK" would claim a guard
+that did not run. One home on purpose: `git_last_commit_date` was written **twice, byte for
+byte**, in `backlog-check.py` (`E-STATE-FRESH`) and `feature-map-check.py` (`FM-FRESH`), and the
+guard would have had to be written twice too, which is how two channels drift apart again.
+Regression suite: `checks/tests/test_shallow_clone.py` — one origin, two clones (full and
+`--depth=1`), each case carrying its **counter-proof** on the full clone, without which the
+guard would "pass" by disabling the rule everywhere. Two of its seven cases pin the **defect
+itself** (git hands back a wrong date; `had_history` answers false on a genuinely deleted file):
+if they ever stop holding, the guard protects nothing and gets re-examined rather than kept out
+of habit.
 
 | Parameter | Effect | Default |
 |---|---|---|
