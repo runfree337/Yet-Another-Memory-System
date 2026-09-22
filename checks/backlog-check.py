@@ -315,14 +315,10 @@ def _norm_milestone(v):
 # --------------------------------------------------------------------------- #
 
 def _git_last_commit_date(relpath: str) -> str | None:
-    try:
-        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", relpath],
-                            cwd=ROOT, env=entrylib.git_env(), capture_output=True,
-                            text=True, encoding="utf-8", errors="replace", timeout=10)
-    except Exception:
-        return None
-    out = r.stdout.strip()
-    return out or None
+    # Thin alias over the single home in `entrylib` — which also returns None on a
+    # SHALLOW clone, where git would answer with the boundary commit's date instead of
+    # the file's and turn every untouched entry into a phantom staleness finding.
+    return entrylib.git_last_commit_date(relpath, cwd=ROOT)
 
 
 def check_freshness(state_rel: str, meta: dict) -> list[Finding]:
@@ -701,14 +697,18 @@ def run() -> list[Finding]:
 
 
 def render_text(findings: list[Finding]) -> str:
+    # A degraded run says so. On a shallow clone the freshness rule is SKIPPED (it would
+    # otherwise read the boundary commit's date and flag every untouched entry): "OK" on
+    # its own would then claim a guard that did not run.
+    tail = ("\n" + entrylib.SHALLOW_NOTICE) if entrylib.is_shallow(ROOT) else ""
     if not findings:
-        return "backlog-check: OK."
+        return "backlog-check: OK." + tail
     bloq = [f for f in findings if f.severity == BLOCKING]
     conf = [f for f in findings if f.severity == TO_CONFIRM]
     lines = [f"{f.severity:14} {f.path}:{f.line}  {f.rule}  {f.msg}"
              for f in sorted(findings, key=lambda f: (f.severity != BLOCKING, f.path, f.line))]
     lines.append(f"\n— {len(findings)} finding(s): {len(bloq)} blocking-auto, {len(conf)} to-confirm")
-    return "\n".join(lines)
+    return "\n".join(lines) + tail
 
 
 def main(argv):
