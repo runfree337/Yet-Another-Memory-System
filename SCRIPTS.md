@@ -55,6 +55,22 @@ git would give is the boundary commit's and every untouched entry would look sta
 (`entrylib.is_shallow`, below); the report then carries `SHALLOW_NOTICE`, so a skipped rule is
 not mistaken for a passed one.
 
+**Phases and gates** (`backlog/README.md §Phases`): `phase:` must be one of `framing |
+architecture | plan | plan-audit | build | validation | closure` (`E-PHASE`, blocking), and each
+phase past a gate must hold that gate's proof (`E-GATE`, blocking, cumulative): `spec.md` with
+`validated: <date>`; the architecture doc named by the spec's `architecture:` (a companion, or a
+path resolved from the **repository** root — `entrylib.repo_root`, not the framework root, so a
+framework nested in a subfolder still finds `<subfolder>/architecture/<doc>.md`); `plan.md`; `audit-plan.md`
+with `verdict: pass`; every build task done; `validation.md` with `verdict: pass`. A gate file
+counts only if declared in `docs:`. `E-PHASE-ORDER` (blocking) flags a build task — label
+starting with `backlog.build-task-prefix`, default `Lot`, compared as a whole word — `done` while
+the plan audit has not passed; it is stated on the proof, not the phase, so stepping a phase back
+never trips it. `E-SKIP` (blocking) accepts only `architecture` / `plan-audit` in the spec's
+`skip:` (a bare scalar is read as a one-item list). `E-SPEC-DRIFT` (to-confirm) reuses the
+`E-STATE-FRESH` mechanics on `spec.md` against its `validated:` date. `E-PHASE-MISSING` is
+to-confirm by default and blocking under `backlog.require-phase: true` — a project flips it once
+every work item carries its phase.
+
 `closure.review` (global settings file) answers, once and for all or not at all, the **Review**
 step of the DoD (step 3): a non-empty string is printed in place of the generic project half
 (what "reviewing" means in this project), `false` prints the step as explicitly waived, an
@@ -67,7 +83,7 @@ non-interactive.
 |---|---|---|
 | *(none)* | runs the full check, prints the text report | — |
 | `--json` | same check, JSON output of findings | disabled |
-| `--board` | work-items-by-milestone view with task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
+| `--board` | work-items-by-milestone view with phase and task counts per state (live state pulled from frontmatters + `## Tasks` section) | — |
 | `--state <id>` | expands one specific work item (tasks + counts + `impacts:` ledger); without `<id>` lists the valid ids | — |
 | `--stamp [files…]` | **writes** `updated: <today>` on the cited `STATE.md` files via `entrylib.stamp_updated`, rewrites the file | paths framework-relative, repo-relative or absolute; one that resolves to no file is named on stderr, never swallowed |
 | `--stamp --staged` | same effect as `--stamp`, but scope = `STATE.md` files **staged** in git (`git diff --cached`), and **re-stages** after writing | wired at pre-commit via the stamp home `hooks/stamp-staged.sh` (callers: `adapters/git/pre-commit`, `adapters/claude-code/hooks/pre-commit-stamp.sh`); selection via `entrylib.stamp_targets`, so it holds when the framework is nested |

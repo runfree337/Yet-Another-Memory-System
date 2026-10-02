@@ -10,7 +10,8 @@ format** as the memory channels: it's an instance of the common `ENTRY-TEMPLATE.
 
 `spec` (framing a work item) → **`backlog`** (decided, not yet built) → *in progress: broken into
 tasks* → on delivery, the content **migrates to the durable** and the work item **leaves** the
-backlog.
+backlog. A doc-backed work item makes the chain explicit and checkable through its **phases**
+(§Phases below): each gate it passes leaves a file that proves it.
 
 ## Structure
 
@@ -25,6 +26,8 @@ backlog.
   `apres`); `docs` = the folder's companion docs; `updated` = last-touched date (formerly `maj`),
   **mechanically stamped** at pre-commit; `milestone` = milestone (formerly `jalon`), an integer or
   `null` (Unplanned); `impacts` = the **impact ledger** (see below).
+- `phase` = where a doc-backed work item stands in its delivery (§Phases); `status` only says
+  whether work has started. A work item in `framing` may be `todo`; past it, `in-progress`.
 - `status: todo | in-progress` (in the frontmatter for a doc-backed item, the badge for an inline
   one). Done → **removed** (no accumulating "done" status — a work item never turns
   `status: done`, it leaves the backlog). The `INDEX.md` line for a doc-backed item carries only
@@ -33,8 +36,11 @@ backlog.
   words (default 60) is flagged `I-ENTRY-LEN` (to-confirm) — detail and history live in the work
   item's folder and `git log`, never in the index.
 - **Opening** a doc-backed work item = `mkdir <id>/` + a `STATE.md` copied from
-  `STATE.template.md` (frontmatter + `## Tasks` + `## Remaining`) + its line in `INDEX.md`
-  (no badge).
+  `STATE.template.md` (frontmatter with `phase: framing` + `## Tasks` + `## Remaining`) + a
+  `spec.md` carrying only the **intent**, written at once + its line in `INDEX.md` (no badge).
+  The only task is framing it (`- [todo] Frame the work item with the user → spec.md`), and the
+  AI **asks the user whether to frame it now**. An inline item has no phase; one that needs a
+  doc becomes a doc-backed work item.
 - `updated`: **auto-stamped at pre-commit** — the stamp home `hooks/stamp-staged.sh` (the ONE
   script that runs `backlog-check.py --stamp --staged` and its two channel siblings) sets
   `updated = commit date` on staged STATE.md files, **mechanically** (no manual bump, no
@@ -85,6 +91,62 @@ durable home (never left "pending" in STATE.md), the task turns `[done]` with, i
 reference to that home. A `STATE.md` that bloats (content > state + references) is the signal
 that this rule was bypassed — see `checks/backlog-check.py §E-STATE-SIZE / §E-STATE-SECTION`
 (soft, to-confirm).
+
+## Phases — a work item proves each gate it passes
+
+**Intent: once the user and the AI have framed a work item together, the AI can carry it alone to
+closure, and resume it at any step** — everything it needs to resume lives in the repository, not
+in a conversation that gets compacted. The user steps in at framing, then at the end (an issue, or
+a corrective work item, if the result doesn't suit).
+
+`phase:` in the frontmatter of `STATE.md`, in this order:
+
+`framing` → `architecture` → `plan` → `plan-audit` → `build` → `validation` → `closure`
+
+**Gates are cumulative**: a phase requires the proof of every gate it is past.
+`checks/backlog-check.py` enforces them (`E-GATE`, blocking).
+
+| To be in… | the work item needs |
+|---|---|
+| `architecture` and later | `spec.md` (declared in `docs:`) whose frontmatter carries `validated: <date>` — set **only on the user's explicit approval** |
+| `plan` and later | the architecture doc **named by the spec** (`architecture:` in its frontmatter): a companion of the folder (no `/`), or a durable doc it modified (a path from the repository root) |
+| `plan-audit` and later | `plan.md` |
+| `build` and later | `audit-plan.md` whose frontmatter says `verdict: pass` — an **independent** audit of spec + architecture + plan against the real code, never by whoever wrote the plan |
+| `validation` and later | every build task `done` |
+| `closure` | `validation.md` with `verdict: pass` — for **each success criterion of the spec**: what was exercised, the evidence (capture, log, measure), the verdict; plus a last line, "left for the human to judge" |
+
+- **Only `architecture` and `plan-audit` may be skipped** — `skip: [architecture]` in the spec's
+  frontmatter, the reason in its prose (`E-SKIP` otherwise). Framing, plan and validation never
+  skip: a validation can be short (re-read a doc against the spec), it is not skipped. The
+  architecture step is due when the work item modifies an existing architecture, or adds a
+  feature that changes the existing docs.
+- **`architecture:` and `skip:` are written before the user validates the spec** — adding them
+  afterwards would be editing a validated spec.
+- **Build tasks start with the word `Lot`** (`backlog.build-task-prefix`): it is how the check
+  sees a build task done before the plan audit passed (`E-PHASE-ORDER`, blocking). A written rule
+  of the protocol, not a convention — the check sees the label, not the code.
+- **A file created along the way** (a gate file, `questions.md`) enters `docs:` **in the same
+  commit** — otherwise `E-DOCS`.
+- **Each gate passed is committed**: gate file written, task ticked, `phase:` advanced, commit. A
+  crash loses at most the step in progress.
+- **A red gate** (blocking audit, failed validation): step `phase:` back, the task says why, fix,
+  run the gate again. If the fix would touch the **spec** — the intent the user validated — remove
+  `validated:` and set `phase: framing` **in the same commit**, then stop and ask. Stop as well at
+  the second failed validation on the same point.
+- **A task waiting on the user** (an open question, a text only the user may approve) turns
+  `blocked`, the question goes to `questions.md` in the folder, and the rest goes on. A work item
+  whose content is the user's to approve cannot reach `closure` without them — by design.
+- **A spec edited after its validation** surfaces as `E-SPEC-DRIFT` (to-confirm): the intent moved
+  without a new validation.
+- **Resuming a work item that predates phases** (migrated to `framing`): name its existing
+  architecture doc in `architecture:`, have the user validate the spec so completed, audit the plan
+  if it never was, and prefix its remaining code tasks with `Lot`.
+- `backlog.require-phase: true` (the project's `checks-config.json`) makes a missing `phase:`
+  blocking once every work item has one; the default only warns, so updating the standard never
+  breaks an adopting project.
+
+How to carry a work item through these phases — batches, delegation, the proof the orchestrator
+never delegates — is the **delivery recipe**, `DELIVERY.md`.
 
 ## The impact ledger — `impacts:`
 

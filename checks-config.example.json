@@ -61,5 +61,11 @@
   "_closure": "Definition of Done, step 3 (`backlog/README.md`). The framework ALWAYS runs its own tier-1 checks at closure; `review` only answers for the PROJECT's review of the delivered surface. Tri-state: key absent or empty = the agent ASKS at each closure (the default — the standard requires the review but never assumes the answer, `INSTALL.md §Guiding principle`); a non-empty string = a standing yes, printed in place of the generic wording (say what reviewing means here: which skill, which agent, which scope); `false` = a standing waiver, printed as such so the choice stays visible. Any other value falls back to asking. There is deliberately NO mechanical check that the review happened — unverifiable without false positives, so out of tier 1 by construction. Example of a declared value: 'standards-auditor agent over the whole work-item surface, not just the last diff'.",
   "closure": {
     "review": ""
+  },
+
+  "_backlog": "Phases and gates of a doc-backed work item (`backlog/README.md §Phases`, `checks/backlog-check.py`). `require-phase` = true once the project has given every work item its `phase:` — a missing one is then BLOCKING (E-PHASE-MISSING); false (default) = a soft warning, so updating the standard warns an adopting project instead of breaking it. `build-task-prefix` = the first word of every build-task label (default \"Lot\"): it is how the check tells code tasks from the others, so that a build task done before the plan audit passed is BLOCKING (E-PHASE-ORDER). Known limit: the check sees the label, not the code — the prefix is a written rule of the protocol, not a convention.",
+  "backlog": {
+    "require-phase": false,
+    "build-task-prefix": "Lot"
   }
 }

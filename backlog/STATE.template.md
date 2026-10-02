@@ -15,7 +15,8 @@ title: <Readable work item title>
 status: todo
 milestone: null
 after: []
-docs: []
+docs: [spec.md]
+phase: framing
 impacts: []
 updated: 2026-07-09
 ---
@@ -23,7 +24,9 @@ updated: 2026-07-09
 <!-- /template -->
 
 `id` = folder name (kebab-case). `status` = `todo | in-progress` (never `done` — a finished work
-item is **removed**, not marked). `milestone` = integer (milestone) or `null` (Unplanned).
+item is **removed**, not marked). `phase` = `framing | architecture | plan | plan-audit | build |
+validation | closure` — each phase past `framing` requires its gate files (`README.md §Phases`);
+a new work item opens in `framing`, with a `spec.md` that carries only its intent. `milestone` = integer (milestone) or `null` (Unplanned).
 `after` = list of work-item `id`s this one depends on. `docs` = list of the folder's companion
 `.md` files (excluding `STATE.md` itself). `impacts` = the **impact ledger**: fill it in **as you
 learn**, during work, as soon as you know a durable doc/memory will need updating — each entry is
@@ -35,9 +38,14 @@ mechanically stamped by `backlog-check.py --stamp`, never by hand.
 ## Tasks
 
 <!-- template -->
-- [done] Frame the work item's intent and write the initial spec.
-- [in-progress] Break the resolution engine down into testable bricks → plan-resolution.md
-- [todo] Write integration tests once the breakdown is stable.
+- [done] Frame the work item with the user → spec.md
+- [done] Architecture → architecture.md
+- [done] Plan → plan.md
+- [done] Plan audit, passed → audit-plan.md
+- [in-progress] Lot 1 — the resolution engine broken into testable bricks
+- [todo] Lot 2 — integration tests once the breakdown is stable
+- [todo] Validation against the spec's success criteria
+- [todo] Definition of Done
 <!-- /template -->
 
 One line = one task. The `<!-- template -->` marker above only exempts the **example paths** in
@@ -46,7 +54,8 @@ this template — it's not a format to copy into a real `STATE.md`'s comments. T
 - `- [<state>] <short label> → <working-doc.md>` — the detail lives in the working doc (inside
   the work item's folder), the label stays short.
 
-States: `todo | in-progress | blocked | done`.
+States: `todo | in-progress | blocked | done`. A **build task starts with the word `Lot`**: it is
+how the check sees code done before the plan audit passed (`README.md §Phases`).
 
 ## Remaining
 

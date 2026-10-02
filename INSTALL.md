@@ -317,7 +317,8 @@ French-keyed corpus; adjust the left column to the legacy at hand):
 
 | Legacy artifact | Target |
 |---|---|
-| per-item state file, local name (`ETAT.md`) | `backlog/<id>/STATE.md`, keys `id/title/status/milestone/after/docs/updated/impacts` |
+| per-item state file, local name (`ETAT.md`) | `backlog/<id>/STATE.md`, keys `id/title/status/milestone/after/docs/updated/impacts/phase` |
+| work items with no phase | every one migrated to `phase: framing` — no legacy spec carries `validated:` yet, and a phase must be provable; each re-validates at its resumption (`backlog/README.md §Phases`). Then `backlog.require-phase: true`. One mechanical commit, made last, on a fresh main (the pre-commit stamp rewrites every `updated:`) |
 | open status vocabulary (`à faire`, `en cours`) | closed vocabulary `todo` / `in-progress` / `blocked` / `done` |
 | free body sections | `## Tasks` (mandatory) + `## Remaining` (optional), nothing else |
 | decision files without frontmatter | YAML frontmatter (`ENTRY-TEMPLATE.md`) + literal `**Decision**` / `**Why**` / `**Invariant**` markers **prepended** — legacy headings kept below |

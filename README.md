@@ -63,7 +63,9 @@ project's standards", and wiring closure into the existing ritual (e.g. the revi
 - `ENTRY-TEMPLATE.md` — the **common memory-entry model** every channel instantiates
   (front matter, index line, confidence lifecycle).
 - `backlog/` — **work in progress**: protocol + INDEX, one `STATE.md` per work item
-  (`STATE.template.md`), the closure Definition of Done.
+  (`STATE.template.md`), its **phases and gates**, the closure Definition of Done.
+- `DELIVERY.md` — how the AI **carries a work item alone** once its spec is validated: the loop
+  over the phases, batches, the frozen batch prompt, the proof it never delegates.
 - `DASHBOARD.md` — the **current state**, one page (the "state" leg of plan / state / todo).
 - `FEATURE_MAP.md` + `features/` — "feature" channel: index + one file per entry.
 - `decisions/` — "decision" channel: protocol + INDEX + one file per decision.

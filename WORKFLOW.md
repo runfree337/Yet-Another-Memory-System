@@ -143,7 +143,7 @@ At the end of a work item, **ask the question**: *did this work reveal a reusabl
 
 ## Delegation (for heavy lifting)
 
-When a task exceeds a single pass, break it down and hand it to **typed roles with clear boundaries** ("does X; does NOT do Y"). The project defines the useful roles; the process only supplies the principle.
+When a task exceeds a single pass, break it down and hand it to **typed roles with clear boundaries** ("does X; does NOT do Y"). The project defines the useful roles; the process only supplies the principle. A doc-backed work item goes through **phases with gates** (`backlog/README.md §Phases`): framed **with** the user until they validate the spec, then carried by the AI alone to closure — how, batch by batch and with the proof it never delegates, is the delivery recipe, `DELIVERY.md`.
 
 ## Deterministic checks (keeping the process honest)
 
