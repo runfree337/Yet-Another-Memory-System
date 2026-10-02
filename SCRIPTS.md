@@ -726,7 +726,7 @@ changed: every doc, decision or recipe still explaining the old contract,
 
 | Command / parameter | Effect | Default |
 |---|---|---|
-| `covers <path> [path…]` | memories citing each path, or a parent dir of it (exact containment, never a substring); only `active` decisions. Each hit ends with **why** it matches: `[exact]`, `[dir <cited-dir>]` (an incidental broad citation reads as such), `[class <Name>]`, `[tag <tag>]`. Exact hits rank first, then deeper dirs | — |
+| `covers <path> [path…]` | memories citing each path, or a parent dir of it (exact containment, never a substring); only `active` decisions. Each hit says **why** it matches, right after its id: `[exact]`, `[class <Name>]`, `[dir <cited-dir>]` (an incidental broad citation reads as such), `[tag <tag>]`. Ranked in that order — a class hit names the file itself, so it beats any folder citation; dirs deepest first | — |
 | `covers --diff <base>` | adds every file changed since `<base>`: committed on the branch (`<base>...HEAD`), staged, unstaged, untracked; deleted and renamed-away files **kept** (their explainers are what closure looks for) | — |
 | `match <term…>` | lexical match (≥4 chars, case/accent-insensitive) on decision ids/titles/tags, feature ids/Roles, recipe titles | — |
 | `neighbors <id> [--depth N]` | typed edges in and out of a node | depth 1 |
@@ -740,9 +740,9 @@ then one closing line naming every uncovered file — silence made visible:
 
 ```
 src/Combat/CombatManager.cs:
-  recipe .claude/skills/combat/SKILL.md — Adding a card effect to combat.  [exact]
-  feature combat-engine — Resolves a combat round.  [exact]
-  feature rundata-save — Save and load the run.  [dir src/Combat/]
+  recipe .claude/skills/combat/SKILL.md [exact] — Adding a card effect to combat.
+  feature combat-engine [exact] — Resolves a combat round.
+  feature rundata-save [dir src/Combat/] — Save and load the run.
 no memory cites: src/Ui/Menu.cs
 ```
 

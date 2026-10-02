@@ -230,7 +230,8 @@ class TestCoversVia(GraphFixture):
         self.assertEqual(via["order-engine"], "exact")
         self.assertEqual(via["broad"], "dir src/orders/")
         self.assertEqual(hits[0][1], "order-engine", "exact hits rank first")
-        self.assertTrue(self.mod.format_covers_line(hits[-1]).endswith("  [dir src/orders/]"))
+        self.assertEqual(self.mod.format_covers_line(hits[-1]),
+                         "feature broad [dir src/orders/] — Broad.")
 
     def test_via_names_class_and_tag(self):
         self._set_config({"class-file-extensions": [".java"]})
@@ -243,11 +244,40 @@ class TestCoversVia(GraphFixture):
         self.assertEqual(via["by-class"], "class OrderManager")
         self.assertEqual(via["D-2026-07-11-02"], "tag ordermanager")
 
+    def test_rank_is_exact_then_class_then_dir_then_tag(self):
+        # A class hit names the file itself: it must beat every `dir` hit
+        # (deep or broad), or the note's cap crowds it out — measured on a host.
+        self._set_config({"class-file-extensions": [".java"]})
+        _write(os.path.join(self.root, "features/aaa-dir-deep.md"),
+               "---\nid: aaa-dir-deep\nupdated: 2026-07-01\n---\n"
+               "**Role:** Deep dir.\n**Code:** `src/orders/`.\n")
+        _write(os.path.join(self.root, "features/aaa-dir-broad.md"),
+               "---\nid: aaa-dir-broad\nupdated: 2026-07-01\n---\n"
+               "**Role:** Broad dir.\n**Code:** `src/`.\n")
+        _write(os.path.join(self.root, "features/zzz-class.md"),
+               "---\nid: zzz-class\nupdated: 2026-07-01\n---\n"
+               "**Role:** Names the class.\n**Code:** `OrderManager`.\n")
+        exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java", exts)
+        self.assertEqual([(h[1], h[3]) for h in hits], [
+            ("order-engine", "exact"),
+            ("zzz-class", "class OrderManager"),
+            ("aaa-dir-deep", "dir src/orders/"),
+            ("aaa-dir-broad", "dir src/"),
+            ("D-2026-07-11-02", "tag ordermanager"),
+        ])
+        # The hook note keeps the same order under its cap.
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        note, _ = self.mod.build_covers_note(
+            self.root, root_abs, {"file_path": "src/orders/OrderManager.java"}, exts)
+        bullets = [l for l in note.split("\n") if l.startswith("- ")]
+        self.assertEqual(bullets[1], "- feature zzz-class [class OrderManager] — Names the class.")
+
     def test_hook_note_shows_the_reason(self):
         root_abs = os.path.abspath(self.root).replace("\\", "/")
         note, _ = self.mod.build_covers_note(
             self.root, root_abs, {"file_path": "src/orders/OrderManager.java"}, set())
-        self.assertIn("- feature order-engine — Drives checkout resolution.  [exact]", note)
+        self.assertIn("- feature order-engine [exact] — Drives checkout resolution.", note)
 
 
 class TestRecipes(GraphFixture):
@@ -332,14 +362,14 @@ class TestMultiPath(GraphFixture):
             set(), grouped=True)
         self.assertEqual(lines, [
             "src/orders/OrderManager.java:",
-            "  feature order-engine — Drives checkout resolution.  [exact]",
+            "  feature order-engine [exact] — Drives checkout resolution.",
             "no memory cites: src/x/A.java, src/y/B.java",
         ])
 
     def test_single_path_keeps_the_flat_output(self):
         self.assertEqual(
             self.mod.covers_report(self.root, ["src/orders/OrderManager.java"], set(), grouped=False),
-            ["feature order-engine — Drives checkout resolution.  [exact]"])
+            ["feature order-engine [exact] — Drives checkout resolution."])
         self.assertEqual(self.mod.covers_report(self.root, ["src/x/A.java"], set(), grouped=False), [])
 
     def test_diff_collects_committed_uncommitted_deleted_and_untracked(self):

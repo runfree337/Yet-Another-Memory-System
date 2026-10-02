@@ -830,8 +830,8 @@ def load_graph(root):
 # ---------------------------------------------------------------------------
 
 def cmd_covers(root, target_path, class_exts=None, nodes=None):
-    """Which memories cover `target_path`. Three EXACT correspondences, in
-    priority order (never fuzzy):
+    """Which memories cover `target_path`. Three EXACT correspondences (never
+    fuzzy; their interleaved ranking is given under `via` below):
     1. a feature/decision/backlog node with a `cite-path` edge whose path is
        EQUAL to the (repo-relative) target, or a directory prefix of it.
        Path hits are ranked by the SPECIFICITY of the best citation — an
@@ -874,8 +874,14 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
     in a parenthesis covers every file below it, and used to say nothing
     about it): `exact` (the node cites this very path), `dir <cited>` (the
     deepest parent directory it cites, as written), `class <Name>` (#2), or
-    `tag <tag>` (#3). Exact hits always rank first (correspondence 1's depth
-    ranking: an exact citation has the target's full segment count).
+    `tag <tag>` (#3).
+
+    Final ranking, across correspondences: `exact` > `class` > `dir` (deepest
+    first, equal depth by id) > `tag`. A class hit names the file itself, so
+    it outranks any folder citation — measured on a host: two fiches naming
+    `CardScorer` sat below three `dir` hits, one of them an `Assets/` fiche
+    on texture compression, and the cap would have cut them. A node reached
+    by several correspondences keeps its best-ranked reason.
 
     Recipe nodes (`recipe-dirs`, opt-in) take part like features: in #1 by
     their cited paths, in #2 by their cited identifiers. Decision nodes take
@@ -909,9 +915,12 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
             depth, cited = max(matched, key=lambda m: m[0])
             via = "exact" if cited.rstrip("/") == target_n else "dir %s" % cited
             path_hits.append((depth, nid, node, via))
-    for _depth, nid, node, via in sorted(path_hits, key=lambda h: (-h[0], h[1])):
-        add(node, nid, via)
+    path_hits.sort(key=lambda h: (-h[0], h[1]))
+    exact_hits = [h for h in path_hits if h[3] == "exact"]
+    dir_hits = [h for h in path_hits if h[3] != "exact"]
 
+    class_hits, tagged = [], []
+    stem = stem_folded = ""
     base = os.path.basename(target_n)
     _, ext = os.path.splitext(base)
     if ext.lower() in class_exts:
@@ -931,10 +940,20 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
             # paragraph in this function's docstring.
             if _code_basename_counts(root_abs, ext.lower()).get(base, 0) > 1:
                 class_hits, tagged = [], []
-        for nid, node in class_hits:
-            add(node, nid, "class %s" % stem)
-        for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
-            add(node, nid, "tag %s" % stem_folded)
+
+    # Rank: exact > class > dir (deepest first, then id) > tag. A class hit
+    # names the file itself; a dir hit only a folder above it — so the class
+    # hit must outrank every dir hit, or under the note's MAX_ENTRIES cap a
+    # broad incidental `Assets/` citation crowds out the fiche about the file.
+    # A node reached twice keeps its best-ranked reason (`add` dedups).
+    for _depth, nid, node, via in exact_hits:
+        add(node, nid, via)
+    for nid, node in class_hits:
+        add(node, nid, "class %s" % stem)
+    for _depth, nid, node, via in dir_hits:
+        add(node, nid, via)
+    for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
+        add(node, nid, "tag %s" % stem_folded)
 
     return hits
 
@@ -1121,13 +1140,15 @@ def cmd_neighbors(root, node_id, depth=1):
 # ---------------------------------------------------------------------------
 
 def format_covers_line(hit):
-    """`<kind> <id> — <title>  [<via>]` — the bracket says which citation made
-    the link (`cmd_covers` docstring)."""
+    """`<kind> <id> [<via>] — <title>` — the bracket says which citation made
+    the link (`cmd_covers` docstring). It sits right after the id, never after
+    the title: a title runs to ~160 chars and would push the reason out of a
+    glance."""
     kind, nid, title = hit[:3]
     via = hit[3] if len(hit) > 3 else ""
     title = sanitize_field(title)
-    core = "%s %s — %s" % (kind, nid, title) if title else "%s %s" % (kind, nid)
-    return "%s  [%s]" % (core, sanitize_field(via)) if via else core
+    head = "%s %s [%s]" % (kind, nid, sanitize_field(via)) if via else "%s %s" % (kind, nid)
+    return "%s — %s" % (head, title) if title else head
 
 
 def format_match_line(entry):

@@ -73,9 +73,10 @@ in, an **ambiguity guard** drops the class/tag hit if two files share that basen
 project's code roots (the convention isn't a filesystem guarantee) — path-containment hits are
 never affected.
 
-Every `covers` hit says **why** it matches — `[exact]`, `[dir <cited-dir>]`, `[class <Name>]` or
-`[tag <tag>]` — so a fiche that names a parent directory in passing reads as the broad citation
-it is, not as a fiche about the file. Several paths (or `--diff <base>`: committed + uncommitted
+Every `covers` hit says **why** it matches, right after its id — `[exact]`, `[class <Name>]`,
+`[dir <cited-dir>]` or `[tag <tag>]`, ranked in that order — so a fiche that names a parent
+directory in passing reads as the broad citation it is, not as a fiche about the file, and
+never outranks one naming the file's class. Several paths (or `--diff <base>`: committed + uncommitted
 changes, deleted files kept) group the answer per file and end with one `no memory cites: …`
 line, so the files nothing explains are named, not just absent.
 
