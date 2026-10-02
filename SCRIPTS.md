@@ -342,6 +342,56 @@ python3 checks/coverage-check.py --diff --staged
 python3 checks/coverage-check.py docs/ --json
 ```
 
+### `measures-check.py`
+**Intent:** flag a **number in the docs that no longer matches what it measures**. A figure copied
+from the repo into a doc (a class size, a count of assets or keys) ages in silence: the code moves,
+the number stays, and the next reader trusts it. Motivating measurement: of 13 doc↔code drifts one
+daily audit surfaced on the reference project, 8 were such copied numbers — and the remedy the
+audit itself prescribed ("re-measure, date it") only wrote a fresh number that would age the same way.
+
+**Declarative, and the measures are the project's.** The number carries, right after it on the
+same line, a marker naming its measure; the check recomputes it and reports the gap. Counting a
+project's assets or sizing its classes is tech-specific, so the framework ships the mechanism and
+no measure: the project declares a Python module in `checks-config.json` (`measures.module`,
+resolved from the repo root) exporting `MEASURES = {"name": fn}`, each `fn(arg) -> number`. A
+measure is reviewed code — never a command read from a doc. Without the key the check is inactive
+(one-line message, exit 0), which is the framework repo's own state.
+
+| Marker | Where | Effect |
+|---|---|---|
+| `<!-- measure: <name>[:<arg>] -->` | right after the number, same line | the LAST number before the marker is compared to `MEASURES[name](arg)` |
+
+What carries **no** marker, on purpose: a dated measurement that cannot be reproduced ("measured
+in play on …"), and a **design value** ("reference dose: 2 × 3 turns"). They are facts or choices,
+not copies of the repo. A marker **quoted as code** — backticks or a fenced block — is a citation,
+not a declaration (the `coverage-check.py` lesson): this very section never triggers the check.
+
+| Rule | Severity | What it proves |
+|---|---|---|
+| `MS-UNKNOWN` | blocking | the marker names a measure the module does not declare — the number is checked by nothing |
+| `MS-NO-NUMBER` | blocking | a marker with no number before it on its line |
+| `MS-STALE` | to-confirm | the number differs from the measure. Not blocking: code moving is normal and must not block an unrelated commit — the doc is due a recount, and the human judges whether the new number changes what the doc concludes |
+| `MS-UNMEASURABLE` | to-confirm | the measure raised — its target is gone or its argument wrong; the doc likely cites something dead |
+| `CFG-INVALID` | blocking | `measures.module` set but missing, unloadable, or without a `MEASURES` dict |
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `<path…>` | files or folders to scan (`.md` only) | the framework root |
+| `--diff` / `--staged` | what changed / what is about to be committed | — |
+| `--value <name[:arg]>` | print the current value of a measure — to write the number in the first place | — |
+| `--list` | the declared measures, with the first docstring line of each | — |
+| `--json` | findings as JSON | text report |
+
+**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING. Silent on success.
+Regression suite: `checks/tests/test_measures_check.py`, including a replay of the founding
+incident (a class size kept in a work item after the class grew).
+
+```bash
+python3 checks/measures-check.py
+python3 checks/measures-check.py --value class-size:src/Scorer.cs
+python3 checks/measures-check.py --staged
+```
+
 ### `entrylib.py`
 **Intent:** **shared library**, NOT a standalone check — an in-house minimal frontmatter
 parser (no yaml dependency) + validation of the common **memory entry** schema

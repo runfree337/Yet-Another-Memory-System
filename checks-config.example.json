@@ -49,6 +49,11 @@
     "code-roots": []
   },
 
+  "_measures": "Settings for `checks/measures-check.py`. `module` = path, resolved from the REPO root, of the project's Python module exporting `MEASURES = {\"name\": fn}`, each `fn(arg: str) -> number`; a doc marker `<!-- measure: name:arg -->` placed right after a number makes the check compare that number to `MEASURES[name](arg)`. The measures are tech-specific and therefore always the project's — the framework ships none. Empty (default) = the check is inactive. Set but missing, unloadable, or without a MEASURES dict = a BLOCKING CFG-INVALID, never a silent no-op.",
+  "measures": {
+    "module": ""
+  },
+
   "_closure": "Definition of Done, step 3 (`backlog/README.md`). The framework ALWAYS runs its own tier-1 checks at closure; `review` only answers for the PROJECT's review of the delivered surface. Tri-state: key absent or empty = the agent ASKS at each closure (the default — the standard requires the review but never assumes the answer, `INSTALL.md §Guiding principle`); a non-empty string = a standing yes, printed in place of the generic wording (say what reviewing means here: which skill, which agent, which scope); `false` = a standing waiver, printed as such so the choice stays visible. Any other value falls back to asking. There is deliberately NO mechanical check that the review happened — unverifiable without false positives, so out of tier 1 by construction. Example of a declared value: 'standards-auditor agent over the whole work-item surface, not just the last diff'.",
   "closure": {
     "review": ""
