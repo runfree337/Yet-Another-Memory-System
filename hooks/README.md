@@ -49,6 +49,8 @@ only source of truth, so the graph can never rot out of sync. Three commands:
 
 ```bash
 python3 hooks/memory-graph.py covers  src/orders/OrderManager.java  # which memories cover this file
+python3 hooks/memory-graph.py covers  a.java b.java                 # several files, grouped per file
+python3 hooks/memory-graph.py covers  --diff main                   # every file changed since main (closure)
 python3 hooks/memory-graph.py match   order clock                  # which decisions/features match these terms
 python3 hooks/memory-graph.py neighbors D-2026-07-11-02             # a node's typed neighborhood
 python3 hooks/memory-graph.py --stdin-json --mode covers|match      # Claude Code adapter
@@ -70,6 +72,19 @@ file's — is a **project** convention (one-symbol-per-file), so it is **opt-in*
 in, an **ambiguity guard** drops the class/tag hit if two files share that basename under the
 project's code roots (the convention isn't a filesystem guarantee) — path-containment hits are
 never affected.
+
+Every `covers` hit says **why** it matches — `[exact]`, `[dir <cited-dir>]`, `[class <Name>]` or
+`[tag <tag>]` — so a fiche that names a parent directory in passing reads as the broad citation
+it is, not as a fiche about the file. Several paths (or `--diff <base>`: committed + uncommitted
+changes, deleted files kept) group the answer per file and end with one `no memory cites: …`
+line, so the files nothing explains are named, not just absent.
+
+Two opt-in sources widen what `covers` reads (both off by default, `checks-config.json →
+memory-graph`): **`recipe-dirs`** — the skills and rules agents follow to the letter become
+`recipe` nodes (their cited paths and identifiers, like a fiche's; excluded from `doctor`, whose
+dead-path job on prose is `doc-refs-check`'s; self-suppressed like a channel) — and
+**`decision-body-paths`** — an active decision's body citations count, not only its INDEX line.
+That is the closure sweep: *what still explains the contract I just changed?*
 
 Two things keep it honest:
 

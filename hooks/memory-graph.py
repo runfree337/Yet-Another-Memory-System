@@ -20,13 +20,17 @@ invocation:
   - **backlog**   `backlog/*/STATE.md` frontmatter (id, title, status, after,
     docs) — `docs:` is a list of doc filenames colocated with the `STATE.md`,
     resolved here to repo-relative paths.
+  - **recipe**    (opt-in, `recipe-dirs`, default OFF) every `.md` under the
+    listed dirs — the skills, rules and agent definitions agents follow to
+    the letter. Not a memory channel: a fifth node KIND read where the
+    recipes already live (id = repo-relative path; see `load_recipes`).
 
 Typed edges: `links` (any→any id), `replaces`/`replaced-by` (decision→decision
-id), `after` (backlog→backlog id), `cite-path` (feature/backlog→path — see
-`load_features`/`load_backlog` docstrings for exactly which sources feed it;
-decisions and memory do NOT contribute `cite-path` edges — only the four
-frontmatter fields named above, per this script's brief; nothing here scans a
-decision's or a memory entry's prose for paths).
+id), `after` (backlog→backlog id), `cite-path` (feature/backlog/recipe→path —
+see `load_features`/`load_backlog`/`load_recipes` docstrings for exactly which
+sources feed it). Memory entries never contribute `cite-path` edges; decisions
+do NOT either unless `decision-body-paths` is on (opt-in, default off: then a
+decision's body backticked paths count, same extraction rule as features).
 
 INVARIANT — the graph is DERIVED, never stored. No cache, no graph file
 written anywhere; every command below re-parses the four channels from disk.
@@ -52,21 +56,36 @@ from config (`checks-config.json → memory-graph`), never hardcoded:
     `checks-config.json` → `memory-graph.class-file-extensions` (default `[]`,
     correspondence OFF). List the extensions whose basename equals an
     identifier (e.g. `[".java"]` for a Java project) to turn it on.
+  - **Recipes** (`recipe-dirs`, default `[]`) and **decision bodies**
+    (`decision-body-paths`, default `false`) are opt-in sources of
+    `cite-path` edges (see above). A listed recipe dir that does not exist is
+    a config error: the hook ignores it silently, the CLI says it on stderr,
+    `doctor` reports it as a blocking CFG-INVALID line.
 
 Four CLI commands (see each `cmd_*` docstring for the exact contract):
 
-  covers    <path>              — which memories cover this file (exact
-                                   containment: equal path, or a repo
+  covers    <path> [path ...]   — which memories cover each file (exact
+            [--diff BASE]          containment: equal path, or a repo
                                    directory prefix of it — never a substring
                                    match; only `status: active` decisions).
+                                   Each hit says WHY it matches: `[exact]`,
+                                   `[dir <cited-dir>]`, `[class <Name>]`,
+                                   `[tag <tag>]`. Several paths, or `--diff`
+                                   (every file changed since BASE, committed
+                                   + uncommitted, deleted kept), group the
+                                   output per file and end with one
+                                   `no memory cites: …` line.
   match     <term> [term ...]   — lexical, case/accent-insensitive match of
                                    terms (>=4 chars only) against decision
-                                   ids/short-titles/tags and feature
-                                   ids/Role lines — never against body prose.
+                                   ids/short-titles/tags, feature ids/Role
+                                   lines and recipe titles — never against
+                                   body prose.
   neighbors <id> [--depth N]    — the typed neighborhood (outgoing AND
                                    incoming edges) of one node.
-  doctor                        — map integrity: every `cite-path` edge must
-                                   resolve on disk; exit 2 (BLOCKING tier —
+  doctor                        — map integrity: every feature/backlog
+                                   `cite-path` edge must resolve on disk
+                                   (recipe and decision citations excluded,
+                                   see `cmd_doctor`); exit 2 (BLOCKING tier —
                                    zero-FP by construction) with a DEAD-CITE
                                    line per failure. Chained into
                                    `checks/memory-audit.py --tier1` (the
@@ -116,8 +135,9 @@ for direct, deliberate lookups):
     every Write/Edit/Grep/Glob call in the repo.
   - **Self-suppression.** Never nudge when the edited/searched target is
     itself a memory channel dir (`decisions/`…, under `channels-base`), a
-    channel index (`FEATURE_MAP.md`/`MEMORY.md`), or a framework tooling dir
-    (`checks/`/`hooks/`/`adapters/` by default, or `self-extra-dirs`) — someone
+    channel index (`FEATURE_MAP.md`/`MEMORY.md`), a framework tooling dir
+    (`checks/`/`hooks/`/`adapters/` by default, or `self-extra-dirs`), or a
+    configured recipe dir (`recipe-dirs`) — someone
     already inside a memory channel or the tooling doesn't need to be told the
     memory graph exists.
   - **Once per target per session.** `--marker <file>` dedups: for `covers`
@@ -166,6 +186,12 @@ DEFAULT_SELF_EXTRA_DIRS = ("checks", "hooks", "adapters")
 # MAX_ENTRIES best and SAYS how many it cut ("… and N more"), never truncating
 # silently, and points at the CLI (uncapped) for the full answer.
 MAX_ENTRIES = 5
+# Node kinds whose `cite-path` edges `doctor` never checks (see `cmd_doctor`).
+DOCTOR_EXCLUDED_KINDS = ("recipe", "decision")
+# Node kinds `match` searches (ids/titles; decisions also their tags). A recipe
+# matches on its title only — its id is a path whose dir names (`skills`,
+# `rules`) would match every recipe at once.
+MATCH_KINDS = ("decision", "feature", "recipe")
 DECISION_ID_RE = re.compile(r'^D-\d{4}-\d{2}-\d{2}-\d+\.md$')
 FRONTMATTER_RE = re.compile(r'^---\n(.*?)\n---\n?', re.S)
 ROLE_RE = re.compile(r'^\*\*Role\s*:\*\*\s*(.*)$', re.M)
@@ -194,7 +220,9 @@ def load_config(root):
     """`checks-config.json → memory-graph` block, or `{}` on any absence/error.
     Tunables: `class-file-extensions` (covers #2/#3 opt-in), `channels-base`
     (subdir the four channels live under, default repo root), `self-extra-dirs`
-    (extra self-suppression roots), `code-roots` (ambiguity-guard scan scope).
+    (extra self-suppression roots), `code-roots` (ambiguity-guard scan scope),
+    `recipe-dirs` (opt-in recipe nodes), `decision-body-paths` (opt-in
+    decision body citations).
     A broken config must never crash a nudge, so every failure degrades to the
     agnostic defaults."""
     try:
@@ -228,6 +256,54 @@ def channels_base(cfg):
     return str(cfg.get("channels-base") or "").strip().strip("/")
 
 
+def recipe_dirs(cfg, root=None):
+    """`(dirs, errors)` for the opt-in recipe channel: `memory-graph.recipe-dirs`
+    normalized to repo-root-relative dirs (slashes stripped, empties dropped),
+    plus a list of human-readable config errors — a non-list value, or (when
+    `root` is given) a listed dir that does not exist. Empty/absent (default)
+    → `([], [])`, the recipe channel is OFF. A missing dir is dropped from
+    `dirs` and reported in `errors`: the hook ignores errors silently (a nudge
+    never breaks the host's tool call), the CLI says them on stderr, and
+    `doctor` turns them into a blocking CFG-INVALID line — a config the user
+    believes active is never silently ignored by the standing audit."""
+    raw = cfg.get("recipe-dirs")
+    if raw is None:
+        return [], []
+    if not isinstance(raw, list):
+        return [], ["memory-graph.recipe-dirs must be a list of dirs, got %r" % (raw,)]
+    dirs, errors = [], []
+    for d in raw:
+        d = str(d).strip().replace("\\", "/").strip("/")
+        if not d:
+            continue
+        if root is not None and not os.path.isdir(os.path.join(root, d)):
+            errors.append("memory-graph.recipe-dirs: %s is not a directory" % d)
+            continue
+        if d not in dirs:
+            dirs.append(d)
+    return dirs, errors
+
+
+def decision_body_paths(cfg):
+    """`(enabled, errors)` for `memory-graph.decision-body-paths`: only a real
+    JSON `true` turns it on; absent → off; any other value → off + an error
+    (same reporting split as `recipe_dirs`)."""
+    raw = cfg.get("decision-body-paths")
+    if raw is None or raw is False:
+        return False, []
+    if raw is True:
+        return True, []
+    return False, ["memory-graph.decision-body-paths must be true or false, got %r" % (raw,)]
+
+
+def config_errors(root, cfg=None):
+    """Every memory-graph config error this engine can name (see `recipe_dirs`
+    / `decision_body_paths`) — what the CLI prints on stderr and `doctor`
+    reports as CFG-INVALID."""
+    cfg = load_config(root) if cfg is None else cfg
+    return recipe_dirs(cfg, root)[1] + decision_body_paths(cfg)[1]
+
+
 def _join_base(base, p):
     """Prefix a repo-relative channel path `p` with `base` (a channels-base),
     or return it unchanged when `base` is empty."""
@@ -237,17 +313,20 @@ def _join_base(base, p):
 
 def resolve_self(cfg):
     """`(self_dirs, self_files)` for the self-suppression guard, honoring
-    `channels-base` and `self-extra-dirs`: the four channel dirs and the two
-    index files under the configured base, plus the framework tooling dirs
-    (default `checks`/`hooks`/`adapters`, overridable)."""
+    `channels-base`, `self-extra-dirs` and `recipe-dirs`: the four channel
+    dirs and the two index files under the configured base, the framework
+    tooling dirs (default `checks`/`hooks`/`adapters`, overridable), and every
+    configured recipe dir — someone editing or searching a recipe is already
+    inside the memory, same as inside a channel."""
     base = channels_base(cfg)
     chan = tuple(_join_base(base, d) for d in CHANNEL_DIR_NAMES)
     extra = cfg.get("self-extra-dirs")
     if not isinstance(extra, list):
         extra = list(DEFAULT_SELF_EXTRA_DIRS)
     extra = tuple(str(e).strip().strip("/") for e in extra if str(e).strip())
+    recipes = tuple(recipe_dirs(cfg)[0])
     self_files = tuple(_join_base(base, f) for f in CHANNEL_INDEX_FILES)
-    return chan + extra, self_files
+    return chan + extra + recipes, self_files
 
 
 # ---------------------------------------------------------------------------
@@ -461,11 +540,17 @@ def load_decision_index(root, base=""):
     return info
 
 
-def load_decisions(root, base=""):
+def load_decisions(root, base="", body_paths=False):
     """`decisions/D-*.md` frontmatter (id, status, links, replaces,
-    replaced-by) merged with the INDEX's short title + tags. No body parsing:
-    a decision contributes NO `cite-path` edges (see module docstring) — only
-    its frontmatter fields decide its edges."""
+    replaced-by) merged with the INDEX's short title + tags. By default no
+    body parsing: a decision contributes NO `cite-path` edges (see module
+    docstring) — only its frontmatter fields decide its edges. With
+    `body_paths` (`memory-graph.decision-body-paths: true`, opt-in), the body's
+    backticked paths (same `extract_paths` rule as features) become
+    `cite-path` edges too — a decision's body often names the files it
+    governs. `covers` still only counts ACTIVE decisions; `doctor` ignores
+    decision citations (a dated record may legitimately name a file it
+    removed)."""
     nodes, edges = {}, []
     index_info = load_decision_index(root, base)
     ddir_rel = _join_base(base, DECISIONS_DIR)
@@ -481,9 +566,10 @@ def load_decisions(root, base=""):
                 text = fh.read()
         except OSError:
             continue
-        fm, _body = parse_frontmatter(text)
+        fm, body = parse_frontmatter(text)
         did = fm.get("id") or name[:-3]
         idx = index_info.get(did, {})
+        cites = extract_paths(body) if body_paths else []
         nodes[did] = {
             "type": "decision",
             "id": did,
@@ -493,7 +579,7 @@ def load_decisions(root, base=""):
             "status": fm.get("status", ""),
             "updated": fm.get("updated", ""),
             "path": ddir_rel + "/" + name,
-            "cites": [],
+            "cites": cites,
         }
         for lid in fm.get("links", []):
             edges.append((did, "links", lid))
@@ -502,6 +588,8 @@ def load_decisions(root, base=""):
         rb = fm.get("replaced-by", "")
         if rb:
             edges.append((did, "replaced-by", rb))
+        for c in cites:
+            edges.append((did, "cite-path", c))
     return nodes, edges
 
 
@@ -549,8 +637,8 @@ def load_features(root, base=""):
 def load_memory(root, base=""):
     """`memory/*.md` frontmatter (id, links) only. The channel may be empty
     (`memory/` may not even exist yet) — this must degrade to empty
-    nodes/edges without raising. No `cite-path` edges (same rule as decisions
-    — only features and backlog cite paths, see module docstring). The node's
+    nodes/edges without raising. No `cite-path` edges, ever (see module
+    docstring for which kinds cite paths). The node's
     title is a best-effort read of the body's first `# H1`, purely for a
     readable `neighbors`/`match` display — the spec for this channel names no
     title source, so this is a convenience, not a contract."""
@@ -628,15 +716,112 @@ def load_backlog(root, base=""):
     return nodes, edges
 
 
+_BLOCK_SCALAR_MARKERS = (">", ">-", ">+", "|", "|-", "|+")
+
+
+def _frontmatter_text_value(text, key):
+    """The value of a frontmatter scalar `key`, including the YAML block-scalar
+    forms recipes routinely use for a long `description:` (`>`/`|` followed by
+    indented lines, folded to one line here) and a quoted single line. The
+    shared `parse_frontmatter` subset stays untouched — this reads only the
+    one key a recipe's title needs."""
+    m = FRONTMATTER_RE.match(text)
+    if not m:
+        return ""
+    lines = m.group(1).split("\n")
+    for i, line in enumerate(lines):
+        if not line.startswith(key + ":"):
+            continue
+        val = line[len(key) + 1:].strip()
+        if val in _BLOCK_SCALAR_MARKERS or not val:
+            parts = []
+            for nxt in lines[i + 1:]:
+                if nxt.strip() and not nxt[:1].isspace():
+                    break
+                parts.append(nxt.strip())
+            return " ".join(p for p in parts if p)
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        return val
+    return ""
+
+
+def _first_sentence(s):
+    """`s` cut at its first sentence end (`. ` / `! ` / `? ` or a final
+    period) — a recipe's `description` is often a paragraph; the title is
+    its first sentence."""
+    s = (s or "").strip()
+    m = re.search(r"[.!?](\s|$)", s)
+    return s[: m.start() + 1].strip() if m else s
+
+
+def load_recipes(root, dirs):
+    """Opt-in fifth node kind (`memory-graph.recipe-dirs`): every `.md` under
+    the listed dirs (recursive, repo-root relative — NOT under channels-base:
+    recipes live with the tooling, e.g. `.claude/skills/`). A recipe is a doc
+    that PRESCRIBES — a skill, a shared rule — and an agent applies it to the
+    letter; a recipe teaching a call to a deleted class is exactly what a
+    closure sweep must find. Node: id = repo-relative path, title = the
+    frontmatter `description`'s first sentence, else the first `# ` heading,
+    else the filename. Edges: its backticked paths (`extract_paths`, same
+    rule as features) → `cite-path`; its bare identifiers → `classes`, used
+    by the opt-in class-name correspondence exactly like a feature's.
+    Unreadable files/dirs degrade to nothing, never raise."""
+    nodes, edges = {}, []
+    for d in dirs:
+        top = os.path.join(root, d)
+        for dirpath, dirnames, filenames in os.walk(top):
+            dirnames[:] = sorted(x for x in dirnames if x not in _WALK_SKIP_DIRS)
+            for fn in sorted(filenames):
+                if not fn.endswith(".md"):
+                    continue
+                full = os.path.join(dirpath, fn)
+                rid = os.path.relpath(full, root).replace(os.sep, "/")
+                if rid in nodes:
+                    continue
+                try:
+                    with open(full, encoding="utf-8", errors="replace") as fh:
+                        text = fh.read()
+                except OSError:
+                    continue
+                _fm, body = parse_frontmatter(text)
+                title = _first_sentence(_frontmatter_text_value(text, "description"))
+                if not title:
+                    m = H1_RE.search(body)
+                    title = m.group(1).strip() if m else fn
+                cites = extract_paths(body)
+                nodes[rid] = {
+                    "type": "recipe",
+                    "id": rid,
+                    "title": title,
+                    "updated": "",
+                    "path": rid,
+                    "cites": cites,
+                    "classes": extract_classes(body),
+                }
+                for c in cites:
+                    edges.append((rid, "cite-path", c))
+    return nodes, edges
+
+
 def load_graph(root):
     """The full derived graph — always recomputed, never cached (module
-    invariant)."""
+    invariant). Config errors (missing recipe dir…) never raise here: the
+    affected opt-in simply contributes nothing; see `config_errors`."""
     nodes, edges = {}, []
-    base = channels_base(load_config(root))
-    for loader in (load_decisions, load_features, load_memory, load_backlog):
+    cfg = load_config(root)
+    base = channels_base(cfg)
+    body_paths = decision_body_paths(cfg)[0]
+    n, e = load_decisions(root, base, body_paths)
+    nodes.update(n)
+    edges.extend(e)
+    for loader in (load_features, load_memory, load_backlog):
         n, e = loader(root, base)
         nodes.update(n)
         edges.extend(e)
+    n, e = load_recipes(root, recipe_dirs(cfg, root)[0])
+    nodes.update(n)
+    edges.extend(e)
     return nodes, edges
 
 
@@ -680,9 +865,22 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
     `nodes`, when given, is a pre-loaded graph (caller already parsed it —
     e.g. the `--prefilter-cache` hook path, to avoid a second `load_graph`
     call); when omitted, this loads the graph itself. Returns EVERY hit as
-    (type, id, title) tuples, ranked — no cap here: the CLI prints the full
-    answer (a deliberate lookup deserves it), and the hook adapters cap the
-    display at MAX_ENTRIES while saying how many they cut."""
+    (type, id, title, via) tuples, ranked — no cap here: the CLI prints the
+    full answer (a deliberate lookup deserves it), and the hook adapters cap
+    the display at MAX_ENTRIES while saying how many they cut.
+
+    `via` names the citation that made the link, so a reader can tell an
+    exact citation from an incidental broad one (a fiche naming a parent dir
+    in a parenthesis covers every file below it, and used to say nothing
+    about it): `exact` (the node cites this very path), `dir <cited>` (the
+    deepest parent directory it cites, as written), `class <Name>` (#2), or
+    `tag <tag>` (#3). Exact hits always rank first (correspondence 1's depth
+    ranking: an exact citation has the target's full segment count).
+
+    Recipe nodes (`recipe-dirs`, opt-in) take part like features: in #1 by
+    their cited paths, in #2 by their cited identifiers. Decision nodes take
+    part in #1 only when `decision-body-paths` is on (otherwise they have no
+    cites)."""
     class_exts = class_exts or set()
     root_abs = os.path.abspath(root).replace("\\", "/")
     target_n = norm_path(target_path, root_abs)
@@ -691,10 +889,10 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
 
     hits, seen = [], set()
 
-    def add(node, nid):
+    def add(node, nid, via):
         if nid not in seen:
             seen.add(nid)
-            hits.append((node["type"], nid, node.get("title", "")))
+            hits.append((node["type"], nid, node.get("title", ""), via))
 
     path_hits = []
     for nid, node in sorted(nodes.items()):
@@ -704,13 +902,15 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
         # matched cite — an exact-file citation has as many segments as the
         # target itself, a directory prefix strictly fewer, so "cites the
         # file" always outranks "cites a folder above it".
-        best = max((cited.rstrip("/").count("/") + 1
-                    for cited in node.get("cites", [])
-                    if is_contained(target_n, cited)), default=0)
-        if best:
-            path_hits.append((best, nid, node))
-    for _depth, nid, node in sorted(path_hits, key=lambda h: (-h[0], h[1])):
-        add(node, nid)
+        matched = [(cited.rstrip("/").count("/") + 1, cited)
+                   for cited in node.get("cites", [])
+                   if is_contained(target_n, cited)]
+        if matched:
+            depth, cited = max(matched, key=lambda m: m[0])
+            via = "exact" if cited.rstrip("/") == target_n else "dir %s" % cited
+            path_hits.append((depth, nid, node, via))
+    for _depth, nid, node, via in sorted(path_hits, key=lambda h: (-h[0], h[1])):
+        add(node, nid, via)
 
     base = os.path.basename(target_n)
     _, ext = os.path.splitext(base)
@@ -719,7 +919,7 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
         stem_folded = norm_text(stem)
         class_hits = [
             (nid, node) for nid, node in sorted(nodes.items())
-            if node["type"] == "feature" and stem in node.get("classes", set())
+            if node["type"] in ("feature", "recipe") and stem in node.get("classes", set())
         ]
         tagged = [
             (nid, node) for nid, node in nodes.items()
@@ -732,9 +932,9 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
             if _code_basename_counts(root_abs, ext.lower()).get(base, 0) > 1:
                 class_hits, tagged = [], []
         for nid, node in class_hits:
-            add(node, nid)
+            add(node, nid, "class %s" % stem)
         for nid, node in sorted(tagged, key=lambda e: _desc_key(e[0])):
-            add(node, nid)
+            add(node, nid, "tag %s" % stem_folded)
 
     return hits
 
@@ -798,12 +998,22 @@ def cmd_doctor(root):
     complains, it just stays silent on the amputated path). Mechanical and
     zero-FP by construction: template/placeholder shapes never become edges
     (`_path_shaped`), so every reported edge is a real citation that fails to
-    resolve. Returns [(node_id, node_path, cited)] sorted for determinism."""
+    resolve. Returns [(node_id, node_path, cited)] sorted for determinism.
+
+    Scope: the DECLARED map only — feature and backlog citations. Recipe
+    citations (`recipe-dirs`) are excluded: a recipe routinely cites example
+    and to-be-created paths, and dead paths in prose docs are
+    `checks/doc-refs-check.py`'s job (which reaches the recipe dirs through
+    `doc-refs.extra-roots`). Decision body citations (`decision-body-paths`)
+    are excluded too: a decision is a dated record and may legitimately name
+    the file it removed."""
     nodes, edges = load_graph(root)
     root_abs = os.path.abspath(root)
     dead = []
     for src, etype, dst in edges:
         if etype != "cite-path":
+            continue
+        if (nodes.get(src) or {}).get("type") in DOCTOR_EXCLUDED_KINDS:
             continue
         target = os.path.join(root_abs, dst.rstrip("/"))
         alive = os.path.isdir(target) if dst.endswith("/") else os.path.exists(target)
@@ -815,9 +1025,9 @@ def cmd_doctor(root):
 
 def cmd_match(root, terms):
     """Lexical, case/accent-insensitive match of `terms` against decision
-    ids/short-titles/tags and feature ids/Role lines (memory and backlog
-    nodes are out of scope for `match` — the spec names only decisions and
-    features). Terms shorter than 4 characters are ignored (too noisy).
+    ids/short-titles/tags, feature ids/Role lines and, when `recipe-dirs` is
+    set, recipe titles only (memory and backlog nodes are out of scope for
+    `match` — the spec names only decisions and features). Terms shorter than 4 characters are ignored (too noisy).
     Requires at least one surviving term to actually hit; returns EVERY hit
     as (score, id, node) tuples, highest score first — no cap here (same
     contract as `cmd_covers`: the CLI prints the full answer, the hook note
@@ -834,9 +1044,11 @@ def cmd_match(root, terms):
     nodes, _edges = load_graph(root)
     scored = []
     for nid, node in nodes.items():
-        if node["type"] not in ("decision", "feature"):
+        if node["type"] not in MATCH_KINDS:
             continue
-        parts = [nid, node.get("title", "")]
+        parts = [node.get("title", "")]
+        if node["type"] != "recipe":
+            parts.append(nid)
         if node["type"] == "decision":
             parts.extend(node.get("tags", []))
         haystack = norm_text(" ".join(parts))
@@ -909,9 +1121,13 @@ def cmd_neighbors(root, node_id, depth=1):
 # ---------------------------------------------------------------------------
 
 def format_covers_line(hit):
-    kind, nid, title = hit
+    """`<kind> <id> — <title>  [<via>]` — the bracket says which citation made
+    the link (`cmd_covers` docstring)."""
+    kind, nid, title = hit[:3]
+    via = hit[3] if len(hit) > 3 else ""
     title = sanitize_field(title)
-    return "%s %s — %s" % (kind, nid, title) if title else "%s %s" % (kind, nid)
+    core = "%s %s — %s" % (kind, nid, title) if title else "%s %s" % (kind, nid)
+    return "%s  [%s]" % (core, sanitize_field(via)) if via else core
 
 
 def format_match_line(entry):
@@ -1017,7 +1233,7 @@ def compute_prefilter_sets(nodes):
             cited = (cited or "").rstrip("/")
             if cited:
                 prefixes.add(cited)
-        if node["type"] == "feature":
+        if node["type"] in ("feature", "recipe"):
             classes.update(node.get("classes", set()) or set())
         if node["type"] == "decision" and node.get("status") == "active":
             tags.update(node.get("tags", []) or [])
@@ -1242,8 +1458,12 @@ def build_argparser():
 
     sub = ap.add_subparsers(dest="command")
 
-    p_covers = sub.add_parser("covers", help="which memories cover this path")
-    p_covers.add_argument("path")
+    p_covers = sub.add_parser("covers", help="which memories cover these paths")
+    p_covers.add_argument("paths", nargs="*", metavar="path")
+    p_covers.add_argument("--diff", metavar="BASE", default=None,
+                          help="also cover every file changed since BASE: committed "
+                               "(BASE...HEAD), staged, unstaged and untracked; "
+                               "deleted and renamed-away files kept")
 
     p_match = sub.add_parser("match", help="lexical node search (decisions + features)")
     p_match.add_argument("terms", nargs="+")
@@ -1258,6 +1478,71 @@ def build_argparser():
     return ap
 
 
+def _git_env():
+    """git subprocess environment with `GIT_DIR`/`GIT_WORK_TREE` purged — under
+    an exported `GIT_DIR` (a git hook) repository discovery is short-circuited
+    and `--root` would be ignored. Same discipline as `checks/entrylib.py
+    git_env`, inlined: this engine is vendored standalone (no entrylib)."""
+    return {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+
+
+def _git_lines(root, args):
+    import subprocess
+    res = subprocess.run(["git"] + args, cwd=root, env=_git_env(), capture_output=True,
+                         text=True, encoding="utf-8", errors="replace", timeout=60)
+    if res.returncode != 0:
+        raise RuntimeError("git %s: %s" % (" ".join(args), res.stderr.strip() or "failed"))
+    return [l.strip() for l in res.stdout.split("\n") if l.strip()]
+
+
+def diff_paths(root, base):
+    """Every path the work changed since `base`, as absolute paths (git
+    reports them toplevel-relative; `cmd_covers` re-normalizes against
+    `root`): committed on the branch (`base...HEAD`, merge-base form),
+    staged, unstaged, and untracked (a new file not yet added is part of
+    the change). `--no-renames` so a renamed file yields BOTH names — the
+    old one is exactly whose explainers a closure sweep must find, same as a
+    deleted file, which is kept. Deduped, first-seen order. Raises
+    RuntimeError on any git failure (bad base, not a repo)."""
+    top = _git_lines(root, ["rev-parse", "--show-toplevel"])[0]
+    out, seen = [], set()
+    for cmd in (["diff", "--name-only", "--no-renames", "%s...HEAD" % base],
+                ["diff", "--name-only", "--no-renames", "--cached"],
+                ["diff", "--name-only", "--no-renames"],
+                ["ls-files", "--others", "--exclude-standard", "--full-name"]):
+        for rel in _git_lines(root, cmd):
+            if rel not in seen:
+                seen.add(rel)
+                out.append(os.path.join(top, rel).replace("\\", "/"))
+    return out
+
+
+def covers_report(root, paths, class_exts, grouped):
+    """CLI text for `covers` over `paths`. Single path, not grouped: one
+    formatted hit per line, nothing when uncovered (the historical output,
+    kept byte-compatible). Grouped (several paths or `--diff`): a `<path>:`
+    header per covered file with its hits indented, then ONE closing line
+    naming every uncovered file (`no memory cites: a, b`) — so silence is
+    visible instead of being an absence. The graph is loaded once."""
+    nodes, _edges = load_graph(root)
+    root_abs = os.path.abspath(root).replace("\\", "/")
+    lines, uncovered = [], []
+    for p in paths:
+        hits = cmd_covers(root, p, class_exts, nodes=nodes)
+        if not grouped:
+            lines.extend(format_covers_line(h) for h in hits)
+            continue
+        shown = norm_path(p, root_abs)
+        if hits:
+            lines.append("%s:" % shown)
+            lines.extend("  %s" % format_covers_line(h) for h in hits)
+        else:
+            uncovered.append(shown)
+    if grouped and uncovered:
+        lines.append("no memory cites: %s" % ", ".join(uncovered))
+    return lines
+
+
 def main():
     ap = build_argparser()
     args = ap.parse_args()
@@ -1265,10 +1550,35 @@ def main():
     if args.stdin_json:
         return hook_main(args)
 
+    cfg_errors = config_errors(args.root)
+    if args.command in ("covers", "match", "neighbors"):
+        for err in cfg_errors:
+            print("memory-graph: CFG-INVALID %s (ignored)" % err, file=sys.stderr)
+
     if args.command == "covers":
         class_exts = class_file_extensions(load_config(args.root))
-        for hit in cmd_covers(args.root, args.path, class_exts):
-            print(format_covers_line(hit))
+        paths, seen = [], set()
+        candidates = list(args.paths)
+        if args.diff is not None:
+            try:
+                candidates += diff_paths(args.root, args.diff)
+            except (RuntimeError, OSError, IndexError) as exc:
+                print("memory-graph covers --diff: %s" % exc, file=sys.stderr)
+                return 2
+        root_abs = os.path.abspath(args.root).replace("\\", "/")
+        for p in candidates:
+            key = norm_path(p, root_abs)
+            if key not in seen:
+                seen.add(key)
+                paths.append(p)
+        if not paths:
+            if args.diff is None:
+                ap.error("covers: give at least one path, or --diff BASE")
+            print("no changed file since %s" % args.diff)
+            return 0
+        grouped = len(paths) > 1 or args.diff is not None
+        for line in covers_report(args.root, paths, class_exts, grouped):
+            print(line)
         return 0
     if args.command == "match":
         for entry in cmd_match(args.root, args.terms):
@@ -1279,10 +1589,16 @@ def main():
             print(format_neighbor_line(entry))
         return 0
     if args.command == "doctor":
+        for err in cfg_errors:
+            print("CFG-INVALID %s" % err)
         dead = cmd_doctor(args.root)
         for nid, node_path, cited in dead:
             print("DEAD-CITE   %s  cite-path resolves to nothing: %s (cited by %s)"
                   % (node_path, cited, nid))
+        if cfg_errors and not dead:
+            print("\nmemory-graph doctor: %d config error(s) — a declared opt-in is inactive."
+                  % len(cfg_errors))
+            return 2
         if not dead:
             print("memory-graph doctor: OK — every cite-path edge resolves.")
             return 0

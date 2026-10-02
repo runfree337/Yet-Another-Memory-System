@@ -220,6 +220,162 @@ class TestCovers(GraphFixture):
                          "archived decision no longer governs the file")
 
 
+class TestCoversVia(GraphFixture):
+    def test_via_names_exact_and_dir_citations(self):
+        _write(os.path.join(self.root, "features/broad.md"),
+               "---\nid: broad\nupdated: 2026-07-01\n---\n"
+               "**Role:** Broad.\n**Code:** (see `src/orders/`).\n")
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
+        via = {h[1]: h[3] for h in hits}
+        self.assertEqual(via["order-engine"], "exact")
+        self.assertEqual(via["broad"], "dir src/orders/")
+        self.assertEqual(hits[0][1], "order-engine", "exact hits rank first")
+        self.assertTrue(self.mod.format_covers_line(hits[-1]).endswith("  [dir src/orders/]"))
+
+    def test_via_names_class_and_tag(self):
+        self._set_config({"class-file-extensions": [".java"]})
+        _write(os.path.join(self.root, "features/by-class.md"),
+               "---\nid: by-class\nupdated: 2026-07-01\n---\n"
+               "**Role:** Names the class.\n**Code:** `OrderManager`.\n")
+        exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java", exts)
+        via = {h[1]: h[3] for h in hits}
+        self.assertEqual(via["by-class"], "class OrderManager")
+        self.assertEqual(via["D-2026-07-11-02"], "tag ordermanager")
+
+    def test_hook_note_shows_the_reason(self):
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        note, _ = self.mod.build_covers_note(
+            self.root, root_abs, {"file_path": "src/orders/OrderManager.java"}, set())
+        self.assertIn("- feature order-engine — Drives checkout resolution.  [exact]", note)
+
+
+class TestRecipes(GraphFixture):
+    def setUp(self):
+        super().setUp()
+        _write(os.path.join(self.root, ".claude/skills/pay/SKILL.md"),
+               "---\nname: pay\ndescription: >-\n  Teaches the payment call. Long tail.\n---\n"
+               "# Pay\nCall `src/pay/OldGateway.java` then `Ledger`.\n")
+        _write(os.path.join(self.root, ".claude/rules/naming.md"),
+               "# Naming rule\nSee `src/pay/`.\n")
+
+    def test_recipe_absent_by_default(self):
+        hits = self.mod.cmd_covers(self.root, "src/pay/OldGateway.java")
+        self.assertEqual(hits, [], "recipe-dirs unset → recipes are not read")
+
+    def test_recipe_found_by_covers(self):
+        self._set_config({"recipe-dirs": [".claude/skills", ".claude/rules/"]})
+        hits = self.mod.cmd_covers(self.root, "src/pay/OldGateway.java")
+        self.assertEqual(hits, [
+            ("recipe", ".claude/skills/pay/SKILL.md", "Teaches the payment call.", "exact"),
+            ("recipe", ".claude/rules/naming.md", "Naming rule", "dir src/pay/"),
+        ])
+
+    def test_recipe_class_correspondence_mirrors_features(self):
+        self._set_config({"recipe-dirs": [".claude/skills"], "class-file-extensions": [".java"]})
+        exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
+        hits = self.mod.cmd_covers(self.root, "lib/Ledger.java", exts)
+        self.assertEqual([(h[1], h[3]) for h in hits],
+                         [(".claude/skills/pay/SKILL.md", "class Ledger")])
+
+    def test_recipe_excluded_from_doctor(self):
+        _write(os.path.join(self.root, "backlog/refacto-x/design.md"), "# design\n")
+        _write(os.path.join(self.root, "src/orders/OrderManager.java"), "x")
+        _write(os.path.join(self.root, "src/orders/TaxCalculator.java"), "x")
+        self._set_config({"recipe-dirs": [".claude/skills"]})
+        self.assertEqual(self.mod.cmd_doctor(self.root), [],
+                         "a recipe's dead example path is doc-refs' job, not doctor's")
+
+    def test_recipe_dir_self_suppresses_and_match_reads_titles(self):
+        self._set_config({"recipe-dirs": [".claude/skills"]})
+        self_dirs, self_files = self.mod.resolve_self(self.mod.load_config(self.root))
+        self.assertTrue(self.mod.is_self_path(".claude/skills/pay/SKILL.md", self_dirs, self_files))
+        ids = [r[1] for r in self.mod.cmd_match(self.root, ["payment"])]
+        self.assertEqual(ids, [".claude/skills/pay/SKILL.md"])
+        self.assertEqual(self.mod.cmd_match(self.root, ["skills"]), [],
+                         "a recipe's id (its path) is not matched")
+
+    def test_missing_recipe_dir_is_a_config_error_never_a_crash(self):
+        self._set_config({"recipe-dirs": [".claude/skills", "nope/"]})
+        errs = self.mod.config_errors(self.root)
+        self.assertEqual(len(errs), 1)
+        self.assertIn("nope", errs[0])
+        # the existing dir still works; the graph never raises
+        self.assertTrue(self.mod.cmd_covers(self.root, "src/pay/OldGateway.java"))
+
+
+class TestDecisionBodyPaths(GraphFixture):
+    def setUp(self):
+        super().setUp()
+        _write(os.path.join(self.root, "decisions/D-2026-07-11-02.md"),
+               "---\nid: D-2026-07-11-02\nstatus: active\nupdated: 2026-07-11\n"
+               "replaces: [D-2026-01-01-01]\n---\n**Decision** governs `src/clock/Tick.java`.\n")
+        _write(os.path.join(self.root, "decisions/D-2026-01-01-01.md"),
+               "---\nid: D-2026-01-01-01\nstatus: archived\nupdated: 2026-01-01\n"
+               "replaced-by: D-2026-07-11-02\n---\n**Decision** governs `src/clock/Tick.java`.\n")
+
+    def test_off_by_default(self):
+        self.assertEqual(self.mod.cmd_covers(self.root, "src/clock/Tick.java"), [])
+
+    def test_on_counts_active_decisions_only(self):
+        self._set_config({"decision-body-paths": True})
+        hits = self.mod.cmd_covers(self.root, "src/clock/Tick.java")
+        self.assertEqual([(h[1], h[3]) for h in hits], [("D-2026-07-11-02", "exact")])
+        self.assertNotIn("D-2026-07-11-02", [d[0] for d in self.mod.cmd_doctor(self.root)],
+                         "a decision's body citation never feeds doctor")
+
+
+class TestMultiPath(GraphFixture):
+    def test_grouped_report_and_visible_silence(self):
+        lines = self.mod.covers_report(
+            self.root, ["src/orders/OrderManager.java", "src/x/A.java", "src/y/B.java"],
+            set(), grouped=True)
+        self.assertEqual(lines, [
+            "src/orders/OrderManager.java:",
+            "  feature order-engine — Drives checkout resolution.  [exact]",
+            "no memory cites: src/x/A.java, src/y/B.java",
+        ])
+
+    def test_single_path_keeps_the_flat_output(self):
+        self.assertEqual(
+            self.mod.covers_report(self.root, ["src/orders/OrderManager.java"], set(), grouped=False),
+            ["feature order-engine — Drives checkout resolution.  [exact]"])
+        self.assertEqual(self.mod.covers_report(self.root, ["src/x/A.java"], set(), grouped=False), [])
+
+    def test_diff_collects_committed_uncommitted_deleted_and_untracked(self):
+        import subprocess
+        env = self.mod._git_env()
+        env.update({"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+
+        def git(*a):
+            subprocess.run(["git"] + list(a), cwd=self.root, env=env, check=True,
+                           capture_output=True)
+        git("init", "-q")
+        for name in ("keep", "gone", "edit", "moved"):
+            _write(os.path.join(self.root, "src/%s.txt" % name), "content of %s\n" % name)
+        git("add", "-A")
+        git("commit", "-q", "-m", "base")
+        git("tag", "base")
+        _write(os.path.join(self.root, "src/committed.txt"), "a")
+        git("add", "src/committed.txt")
+        git("mv", "src/moved.txt", "src/renamed.txt")
+        git("commit", "-q", "-m", "work")                        # committed + rename
+        os.remove(os.path.join(self.root, "src/gone.txt"))       # deleted, unstaged
+        _write(os.path.join(self.root, "src/edit.txt"), "b")    # modified, unstaged
+        _write(os.path.join(self.root, "src/staged.txt"), "a")
+        git("add", "src/staged.txt")                             # staged
+        _write(os.path.join(self.root, "src/new.txt"), "a")     # untracked
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        got = [self.mod.norm_path(p, root_abs) for p in self.mod.diff_paths(self.root, "base")]
+        self.assertEqual(sorted(p for p in got if p.startswith("src/")),
+                         ["src/committed.txt", "src/edit.txt", "src/gone.txt", "src/moved.txt",
+                          "src/new.txt", "src/renamed.txt", "src/staged.txt"])
+        self.assertEqual(len(got), len(set(got)), "deduped")
+        with self.assertRaises(RuntimeError):
+            self.mod.diff_paths(self.root, "no-such-ref")
+
+
 class TestMatch(GraphFixture):
     def test_living_memory_wins_ties(self):
         # Both decisions share the 'order' term; the active one must rank first.
