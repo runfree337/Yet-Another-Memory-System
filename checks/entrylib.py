@@ -484,6 +484,48 @@ def git_last_commit_date(relpath: str, cwd: str = None) -> str | None:
     return out or None
 
 
+def git_gate_commit(relpath: str, regex: str = None, cwd: str = None) -> str | None:
+    """Hash of the commit that set a GATE: the last commit touching `relpath` — or, with
+    `regex`, the last one whose diff adds or removes a line matching it (`git log -G`).
+    None when unknowable (no git, SHALLOW clone, never committed).
+
+    Callers run it only when the gate line is actually there: a `-G` that matches nothing
+    walks the whole history (~1 s on a few thousand commits), and the stop hook runs this.
+    No `--follow`: a rename re-sets the gate at the rename, which is harmless.
+    """
+    if is_shallow(cwd):
+        return None
+    cmd = ["git", "log", "-1", "--format=%H"]
+    if regex:
+        cmd += ["-G", regex]
+    try:
+        r = subprocess.run(cmd + ["--", relpath], cwd=cwd, env=git_env(),
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=20)
+    except Exception:
+        return None
+    out = r.stdout.strip()
+    return (out or None) if r.returncode == 0 else None
+
+
+def git_touched_since(gate: str, relpath: str, cwd: str = None) -> str | None:
+    """Hash of a commit AFTER `gate` (reachable from HEAD, not from `gate`) that touches
+    `relpath`, or None. `rev-list <gate>..HEAD` reads the graph, not dates: same-day
+    commits, clock skew and merges answer right. Any git failure is None — never a
+    drift reported on a question git could not answer."""
+    if not gate or is_shallow(cwd):
+        return None
+    try:
+        r = subprocess.run(["git", "rev-list", "-1", f"{gate}..HEAD", "--", relpath],
+                           cwd=cwd, env=git_env(), capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=20)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
 def repo_root(start: str = None) -> str:
     """Absolute path of the enclosing git repository, or `start` when there is no git.
 

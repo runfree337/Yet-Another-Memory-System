@@ -1,7 +1,7 @@
 # tests/test_backlog_phases.py
 #
 # Regression tests for `backlog-check.py`'s phases and gates (`backlog/README.md §Phases`):
-# E-PHASE, E-PHASE-MISSING, E-GATE, E-PHASE-ORDER, E-SKIP, E-SPEC-DRIFT. What must never
+# E-PHASE, E-PHASE-MISSING, E-GATE, E-PHASE-ORDER, E-SKIP, E-SPEC-DRIFT, E-PLAN-DRIFT. What must never
 # re-open: a work item that claims a phase it cannot prove — building before the plan was
 # audited, closing before anything was validated — passing the check in silence. Each rule
 # here was seen RED by neutralizing it (counter-proof, see the work item that added them).
@@ -16,7 +16,7 @@ import unittest
 CHECKS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PHASE_RULES = {"E-PHASE", "E-PHASE-MISSING", "E-GATE", "E-PHASE-ORDER", "E-SKIP",
-               "E-SPEC-DRIFT"}
+               "E-SPEC-DRIFT", "E-PLAN-DRIFT"}
 
 COMMIT_DAY = "2020-06-15"
 
@@ -185,14 +185,66 @@ class PhaseGates(unittest.TestCase):
                    GIT_AUTHOR_DATE=f"{COMMIT_DAY}T12:00:00")
         subprocess.run(["git", "commit", "-q", "-m", "c"], cwd=self.repo, check=True, env=env)
 
-    def test_spec_committed_after_validation_drifts(self):
+    # The gate is the COMMIT that set the line, not a date: every commit below lands on the
+    # same day (`_commit`), which is exactly the case a date comparison could not see.
+    def test_spec_validated_in_its_only_commit_is_quiet(self):
         cdir = self._item("framing", companions=self._spec(validated="2020-06-14"))
         self._commit()
-        self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-SPEC-DRIFT"])
+        self.assertEqual(self._rules(cdir), [])
 
-    def test_spec_validated_the_day_it_was_committed(self):
-        cdir = self._item("framing", companions=self._spec(validated=COMMIT_DAY))
+    def test_spec_edited_after_validation_the_same_day_blocks(self):
+        self._item("framing", companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec")})
         self._commit()
+        cdir = self._item("framing",
+                          companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec, moved")})
+        self._commit()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-SPEC-DRIFT"])
+
+    def test_skip_added_after_validation_blocks(self):
+        self._item("framing", companions=self._spec(validated=COMMIT_DAY))
+        self._commit()
+        cdir = self._item("framing", companions=self._spec(validated=COMMIT_DAY,
+                                                           skip=["plan-audit"]))
+        self._commit()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-SPEC-DRIFT"])
+
+    def test_revalidated_spec_is_quiet(self):
+        self._item("framing", companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec")})
+        self._commit()
+        self._item("framing", companions={"spec.md": (None, "# Spec, moved")})
+        self._commit()   # stepping back: the line is dropped
+        cdir = self._item("framing",
+                          companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec, moved")})
+        self._commit()   # set again: the gate moves here
+        self.assertEqual(self._rules(cdir), [])
+
+    def test_uncommitted_spec_is_not_judged(self):
+        cdir = self._item("framing", companions=self._spec(validated=COMMIT_DAY))
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-PLAN-DRIFT ------------------------------------------------------- #
+    def _built_then_plan_edited(self, phase="build"):
+        self._item(phase, companions=self._proven_through_audit())
+        self._commit()
+        cdir = self._item(phase, companions=self._proven_through_audit(
+            **{"plan.md": (None, "# Plan, with a new batch")}))
+        self._commit()
+        return cdir
+
+    def test_plan_edited_after_its_audit_blocks_in_build(self):
+        cdir = self._built_then_plan_edited()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-PLAN-DRIFT"])
+
+    def test_a_new_audit_lifts_the_plan_drift(self):
+        self._built_then_plan_edited()
+        cdir = self._item("build", companions=self._proven_through_audit(
+            **{"plan.md": (None, "# Plan, with a new batch"),
+               "audit-plan.md": ({"verdict": "pass"}, "# Audit, second pass")}))
+        self._commit()
+        self.assertEqual(self._rules(cdir), [])
+
+    def test_revising_the_plan_before_build_is_quiet(self):
+        cdir = self._built_then_plan_edited(phase="plan")
         self.assertEqual(self._rules(cdir), [])
 
 

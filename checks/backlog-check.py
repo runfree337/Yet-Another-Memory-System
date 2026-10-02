@@ -87,9 +87,20 @@ Rules:
   E-SKIP         (BLOCKING)      the spec's `skip:` names something other than
                                   `architecture` / `plan-audit` — framing, plan and
                                   validation never skip.
-  E-SPEC-DRIFT   (TO-CONFIRM)    `spec.md` committed after its `validated:` date — the
-                                  intent moved without a new validation. Same soft form as
-                                  E-STATE-FRESH (commit date `%cs`: merge, never rebase).
+  E-SPEC-DRIFT   (BLOCKING)      a GATE REOPENED: a commit touches `spec.md` after the
+                                  commit that set its `validated:` line (`git log -G`, then
+                                  `rev-list <gate>..HEAD`: the commit graph, not dates — a
+                                  same-day edit is seen). Covers `skip:`, which lives in the
+                                  spec. Validated and edited in ONE commit is one gesture.
+                                  Re-validating keeps the same line, so the gesture is: drop
+                                  `validated:` (stepping back, one commit), set it again
+                                  (another commit).
+  E-PLAN-DRIFT   (BLOCKING)      from `build` on, a commit touches `plan.md` after the last
+                                  commit touching `audit-plan.md` (verdict `pass` at HEAD):
+                                  the audit approved another plan. Silent before `build` —
+                                  revising the plan under a still-`pass` audit is the
+                                  prescribed step back. A re-audit is committed WITH
+                                  `audit-plan.md`; any edit to it, even a typo, re-approves.
   I-FLAT         (BLOCKING)      flat `.md` file at the top level of `backlog/` (other than
                                   `INDEX.md`/`README.md`/`STATE.template.md`) — abandoned
                                   tier.
@@ -409,7 +420,7 @@ def check_impacts(path: str, meta: dict) -> list[Finding]:
 
 # --------------------------------------------------------------------------- #
 # Phases and gates — E-PHASE / E-PHASE-MISSING / E-GATE / E-PHASE-ORDER /      #
-# E-SKIP / E-SPEC-DRIFT                                                        #
+# E-SKIP / E-SPEC-DRIFT / E-PLAN-DRIFT                                         #
 # --------------------------------------------------------------------------- #
 
 def _as_list(value):
@@ -506,13 +517,29 @@ def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
 
     validated = (spec or {}).get("validated")
     if validated and entrylib.DATE_RE.match(str(validated)):
-        commit_date = entrylib.git_last_commit_date(rel(os.path.join(cdir, "spec.md")), cwd=ROOT)
-        if commit_date and commit_date > str(validated):
-            findings.append(Finding(TO_CONFIRM, "E-SPEC-DRIFT", state_rel, 1,
-                                    f"spec.md last committed {commit_date}, after its "
-                                    f"« validated: {validated} » — the intent moved without a "
-                                    "new validation; ask the user, then re-date it (or step "
-                                    "back to `framing`)."))
+        spec_rel = rel(os.path.join(cdir, "spec.md"))
+        gate_commit = entrylib.git_gate_commit(spec_rel, r"^validated:", cwd=ROOT)
+        later = entrylib.git_touched_since(gate_commit, spec_rel, cwd=ROOT)
+        if later:
+            findings.append(Finding(BLOCKING, "E-SPEC-DRIFT", state_rel, 1,
+                                    f"spec.md changed in {later[:8]}, after the commit that set "
+                                    f"« validated: » ({gate_commit[:8]}) — the intent moved "
+                                    "without a new validation. Step back: drop `validated:` "
+                                    "and set `phase: framing` in one commit, ask the user, "
+                                    "then set `validated:` again in another commit."))
+
+    if (idx is not None and idx >= PHASES.index("build") and "plan-audit" not in skip
+            and audit is not None and audit.get("verdict") == "pass" and "plan.md" in declared):
+        gate_commit = entrylib.git_gate_commit(rel(os.path.join(cdir, "audit-plan.md")),
+                                               cwd=ROOT)
+        later = entrylib.git_touched_since(gate_commit, rel(os.path.join(cdir, "plan.md")),
+                                           cwd=ROOT)
+        if later:
+            findings.append(Finding(BLOCKING, "E-PLAN-DRIFT", state_rel, 1,
+                                    f"plan.md changed in {later[:8]}, after the plan audit "
+                                    f"({gate_commit[:8]}) — the audit approved another plan. "
+                                    "Re-run the audit and commit it with `audit-plan.md`, or "
+                                    "step back to `plan`."))
     return findings
 
 
