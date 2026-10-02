@@ -114,7 +114,9 @@ it is either perfect or dead weight, and the two are indistinguishable without a
 **channel** (is `decisions/` still distinct from the durable doc in practice, or has the
 placement router quietly collapsed?), per **doc** (the cross-reference density is deliberate,
 but each hop costs an agent context — `WORKFLOW.md §Orients` asks it to read three files
-before touching anything; that budget has never been measured).
+before touching anything; that budget has never been measured on the framework itself — a host
+project measured its own: ~9,100 words loaded at every session start, brought to 4,904 by a
+ratified pass, `knowledge-capture.md §Trimming the standing instructions`).
 
 Deliverable: not a script — a **rubric + a cadence**, in the same tier-2 spirit as
 `checks/memory-audit.md`, plus whatever mechanical counter turns out to be cheap (a check's

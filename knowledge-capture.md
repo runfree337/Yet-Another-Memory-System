@@ -92,3 +92,33 @@ responsibly.
 - **Guard** (`hooks/normative-write-guard.py` <!-- template -->) = **prevention by the harness** —
   the write is intercepted *before* it lands, gated on human confirmation, independent of the
   model's goodwill or the check's next run.
+
+## Trimming the standing instructions — what to check before cutting
+
+Capture adds; nothing above ever removes. But every rule loaded at session start (the shared
+rule files of §3) is **paid at every session**, and it only grows. So the instruction weight is
+worth measuring (words loaded before the first prompt), and trimming it is legitimate work.
+Measured on a host project: one pass took it from ~9,100 to 4,904 words, **every cut ratified
+one by one** by the human. A relevance tool or an "over-constraint" read flags a lot that must
+stay; what the pass learned to check before cutting:
+
+- **A dated internal trap stays**, however imperative or bolded: the interpreter name that does
+  not exist on this machine, the null-check that lies, the shared resource two agents fight
+  over. Those are exactly what a model cannot rediscover alone.
+- **A measured arbitration stays** ("process decisions belong to the user"): it records an
+  answer, not a style.
+- **A rule's incidents move, they are not cut** — to a file of their own, word for word; the
+  rule keeps its statement and a pointer.
+- **A contract is not a repetition**: "the rubric is not here, load it" in an auditing agent,
+  its read-only charter, the "never" lines of a tool — each is what makes the agent parse
+  correctly, even if another file says it too.
+- **An instruction aimed at another model is not an instruction for the agent**: a "no negative
+  clause" rule in a prompt-writing recipe targets the image model the prompt is for.
+- **"Unused" is checked by citations, not by one session's log**: a tool judged unused during a
+  session where its server was disconnected was cited by six recipes.
+- **Two files saying the same thing**: merging them is a preference, not a defect — fix only
+  the pointers that are wrong.
+
+Loading on demand beats deleting: a rule scoped to the paths it governs, or a recipe whose
+routing sits at the top and whose detail lives in references read when needed, costs nothing
+in a session that does not touch its subject.
