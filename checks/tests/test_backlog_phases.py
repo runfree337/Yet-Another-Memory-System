@@ -47,7 +47,7 @@ class PhaseGates(unittest.TestCase):
         self.mod.ROOT = self.root
         self.mod.BACKLOG = os.path.join(self.root, "backlog")
         self.mod.REQUIRE_PHASE = False
-        self.mod.BUILD_TASK_PREFIX = "Lot"
+        self.mod.BUILD_TASK_PREFIX = "Batch"
 
     # -- fixture ----------------------------------------------------------- #
     def _item(self, phase="framing", tasks=(), companions=None, extra_docs=(),
@@ -148,12 +148,12 @@ class PhaseGates(unittest.TestCase):
         comp = self._spec(validated="2020-06-10", skip=["architecture", "plan-audit"])
         comp["plan.md"] = (None, "# Plan")
         self.assertEqual(self._rules(self._item("build", companions=comp,
-                                                tasks=[("done", "Lot 1 — x")])), [])
+                                                tasks=[("done", "Batch 1 — x")])), [])
 
     def test_validation_needs_every_build_task_done(self):
         comp = self._proven_through_audit()
         cdir = self._item("validation", companions=comp,
-                          tasks=[("done", "Lot 1 — a"), ("in-progress", "Lot 2 — b")])
+                          tasks=[("done", "Batch 1 — a"), ("in-progress", "Batch 2 — b")])
         self.assertEqual(self._rules(cdir), ["E-GATE"])
 
     def test_closure_needs_a_passing_validation(self):
@@ -164,16 +164,16 @@ class PhaseGates(unittest.TestCase):
 
     # -- E-PHASE-ORDER ------------------------------------------------------ #
     def test_build_task_done_before_the_audit_blocks(self):
-        cdir = self._item("framing", tasks=[("done", "Lot 1 — wrote code")])
+        cdir = self._item("framing", tasks=[("done", "Batch 1 — wrote code")])
         self.assertEqual(self._rules(cdir), ["E-PHASE-ORDER"])
 
     def test_stepping_back_after_a_passed_audit_does_not_block(self):
         comp = self._proven_through_audit()
-        cdir = self._item("plan", companions=comp, tasks=[("done", "Lot 1 — wrote code")])
+        cdir = self._item("plan", companions=comp, tasks=[("done", "Batch 1 — wrote code")])
         self.assertEqual(self._rules(cdir), [])
 
     def test_prefix_is_a_whole_word(self):
-        cdir = self._item("framing", tasks=[("done", "Lotus position reviewed")])
+        cdir = self._item("framing", tasks=[("done", "Batchwork reviewed")])
         self.assertEqual(self._rules(cdir), [])
 
     # -- E-SKIP ------------------------------------------------------------- #
@@ -253,31 +253,31 @@ class PhaseGates(unittest.TestCase):
     # -- E-VALIDATION-STALE ------------------------------------------------- #
     def _validated_closure(self):
         comp = self._proven_through_audit(**{"validation.md": ({"verdict": "pass"}, "# V")})
-        self._item("closure", companions=comp, tasks=[("done", "Lot 1 — a")])
+        self._item("closure", companions=comp, tasks=[("done", "Batch 1 — a")])
         self._commit()
         return comp
 
     def test_batch_done_after_the_validation_is_reported(self):
         comp = self._validated_closure()
         cdir = self._item("closure", companions=comp,
-                          tasks=[("done", "Lot 1 — a"), ("done", "Lot 2 — b")])
+                          tasks=[("done", "Batch 1 — a"), ("done", "Batch 2 — b")])
         self._commit()
         self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-VALIDATION-STALE"])
 
     def test_validation_that_saw_every_batch_is_quiet(self):
         self._validated_closure()
         cdir = self._item("closure", companions=self._proven_through_audit(
-            **{"validation.md": ({"verdict": "pass"}, "# V")}), tasks=[("done", "Lot 1 — a")])
+            **{"validation.md": ({"verdict": "pass"}, "# V")}), tasks=[("done", "Batch 1 — a")])
         self.assertEqual(self._rules(cdir), [])
 
     # -- E-PHASE-LATE ------------------------------------------------------- #
     def test_batch_in_progress_before_build_is_reported(self):
-        cdir = self._item("framing", tasks=[("in-progress", "Lot 1 — coding already")])
+        cdir = self._item("framing", tasks=[("in-progress", "Batch 1 — coding already")])
         self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-PHASE-LATE"])
 
     def test_batch_in_progress_in_build_is_quiet(self):
         cdir = self._item("build", companions=self._proven_through_audit(),
-                          tasks=[("in-progress", "Lot 1 — coding")])
+                          tasks=[("in-progress", "Batch 1 — coding")])
         self.assertEqual(self._rules(cdir), [])
 
     # -- E-STATUS-PHASE ----------------------------------------------------- #
@@ -302,11 +302,11 @@ class PhaseGates(unittest.TestCase):
         self.assertEqual(self.mod.DEFAULT_BUILD_TASK_PREFIX, "Batch")
 
     def test_emphasis_around_the_prefix_is_ignored(self):
-        cdir = self._item("framing", tasks=[("done", "**Lot** 1 — wrote code")])
+        cdir = self._item("framing", tasks=[("done", "**Batch** 1 — wrote code")])
         self.assertEqual(self._rules(cdir), ["E-PHASE-ORDER"])
 
     def test_plural_prefix_is_reported(self):
-        cdir = self._item("framing", tasks=[("todo", "Lots 1-2 — two at once")])
+        cdir = self._item("framing", tasks=[("todo", "Batches 1-2 — two at once")])
         self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-BUILD-PREFIX"])
 
 
