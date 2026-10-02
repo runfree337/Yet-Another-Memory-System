@@ -63,6 +63,33 @@ Rules:
                                   Soft by design: a host where part of the work happens
                                   where no hook can run would make a blocking tier noisy
                                   by construction. Unversioned/uncommitted file -> ignored.
+  -- Phases and gates (`backlog/README.md §Phases`) --
+  E-PHASE        (BLOCKING)      `phase:` outside framing|architecture|plan|plan-audit|
+                                  build|validation|closure.
+  E-PHASE-MISSING(TO-CONFIRM)    work item with no `phase:` — BLOCKING when
+                                  `backlog.require-phase` is true (a project that has
+                                  migrated); soft by default so updating the standard warns
+                                  an adopting project instead of breaking it.
+  E-GATE         (BLOCKING)      a phase past a gate without that gate's proof. Gates are
+                                  cumulative: `architecture`+ needs `spec.md` with
+                                  `validated: <date>`; `plan`+ needs the file named by the
+                                  spec's `architecture:` (no `/` = a companion of the
+                                  folder; with `/` = from the REPOSITORY root, not the
+                                  framework root) unless `architecture` is skipped;
+                                  `plan-audit`+ needs `plan.md`; `build`+ needs
+                                  `audit-plan.md` with `verdict: pass` unless `plan-audit`
+                                  is skipped; `validation`+ needs every build task done;
+                                  `closure` needs `validation.md` with `verdict: pass`.
+  E-PHASE-ORDER  (BLOCKING)      a build task (label starting with
+                                  `backlog.build-task-prefix`, default `Lot`) is `done`
+                                  while the plan audit has not passed. Stated on the PROOF,
+                                  not the phase, so stepping a phase back never trips it.
+  E-SKIP         (BLOCKING)      the spec's `skip:` names something other than
+                                  `architecture` / `plan-audit` — framing, plan and
+                                  validation never skip.
+  E-SPEC-DRIFT   (TO-CONFIRM)    `spec.md` committed after its `validated:` date — the
+                                  intent moved without a new validation. Same soft form as
+                                  E-STATE-FRESH (commit date `%cs`: merge, never rebase).
   I-FLAT         (BLOCKING)      flat `.md` file at the top level of `backlog/` (other than
                                   `INDEX.md`/`README.md`/`STATE.template.md`) — abandoned
                                   tier.
@@ -151,6 +178,12 @@ def check_config() -> list[Finding]:
 
 # `impacts:` closed vocabulary — a channel keyword or a target path (see check_impacts).
 IMPACT_KEYWORDS = {"decision", "feature", "memory"}
+
+# Phases, in order (`backlog/README.md §Phases`). Only these two gates may be skipped.
+PHASES = ["framing", "architecture", "plan", "plan-audit", "build", "validation", "closure"]
+SKIPPABLE = {"architecture", "plan-audit"}
+REQUIRE_PHASE = entrylib.cfg_get(_CFG, ("backlog", "require-phase"), False) is True
+BUILD_TASK_PREFIX = str(entrylib.cfg_get(_CFG, ("backlog", "build-task-prefix"), "Lot"))
 
 # DoD (cf. backlog/README.md). `{target}` = the work item to remove. Step 1 is a CHECK
 # (capitalization already happened task by task), not heavy lifting. Step 3 REQUIRES the
@@ -375,6 +408,115 @@ def check_impacts(path: str, meta: dict) -> list[Finding]:
 
 
 # --------------------------------------------------------------------------- #
+# Phases and gates — E-PHASE / E-PHASE-MISSING / E-GATE / E-PHASE-ORDER /      #
+# E-SKIP / E-SPEC-DRIFT                                                        #
+# --------------------------------------------------------------------------- #
+
+def _as_list(value):
+    """A frontmatter list key written as a bare scalar (`skip: architecture`) would be
+    iterated letter by letter — normalize it like `impacts:`."""
+    if value is None or value == "":
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _companion_meta(cdir, name, declared):
+    """Frontmatter of a DECLARED companion doc, or None — an undeclared file is no proof
+    (E-DOCS already reports it)."""
+    path = os.path.join(cdir, name)
+    if name not in declared or not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        meta, _body, _err = entrylib.parse_frontmatter(f.read())
+    return meta or {}
+
+
+def is_build_task(label):
+    words = label.split()
+    return bool(words) and words[0].casefold() == BUILD_TASK_PREFIX.casefold()
+
+
+def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
+    """The gates of `backlog/README.md §Phases`. `tasks` = [(lineno, state, label)]."""
+    findings: list[Finding] = []
+    phase = meta.get("phase")
+    idx = None
+    if phase in (None, ""):
+        findings.append(Finding(BLOCKING if REQUIRE_PHASE else TO_CONFIRM, "E-PHASE-MISSING",
+                                state_rel, 1, "no `phase:` in the frontmatter — one of: "
+                                + " | ".join(PHASES) + "."))
+    elif phase not in PHASES:
+        findings.append(Finding(BLOCKING, "E-PHASE", state_rel, 1,
+                                f"`phase: {phase}` — not one of: " + " | ".join(PHASES) + "."))
+    else:
+        idx = PHASES.index(phase)
+
+    spec = _companion_meta(cdir, "spec.md", declared)
+    skip = [str(s).strip() for s in _as_list((spec or {}).get("skip"))]
+    for s in skip:
+        if s not in SKIPPABLE:
+            findings.append(Finding(BLOCKING, "E-SKIP", state_rel, 1,
+                                    f"spec.md `skip:` names « {s} » — only "
+                                    + " / ".join(sorted(SKIPPABLE)) + " may be skipped."))
+    audit = _companion_meta(cdir, "audit-plan.md", declared)
+    audit_passed = "plan-audit" in skip or (audit is not None and audit.get("verdict") == "pass")
+
+    build = [(ln, st, lb) for ln, st, lb in tasks if is_build_task(lb)]
+    if not audit_passed:
+        for lineno, state, label in build:
+            if state == "done":
+                findings.append(Finding(BLOCKING, "E-PHASE-ORDER", state_rel, lineno,
+                                        f"build task « {label} » is done but the plan audit "
+                                        "has not passed (`audit-plan.md` with "
+                                        "`verdict: pass`, or `skip: [plan-audit]`)."))
+
+    def gate(reached, missing):
+        findings.append(Finding(BLOCKING, "E-GATE", state_rel, 1,
+                                f"`phase: {phase}` is past the {reached} gate, but {missing}."))
+
+    if idx is not None:
+        validated = (spec or {}).get("validated")
+        if idx >= 1 and not (validated and entrylib.DATE_RE.match(str(validated))):
+            gate("framing", "`spec.md` has no `validated: <date>` (set on the user's explicit "
+                 "approval)" if spec is not None else "`spec.md` is not a declared companion")
+        if idx >= 2 and "architecture" not in skip:
+            arch = str((spec or {}).get("architecture") or "").strip()
+            if not arch:
+                gate("architecture", "spec.md names no `architecture:` doc (nor "
+                     "`skip: [architecture]`)")
+            elif "/" in arch:
+                if not os.path.isfile(os.path.join(entrylib.repo_root(ROOT), arch)):
+                    gate("architecture", f"`architecture: {arch}` does not exist (resolved "
+                         "from the repository root)")
+            elif arch not in declared or not os.path.isfile(os.path.join(cdir, arch)):
+                gate("architecture", f"`architecture: {arch}` is not a declared companion of "
+                     "the folder")
+        if idx >= 3 and "plan.md" not in declared:
+            gate("plan", "`plan.md` is not a declared companion")
+        if idx >= 4 and not audit_passed:
+            gate("plan-audit", "`audit-plan.md` with `verdict: pass` is missing")
+        if idx >= 5:
+            open_build = [lb for _ln, st, lb in build if st != "done"]
+            if open_build:
+                gate("build", f"{len(open_build)} build task(s) not done (« {open_build[0]} »…)")
+        if idx >= 6:
+            val = _companion_meta(cdir, "validation.md", declared)
+            if val is None or val.get("verdict") != "pass":
+                gate("validation", "`validation.md` with `verdict: pass` is missing")
+
+    validated = (spec or {}).get("validated")
+    if validated and entrylib.DATE_RE.match(str(validated)):
+        commit_date = entrylib.git_last_commit_date(rel(os.path.join(cdir, "spec.md")), cwd=ROOT)
+        if commit_date and commit_date > str(validated):
+            findings.append(Finding(TO_CONFIRM, "E-SPEC-DRIFT", state_rel, 1,
+                                    f"spec.md last committed {commit_date}, after its "
+                                    f"« validated: {validated} » — the intent moved without a "
+                                    "new validation; ask the user, then re-date it (or step "
+                                    "back to `framing`)."))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
 # A work item — frontmatter (entrylib) + tasks + safeguards                   #
 # --------------------------------------------------------------------------- #
 
@@ -465,6 +607,7 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
                                  "into its durable home."))
 
     # E-TASK-SECTION + tasks
+    task_rows = []
     if "Tasks" not in sections:
         findings.append(Finding(BLOCKING, "E-TASK-SECTION", state_rel, 1,
                                  "`## Tasks` section absent (mandatory, `backlog/README.md`)."))
@@ -474,6 +617,7 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
         for lineno, raw in sections["Tasks"]:
             state, label, doc = parse_task(raw)
             total += 1
+            task_rows.append((lineno, state, label))
             if state not in TASK_STATES:
                 findings.append(Finding(BLOCKING, "E-TASK-STATE", state_rel, lineno,
                                          f"task state « {state or '(absent)'} » outside "
@@ -504,6 +648,7 @@ def check_work_item(cid, cdir, ids, milestone_map, seen_ids) -> list[Finding]:
                                      "ready to close with no declared durable impact — really "
                                      "nothing to migrate?"))
 
+    findings += check_phase(cdir, state_rel, meta, task_rows, declared)
     return findings
 
 
@@ -623,6 +768,7 @@ def work_item_state(cid):
     return {
         "id": meta.get("id", cid), "title": meta.get("title"), "status": meta.get("status"),
         "milestone": _norm_milestone(meta.get("milestone")), "updated": meta.get("updated"),
+        "phase": meta.get("phase"),
         "docs": meta.get("docs") or [], "impacts": meta.get("impacts") or [],
         "tasks": tasks, "task_counts": counts,
         "remaining": [content for _, content in sections.get("Remaining", [])],
@@ -641,7 +787,8 @@ def render_state(cid):
         return f"[backlog-check] work item « {cid} » not found (backlog/{cid}/STATE.md).\nWork items: {available}"
     milestone_label = "Unplanned" if st["milestone"] is None else f"Milestone {st['milestone']}"
     lines = [f"Work item {st['id']} — {st['title']}",
-             f"  status : {st['status']}   ·   {milestone_label}   ·   updated {st['updated']}"]
+             f"  status : {st['status']}   ·   phase {st['phase'] or '—'}   ·   {milestone_label}"
+             f"   ·   updated {st['updated']}"]
     suffix = _task_counts_suffix(st["task_counts"])
     lines.append("  tasks  : " + (suffix if suffix else "—"))
     if st["docs"]:
@@ -673,7 +820,8 @@ def render_board():
             cur = grp
             lines.append(f"\n### {grp}")
         status = s.get("status") or "?"
-        line = f"  {icon.get(status, '·')} [{status}] {s.get('id')} — {s.get('title') or s.get('id')}"
+        phase = f" {s['phase']}" if s.get("phase") else ""
+        line = f"  {icon.get(status, '·')} [{status}{phase}] {s.get('id')} — {s.get('title') or s.get('id')}"
         suffix = _task_counts_suffix(s.get("task_counts") or {})
         if suffix:
             line += f"   ({suffix})"
