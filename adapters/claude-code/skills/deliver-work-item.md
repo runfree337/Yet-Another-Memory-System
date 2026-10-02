@@ -28,8 +28,10 @@ user's explicit approval.
   `audit-plan.md` (and `validation.md`) itself — `verdict: pass` only when no blocking finding is
   left open. The audit is never DONE in the context that wrote what it audits: the orchestrator
   launches the auditor as a fresh subagent and copies its report — that is what makes it independent.
-  A re-audit (after a FAIL, or a plan revised in `build`) is committed WITH `audit-plan.md`: its
-  last commit is the gate `E-PLAN-DRIFT` measures the plan against.
+  A re-audit (after a FAIL, or a plan amended in `build`) is committed WITH `audit-plan.md`: its
+  last commit is the gate `E-PLAN-DRIFT` measures the plan against. An amendment in `build` gets a
+  SHORT audit: the auditor is told to judge the amendment only, against the code already
+  delivered — not to re-audit the whole plan, and not to assume nothing is built.
 - **Foreground or background**: a gate the next step depends on (the plan audit) runs in the
   foreground; independent batches run in the background, launched in one message.
 - **Tools that drive a shared application** (an editor bridge, a device) can stall or vanish in a

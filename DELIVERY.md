@@ -49,8 +49,9 @@ everything it needs lives in the repository:
   then deleted.
 - **Build tasks start with `Batch`** — or the word the project set (`backlog/README.md §Phases`).
 - **Touching an approved file reopens its gate**: an edited spec steps back to `framing` (drop
-  `validated:`, ask, set it again in another commit); a plan edited in `build` needs its audit
-  re-run, committed with `audit-plan.md`.
+  `validated:`, ask, set it again in another commit); a plan amended in `build` gets a short
+  audit of the amendment only, added to `audit-plan.md` and committed with it. Progress never
+  goes in `plan.md` — it lives in `STATE.md`.
 
 ## The batch prompt — frozen, copied for every batch
 
