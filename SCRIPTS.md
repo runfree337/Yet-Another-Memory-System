@@ -382,7 +382,10 @@ not a declaration (the `coverage-check.py` lesson): this very section never trig
 | `--list` | the declared measures, with the first docstring line of each | — |
 | `--json` | findings as JSON | text report |
 
-**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING. Silent on success.
+**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING. A clean run says
+**how much** it verified (`OK — N marked number(s) recomputed in M file(s)`), and a run that read no
+marker says `nothing verified` — an absent path or an empty folder must never answer like a full
+pass (the defect `doc-refs-check.py` still has on a folder argument).
 Regression suite: `checks/tests/test_measures_check.py`, including a replay of the founding
 incident (a class size kept in a work item after the class grew).
 

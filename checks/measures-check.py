@@ -130,10 +130,9 @@ def same(doc: str, value) -> bool:
 # Rule                                                                        #
 # --------------------------------------------------------------------------- #
 
-def rule_markers(path: str, lines: list, measures: dict) -> list:
-    """Every marker of the file, checked against its measure. Pure apart from the measures,
-    which are the project's own read-only functions."""
-    out = []
+def declared(lines: list):
+    """Yields `(line_no, spec, numbers_before)` for every DECLARED marker — not inside a fence,
+    not quoted in a backtick span (a marker quoted as code documents the mechanism)."""
     fenced = False
     for i, line in enumerate(lines, 1):
         if line.lstrip().startswith("```"):
@@ -145,28 +144,34 @@ def rule_markers(path: str, lines: list, measures: dict) -> list:
         start = 0
         for m in MARKER.finditer(line):
             if any(a <= m.start() < b for a, b in quoted):
-                continue  # a marker quoted as code documents the mechanism, it declares nothing
-            before = NUMBER.findall(line[start:m.start()])
+                continue
+            yield i, m.group(1), NUMBER.findall(line[start:m.start()])
             start = m.end()
-            spec = m.group(1)
-            if not before:
-                out.append(Finding(BLOCKING, "MS-NO-NUMBER", path, i,
-                                   f"marker `{spec}` has no number before it on its line"))
-                continue
-            doc = before[-1]
-            try:
-                value = measure(measures, spec)
-            except UnknownMeasure as e:
-                out.append(Finding(BLOCKING, "MS-UNKNOWN", path, i,
-                                   f"no measure named `{e.args[0]}` (see --list)"))
-                continue
-            except Exception as e:
-                out.append(Finding(TO_CONFIRM, "MS-UNMEASURABLE", path, i,
-                                   f"`{spec}` could not be measured ({type(e).__name__}: {e})"))
-                continue
-            if not same(doc, value):
-                out.append(Finding(TO_CONFIRM, "MS-STALE", path, i,
-                                   f"the doc says {doc}, `{spec}` measures {value}"))
+
+
+def rule_markers(path: str, lines: list, measures: dict) -> list:
+    """Every declared marker of the file, checked against its measure. Pure apart from the
+    measures, which are the project's own read-only functions."""
+    out = []
+    for i, spec, before in declared(lines):
+        if not before:
+            out.append(Finding(BLOCKING, "MS-NO-NUMBER", path, i,
+                               f"marker `{spec}` has no number before it on its line"))
+            continue
+        doc = before[-1]
+        try:
+            value = measure(measures, spec)
+        except UnknownMeasure as e:
+            out.append(Finding(BLOCKING, "MS-UNKNOWN", path, i,
+                               f"no measure named `{e.args[0]}` (see --list)"))
+            continue
+        except Exception as e:
+            out.append(Finding(TO_CONFIRM, "MS-UNMEASURABLE", path, i,
+                               f"`{spec}` could not be measured ({type(e).__name__}: {e})"))
+            continue
+        if not same(doc, value):
+            out.append(Finding(TO_CONFIRM, "MS-STALE", path, i,
+                               f"the doc says {doc}, `{spec}` measures {value}"))
     return out
 
 
@@ -248,10 +253,13 @@ def main(argv) -> int:
     if not (targets or diff or staged):
         targets = [FRAMEWORK]
     findings = []
-    for path in collect(targets, diff, staged, repo):
+    files = collect(targets, diff, staged, repo)
+    n_markers = 0
+    for path in files:
         with open(path, encoding="utf-8", errors="replace") as fh:
             lines = fh.read().splitlines()
         rel = os.path.relpath(path, repo).replace(os.sep, "/")
+        n_markers += sum(1 for _ in declared(lines))
         findings += rule_markers(rel, lines, measures)
 
     bloq = [f for f in findings if f.severity == BLOCKING]
@@ -262,6 +270,12 @@ def main(argv) -> int:
         for f in sorted(findings, key=lambda f: (f.severity != BLOCKING, f.path, f.line)):
             print(f"{f.severity:14} {f.path}:{f.line}  {f.rule}  {f.msg}")
         print(f"\n— {len(findings)} finding(s): {len(bloq)} blocking-auto, {len(conf)} to-confirm")
+    elif n_markers:
+        print(f"measures-check: OK — {n_markers} marked number(s) recomputed in {len(files)} file(s).")
+    else:
+        # A check that read nothing must not answer like one that verified everything:
+        # an absent path or an empty folder lands here, never on the OK line above.
+        print(f"measures-check: no marked number in scope ({len(files)} .md file(s) read) — nothing verified.")
     return 2 if bloq else (1 if conf else 0)
 
 
