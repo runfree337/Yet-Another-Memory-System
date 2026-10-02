@@ -95,7 +95,10 @@ Rules:
                                   spec. Validated and edited in ONE commit is one gesture.
                                   Re-validating keeps the same line, so the gesture is: drop
                                   `validated:` (stepping back, one commit), set it again
-                                  (another commit).
+                                  (another commit). Known limit: `-G` does not diff merge
+                                  commits, so a `validated:` line set while resolving a
+                                  conflict leaves the gate on an older commit (a false
+                                  drift, rare).
   E-VALIDATION-STALE (TO-CONFIRM) in `closure`, a build task is `done` at HEAD that was
                                   not `done` in STATE.md as read at the last commit of
                                   `validation.md` (`git show`, same parse as everywhere):
@@ -597,8 +600,10 @@ def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
             findings.append(Finding(BLOCKING, "E-PLAN-DRIFT", state_rel, 1,
                                     f"plan.md changed in {later[:8]}, after the plan audit "
                                     f"({gate_commit[:8]}) — the audit approved another plan. "
-                                    "Re-run the audit and commit it with `audit-plan.md`, or "
-                                    "step back to `plan`."))
+                                    "An amended plan gets a SHORT audit of the amendment only, "
+                                    "added to `audit-plan.md` and committed WITH `plan.md`; or "
+                                    "step back to `plan`. Progress belongs in STATE.md, never "
+                                    "in plan.md."))
 
     if idx == PHASES.index("closure"):
         val = _companion_meta(cdir, "validation.md", declared)

@@ -152,10 +152,18 @@ report does not open the gate.
     so the gesture is the red gate's: drop `validated:` (stepping back, one commit), then set it
     again on the user's approval (another commit);
   - **the plan** (`E-PLAN-DRIFT`, blocking, from `build` on): a commit touches `plan.md` after the
-    last commit of `audit-plan.md` — the audit approved another plan. Re-run the audit and commit
-    it with `audit-plan.md`; before `build`, revising the plan is the prescribed step back;
+    last commit of `audit-plan.md` — the audit approved another plan. Before `build`, revising
+    the plan is the prescribed step back;
   - **the validation** (`E-VALIDATION-STALE`, to-confirm, in `closure`): a batch done after the
     last commit of `validation.md` — replay the validation on what it touches.
+- **A plan amended during `build`** — it happens: development teaches what the plan could not
+  know. `plan.md` never carries progress (that is `STATE.md`'s job), so touching it means
+  changing what will be built. The gesture: write the amendment in the plan, have it audited
+  **short** — the same independent auditor, bounded to the amendment, against the code the done
+  batches already delivered —, add that audit as a section of `audit-plan.md`, and commit the
+  amendment and its audit **together**: that commit becomes the gate. A short audit that FAILs
+  flips the single `verdict:` of `audit-plan.md` to `fail` (`E-GATE` then holds the phase) and the
+  phase steps back to `plan`.
 - `status: todo` past `framing` (`E-STATUS-PHASE`) and an `architecture:` path that leaves the
   repository (`E-ARCH-PATH`, absolute or `..`) block.
 - **Resuming a work item that predates phases** (migrated to `framing`): name its existing
