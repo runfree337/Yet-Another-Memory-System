@@ -223,7 +223,11 @@ is the exact fix, after which a project's patterns simply empty out.
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
-channel checks).
+channel checks — and `ARG-MISSING`, an explicit target that does not exist). A folder argument
+is walked for `.md` files. The OK line states how many files were scanned, and a run that read
+none says `nothing verified`: until 2026-10, a folder or an absent path reached the scanner,
+which read nothing from it, and the run answered "OK — no dead references", exit 0 — the shape
+of a full pass, while this very section already promised the one-subfolder form below.
 
 **Template exemption:** an example path (never meant to exist — naming template, config not
 yet created by the project…) escapes the scan via an explicit **HTML marker in
