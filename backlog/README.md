@@ -210,7 +210,8 @@ in its frontmatter.
 4. **Backlog cleared** — the work item + its `INDEX.md` line are **removed** (or status updated if
    partial).
 5. **State updated** — `DASHBOARD.md`: progress of the relevant milestone, hot spots (resolved
-   ones removed / new ones added), date line.
+   ones removed / new ones added), the date. **Not a log**: the work item's story does not go
+   there — it lives in `git log` and `decisions/`.
 6. **Knowledge capture** — ask "reusable method learned here?" and route it if so.
 
 > Until these steps are done, the work item **is not closed**. Step 3 is where the project's own

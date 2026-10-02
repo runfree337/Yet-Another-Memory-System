@@ -8,9 +8,15 @@
      here:
 
          python3 checks/backlog-check.py --board
+
+     NOT a development log. What was done lives in `git log` and `decisions/`; this page
+     only says where things stand. Each update corrects the state that moved, then the date —
+     never a paragraph about the session. A "gist of the last session" line is the seed of the
+     drift: one sentence per session, stacked, measured on a host project at 675 lines of
+     chronicle over a 190-line status.
 -->
 
-> Last updated: <YYYY-MM-DD> — <one-sentence gist of the last session>
+> Last updated: <YYYY-MM-DD>
 
 ## Progress by milestone
 

@@ -46,7 +46,7 @@ For every task, the AI:
 Three roles, never conflated:
 
 - **The plan** (the order, the sequencer) — the **milestone** groups in `backlog/INDEX.md` (`### Milestone N — <name>`). No separate document: the milestone *is* the plan, it orders the work items.
-- **The status** (where things stand, to resume) — `DASHBOARD.md`: progress per milestone + hot spots, in 1 page, updated **at closure** of a work item (`backlog/README.md §DoD`).
+- **The status** (where things stand, to resume) — `DASHBOARD.md`: progress per milestone + hot spots, in 1 page, updated **at closure** of a work item (`backlog/README.md §DoD`). **Not a development log**: what was done lives in `git log` and `decisions/`.
 - **The todo** (work not yet done) — `backlog/INDEX.md` (§Work in progress, above).
 
 The detailed, **live** status view (`checks/backlog-check.py --board`) stays **generated**; never duplicated by hand into `DASHBOARD.md`.
