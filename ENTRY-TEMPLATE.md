@@ -64,7 +64,7 @@ Each channel **details its own rules** in its README (`MEMORY.md`, `decisions/RE
 | **Memory** | `memory/<slug>.md` | `MEMORY.md` | *(none — the common frontmatter is enough)* | No mandatory `status`. |
 | **Decision** | `decisions/D-YYYY-MM-DD-NN.md` | `decisions/INDEX.md` | `status: active \| revoked \| archived`, `replaces: [ids]`, `replaced-by: <id>` | `status` mandatory; revocation/archival is a **`status` + links transition**, verifiable — more than a pure prose discipline. |
 | **Feature** | `features/<slug>.md` | `FEATURE_MAP.md` | *(none — the common frontmatter is enough)* | No mandatory `status`; the body keeps its own sections (Role/Code/Doc/Tests/How to add one). |
-| **Backlog** | `backlog/<id>/STATE.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [paths]` | **Transient** (the *todo*), not a memory entry — but follows the **same entry format**. Tasks under the body's `## Tasks` section carry their own sub-state `todo \| in-progress \| blocked \| done`, distinct from the work item's own `status`. |
+| **Backlog** | `backlog/<id>/STATE.md` | `backlog/INDEX.md` | `status: todo \| in-progress`, `title`, `milestone`, `after: [ids]`, `docs: [paths]`, `phase: framing \| architecture \| plan \| plan-audit \| build \| validation \| closure` | **Transient** (the *todo*), not a memory entry — but follows the **same entry format**. Each `phase` past `framing` requires its gate files (`backlog/README.md §Phases`). Tasks under the body's `## Tasks` section carry their own sub-state `todo \| in-progress \| blocked \| done`, distinct from the work item's own `status`. |
 
 <!-- /template -->
 
