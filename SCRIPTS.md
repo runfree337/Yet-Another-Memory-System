@@ -63,11 +63,21 @@ path resolved from the **repository** root — `entrylib.repo_root`, not the fra
 framework nested in a subfolder still finds `<subfolder>/architecture/<doc>.md`); `plan.md`; `audit-plan.md`
 with `verdict: pass`; every build task done; `validation.md` with `verdict: pass`. A gate file
 counts only if declared in `docs:`. `E-PHASE-ORDER` (blocking) flags a build task — label
-starting with `backlog.build-task-prefix`, default `Lot`, compared as a whole word — `done` while
+starting with `backlog.build-task-prefix`, default `Batch` (`DEFAULT_BUILD_TASK_PREFIX`), compared
+as a whole word, Markdown emphasis around it ignored — `done` while
 the plan audit has not passed; it is stated on the proof, not the phase, so stepping a phase back
 never trips it. `E-SKIP` (blocking) accepts only `architecture` / `plan-audit` in the spec's
-`skip:` (a bare scalar is read as a one-item list). `E-SPEC-DRIFT` (to-confirm) reuses the
-`E-STATE-FRESH` mechanics on `spec.md` against its `validated:` date. `E-PHASE-MISSING` is
+`skip:` (a bare scalar is read as a one-item list). A **gate reopened** is judged on the commit
+graph, never on dates (`entrylib.git_gate_commit`: the last commit touching a file, or with `-G`
+the last one changing a line; `entrylib.git_touched_since`: `rev-list <gate>..HEAD -- <file>`;
+both None on a shallow clone or any git failure): `E-SPEC-DRIFT` (blocking) — `spec.md` touched
+after the commit that set `validated:`; `E-PLAN-DRIFT` (blocking, `build` and later) — `plan.md`
+touched after the last commit of `audit-plan.md`; `E-VALIDATION-STALE` (to-confirm, `closure`) —
+a build task done at HEAD that STATE.md did not have at the last commit of `validation.md`
+(`entrylib.git_show`, path made relative to the framework with `./`). `E-PHASE-LATE`
+(to-confirm) flags a build task in progress before `build`; `E-STATUS-PHASE` (blocking)
+`status: todo` past `framing`; `E-ARCH-PATH` (blocking) an absolute or `..` `architecture:`;
+`E-BUILD-PREFIX` (to-confirm) a plural of the build word. `E-PHASE-MISSING` is
 to-confirm by default and blocking under `backlog.require-phase: true` — a project flips it once
 every work item carries its phase.
 

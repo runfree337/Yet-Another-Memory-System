@@ -66,6 +66,6 @@
   "_backlog": "Phases and gates of a doc-backed work item (`backlog/README.md §Phases`, `checks/backlog-check.py`). `require-phase` = true once the project has given every work item its `phase:` — a missing one is then BLOCKING (E-PHASE-MISSING); false (default) = a soft warning, so updating the standard warns an adopting project instead of breaking it. `build-task-prefix` = the first word of every build-task label (default \"Lot\"): it is how the check tells code tasks from the others, so that a build task done before the plan audit passed is BLOCKING (E-PHASE-ORDER). Known limit: the check sees the label, not the code — the prefix is a written rule of the protocol, not a convention.",
   "backlog": {
     "require-phase": false,
-    "build-task-prefix": "Lot"
+    "build-task-prefix": "Batch"
   }
 }

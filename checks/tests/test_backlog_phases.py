@@ -1,7 +1,8 @@
 # tests/test_backlog_phases.py
 #
 # Regression tests for `backlog-check.py`'s phases and gates (`backlog/README.md §Phases`):
-# E-PHASE, E-PHASE-MISSING, E-GATE, E-PHASE-ORDER, E-SKIP, E-SPEC-DRIFT. What must never
+# E-PHASE, E-PHASE-MISSING, E-GATE, E-PHASE-ORDER, E-SKIP, E-SPEC-DRIFT, E-PLAN-DRIFT,
+# E-VALIDATION-STALE, E-PHASE-LATE, E-STATUS-PHASE, E-ARCH-PATH, E-BUILD-PREFIX. What must never
 # re-open: a work item that claims a phase it cannot prove — building before the plan was
 # audited, closing before anything was validated — passing the check in silence. Each rule
 # here was seen RED by neutralizing it (counter-proof, see the work item that added them).
@@ -16,7 +17,8 @@ import unittest
 CHECKS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PHASE_RULES = {"E-PHASE", "E-PHASE-MISSING", "E-GATE", "E-PHASE-ORDER", "E-SKIP",
-               "E-SPEC-DRIFT"}
+               "E-SPEC-DRIFT", "E-PLAN-DRIFT", "E-VALIDATION-STALE", "E-PHASE-LATE",
+               "E-STATUS-PHASE", "E-ARCH-PATH", "E-BUILD-PREFIX"}
 
 COMMIT_DAY = "2020-06-15"
 
@@ -48,7 +50,8 @@ class PhaseGates(unittest.TestCase):
         self.mod.BUILD_TASK_PREFIX = "Lot"
 
     # -- fixture ----------------------------------------------------------- #
-    def _item(self, phase="framing", tasks=(), companions=None, extra_docs=()):
+    def _item(self, phase="framing", tasks=(), companions=None, extra_docs=(),
+              status="in-progress"):
         """Writes backlog/x/ — `companions` = {name: (frontmatter dict | None, body)}."""
         companions = companions or {}
         cdir = os.path.join(self.mod.BACKLOG, "x")
@@ -67,7 +70,7 @@ class PhaseGates(unittest.TestCase):
         phase_line = f"phase: {phase}\n" if phase is not None else ""
         task_lines = "\n".join(f"- [{s}] {lb}" for s, lb in tasks) or "- [todo] Frame it"
         with open(os.path.join(cdir, "STATE.md"), "w", encoding="utf-8") as fh:
-            fh.write("---\nid: x\ntitle: X\nstatus: in-progress\nmilestone: null\n"
+            fh.write(f"---\nid: x\ntitle: X\nstatus: {status}\nmilestone: null\n"
                      f"docs: [{', '.join(docs)}]\n{phase_line}updated: {COMMIT_DAY}\n---\n\n"
                      f"## Tasks\n{task_lines}\n")
         return cdir
@@ -185,15 +188,126 @@ class PhaseGates(unittest.TestCase):
                    GIT_AUTHOR_DATE=f"{COMMIT_DAY}T12:00:00")
         subprocess.run(["git", "commit", "-q", "-m", "c"], cwd=self.repo, check=True, env=env)
 
-    def test_spec_committed_after_validation_drifts(self):
+    # The gate is the COMMIT that set the line, not a date: every commit below lands on the
+    # same day (`_commit`), which is exactly the case a date comparison could not see.
+    def test_spec_validated_in_its_only_commit_is_quiet(self):
         cdir = self._item("framing", companions=self._spec(validated="2020-06-14"))
         self._commit()
-        self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-SPEC-DRIFT"])
+        self.assertEqual(self._rules(cdir), [])
 
-    def test_spec_validated_the_day_it_was_committed(self):
+    def test_spec_edited_after_validation_the_same_day_blocks(self):
+        self._item("framing", companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec")})
+        self._commit()
+        cdir = self._item("framing",
+                          companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec, moved")})
+        self._commit()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-SPEC-DRIFT"])
+
+    def test_skip_added_after_validation_blocks(self):
+        self._item("framing", companions=self._spec(validated=COMMIT_DAY))
+        self._commit()
+        cdir = self._item("framing", companions=self._spec(validated=COMMIT_DAY,
+                                                           skip=["plan-audit"]))
+        self._commit()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-SPEC-DRIFT"])
+
+    def test_revalidated_spec_is_quiet(self):
+        self._item("framing", companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec")})
+        self._commit()
+        self._item("framing", companions={"spec.md": (None, "# Spec, moved")})
+        self._commit()   # stepping back: the line is dropped
+        cdir = self._item("framing",
+                          companions={"spec.md": ({"validated": COMMIT_DAY}, "# Spec, moved")})
+        self._commit()   # set again: the gate moves here
+        self.assertEqual(self._rules(cdir), [])
+
+    def test_uncommitted_spec_is_not_judged(self):
         cdir = self._item("framing", companions=self._spec(validated=COMMIT_DAY))
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-PLAN-DRIFT ------------------------------------------------------- #
+    def _built_then_plan_edited(self, phase="build"):
+        self._item(phase, companions=self._proven_through_audit())
+        self._commit()
+        cdir = self._item(phase, companions=self._proven_through_audit(
+            **{"plan.md": (None, "# Plan, with a new batch")}))
+        self._commit()
+        return cdir
+
+    def test_plan_edited_after_its_audit_blocks_in_build(self):
+        cdir = self._built_then_plan_edited()
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-PLAN-DRIFT"])
+
+    def test_a_new_audit_lifts_the_plan_drift(self):
+        self._built_then_plan_edited()
+        cdir = self._item("build", companions=self._proven_through_audit(
+            **{"plan.md": (None, "# Plan, with a new batch"),
+               "audit-plan.md": ({"verdict": "pass"}, "# Audit, second pass")}))
         self._commit()
         self.assertEqual(self._rules(cdir), [])
+
+    def test_revising_the_plan_before_build_is_quiet(self):
+        cdir = self._built_then_plan_edited(phase="plan")
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-VALIDATION-STALE ------------------------------------------------- #
+    def _validated_closure(self):
+        comp = self._proven_through_audit(**{"validation.md": ({"verdict": "pass"}, "# V")})
+        self._item("closure", companions=comp, tasks=[("done", "Lot 1 — a")])
+        self._commit()
+        return comp
+
+    def test_batch_done_after_the_validation_is_reported(self):
+        comp = self._validated_closure()
+        cdir = self._item("closure", companions=comp,
+                          tasks=[("done", "Lot 1 — a"), ("done", "Lot 2 — b")])
+        self._commit()
+        self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-VALIDATION-STALE"])
+
+    def test_validation_that_saw_every_batch_is_quiet(self):
+        self._validated_closure()
+        cdir = self._item("closure", companions=self._proven_through_audit(
+            **{"validation.md": ({"verdict": "pass"}, "# V")}), tasks=[("done", "Lot 1 — a")])
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-PHASE-LATE ------------------------------------------------------- #
+    def test_batch_in_progress_before_build_is_reported(self):
+        cdir = self._item("framing", tasks=[("in-progress", "Lot 1 — coding already")])
+        self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-PHASE-LATE"])
+
+    def test_batch_in_progress_in_build_is_quiet(self):
+        cdir = self._item("build", companions=self._proven_through_audit(),
+                          tasks=[("in-progress", "Lot 1 — coding")])
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-STATUS-PHASE ----------------------------------------------------- #
+    def test_todo_status_past_framing_blocks(self):
+        comp = self._spec(validated="2020-06-10")
+        cdir = self._item("architecture", companions=comp, status="todo")
+        self.assertEqual(self._rules(cdir, self.mod.BLOCKING), ["E-STATUS-PHASE"])
+        cdir = self._item("framing", status="todo")
+        self.assertEqual(self._rules(cdir), [])
+
+    # -- E-ARCH-PATH -------------------------------------------------------- #
+    def test_architecture_leaving_the_repository_blocks(self):
+        for arch in ("C:/x.md", "/x.md", "\\x.md", "a/../b.md", "..\\x.md"):
+            comp = self._spec(validated="2020-06-10", architecture=arch)
+            with self.subTest(arch=arch):
+                self.assertIn("E-ARCH-PATH",
+                              self._rules(self._item("plan", companions=comp),
+                                          self.mod.BLOCKING))
+
+    # -- the build prefix --------------------------------------------------- #
+    def test_default_prefix_is_batch(self):
+        self.assertEqual(self.mod.DEFAULT_BUILD_TASK_PREFIX, "Batch")
+
+    def test_emphasis_around_the_prefix_is_ignored(self):
+        cdir = self._item("framing", tasks=[("done", "**Lot** 1 — wrote code")])
+        self.assertEqual(self._rules(cdir), ["E-PHASE-ORDER"])
+
+    def test_plural_prefix_is_reported(self):
+        cdir = self._item("framing", tasks=[("todo", "Lots 1-2 — two at once")])
+        self.assertEqual(self._rules(cdir, self.mod.TO_CONFIRM), ["E-BUILD-PREFIX"])
 
 
 class PhaseGatesNestedFramework(PhaseGates):

@@ -126,9 +126,12 @@ report does not open the gate.
   feature that changes the existing docs.
 - **`architecture:` and `skip:` are written before the user validates the spec** — adding them
   afterwards would be editing a validated spec.
-- **Build tasks start with the word `Lot`** (`backlog.build-task-prefix`): it is how the check
-  sees a build task done before the plan audit passed (`E-PHASE-ORDER`, blocking). A written rule
-  of the protocol, not a convention — the check sees the label, not the code.
+- **Build tasks start with the word `Batch`** (`backlog.build-task-prefix` — a project may set its
+  own word): it is how the check sees a build task done before the plan audit passed
+  (`E-PHASE-ORDER`, blocking) or in progress before `build` (`E-PHASE-LATE`). A written rule of
+  the protocol, not a convention — the check sees the label, not the code. Markdown emphasis
+  around the word is fine; a plural (`Batches 1-2`) is not a build task (`E-BUILD-PREFIX`): one
+  task, one batch.
 - **A file created along the way** (a gate file, `questions.md`) enters `docs:` **in the same
   commit** — otherwise `E-DOCS`.
 - **Each gate passed is committed**: gate file written, task ticked, `phase:` advanced, commit. A
@@ -141,11 +144,23 @@ report does not open the gate.
 - **A task waiting on the user** (an open question, a text only the user may approve) turns
   `blocked`, the question goes to `questions.md` in the folder, and the rest goes on. A work item
   whose content is the user's to approve cannot reach `closure` without them — by design.
-- **A spec edited after its validation** surfaces as `E-SPEC-DRIFT` (to-confirm): the intent moved
-  without a new validation.
+- **A gate reopened is seen by commit, not by date.** `backlog-check` finds the commit that set
+  the gate and asks git whether anything touched the approved file after it — a same-day edit is
+  seen:
+  - **the spec** (`E-SPEC-DRIFT`, blocking): a commit touches `spec.md` after the one that set its
+    `validated:` line — `skip:` included, it lives in the spec. Re-validating keeps the same line,
+    so the gesture is the red gate's: drop `validated:` (stepping back, one commit), then set it
+    again on the user's approval (another commit);
+  - **the plan** (`E-PLAN-DRIFT`, blocking, from `build` on): a commit touches `plan.md` after the
+    last commit of `audit-plan.md` — the audit approved another plan. Re-run the audit and commit
+    it with `audit-plan.md`; before `build`, revising the plan is the prescribed step back;
+  - **the validation** (`E-VALIDATION-STALE`, to-confirm, in `closure`): a batch done after the
+    last commit of `validation.md` — replay the validation on what it touches.
+- `status: todo` past `framing` (`E-STATUS-PHASE`) and an `architecture:` path that leaves the
+  repository (`E-ARCH-PATH`, absolute or `..`) block.
 - **Resuming a work item that predates phases** (migrated to `framing`): name its existing
   architecture doc in `architecture:`, have the user validate the spec so completed, audit the plan
-  if it never was, and prefix its remaining code tasks with `Lot`.
+  if it never was, and prefix its remaining code tasks with the build word (`Batch`).
 - `backlog.require-phase: true` (the project's `checks-config.json`) makes a missing `phase:`
   blocking once every work item has one; the default only warns, so updating the standard never
   breaks an adopting project.
