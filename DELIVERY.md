@@ -22,7 +22,7 @@ everything it needs lives in the repository:
 2. **Do the current phase** with the project's role for it.
 3. **Pass its gate**: write the gate file, add it to `docs:`, tick the task, advance `phase:`,
    **commit**. A crash then loses at most the step in progress.
-4. **A red gate** steps `phase:` back (`backlog/README.md §Phases`): fix and run the gate again;
+4. **A red gate** steps `phase:` back (`backlog/README.md §Phases`): fix and run the gate again (a code fix at closure goes back to `build`, then to validation);
    stop when the fix would touch the spec, or at the second failed validation on the same point.
 5. **Waiting on the user** blocks a task, never the work item: the question goes to
    `questions.md`, the task turns `blocked`, the rest goes on.

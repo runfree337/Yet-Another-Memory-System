@@ -26,7 +26,8 @@ user's explicit approval.
   a batch that needs a given effort goes to the agent type that carries it.
 - **An auditor agent is read-only.** Its report comes back to the orchestrator, which writes
   `audit-plan.md` (and `validation.md`) itself — `verdict: pass` only when no blocking finding is
-  left open. Never invoke the auditor from the context that wrote what it audits.
+  left open. The audit is never DONE in the context that wrote what it audits: the orchestrator
+  launches the auditor as a fresh subagent and copies its report — that is what makes it independent.
 - **Foreground or background**: a gate the next step depends on (the plan audit) runs in the
   foreground; independent batches run in the background, launched in one message.
 - **Tools that drive a shared application** (an editor bridge, a device) can stall or vanish in a

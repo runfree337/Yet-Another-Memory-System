@@ -133,8 +133,9 @@ report does not open the gate.
   commit** — otherwise `E-DOCS`.
 - **Each gate passed is committed**: gate file written, task ticked, `phase:` advanced, commit. A
   crash loses at most the step in progress.
-- **A red gate** (blocking audit, failed validation): step `phase:` back, the task says why, fix,
-  run the gate again. If the fix would touch the **spec** — the intent the user validated — remove
+- **A red gate** (blocking audit, failed validation, a code fix asked by the closure review): step
+  `phase:` back, the task says why, fix, run the gate again. A code fix at closure is a build task:
+  the phase goes back to `build`, then the validation is replayed on the criterion it touches. If the fix would touch the **spec** — the intent the user validated — remove
   `validated:` and set `phase: framing` **in the same commit**, then stop and ask. Stop as well at
   the second failed validation on the same point.
 - **A task waiting on the user** (an open question, a text only the user may approve) turns
