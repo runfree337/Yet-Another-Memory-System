@@ -301,6 +301,14 @@ must decrease monotonically), and at the end (Definition of Done = every channel
   user-invocable tier-2 recipe — its replacement lives in `adapters/<tool>/skills/`, see
   step 4 of the install). Measured failure mode: folders removed against a script-level
   proof only, and the semantic audit was left with no way to be invoked.
+  The same holds for **any tool removed**, migration or not, with a fourth layer the
+  inventory of its validators never shows: what its **interface made impossible to write**.
+  A form with drop-down lists and typed fields guards its data by its shape, with no
+  validator to list. Measured on a host project: an editor was retired after its validators
+  were ported one by one; its drop-downs were not, and once the data was written as free text,
+  25 enum reads, as many numbers, JSON fields and cited ids fell back silently on a default
+  (`Agilty` → none, `oui` → false). Before removing a tool, ask what it prevented, not only
+  what it checked.
 
 Suggested order (each step ends on its own green check + one commit): tooling → backlog →
 decisions → features → memory shell → dead references → tooling switch + close with a
