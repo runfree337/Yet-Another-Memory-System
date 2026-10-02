@@ -334,6 +334,66 @@ class TestRecipes(GraphFixture):
         self.assertTrue(self.mod.cmd_covers(self.root, "src/pay/OldGateway.java"))
 
 
+class TestMinDirDepth(GraphFixture):
+    TARGET = "src/a/b/c/Deep.java"
+
+    def setUp(self):
+        super().setUp()
+        _write(os.path.join(self.root, "features/root-dir.md"),
+               "---\nid: root-dir\nupdated: 2026-07-01\n---\n**Role:** R.\n**Code:** `src/`.\n")
+        _write(os.path.join(self.root, "features/three-dir.md"),
+               "---\nid: three-dir\nupdated: 2026-07-01\n---\n**Role:** T.\n**Code:** `src/a/b/`.\n")
+        _write(os.path.join(self.root, "features/four-dir.md"),
+               "---\nid: four-dir\nupdated: 2026-07-01\n---\n**Role:** F.\n**Code:** `src/a/b/c/`.\n")
+        _write(os.path.join(self.root, "features/exact.md"),
+               "---\nid: exact\nupdated: 2026-07-01\n---\n**Role:** E.\n"
+               "**Code:** `src/a/b/c/Deep.java`, `src/`.\n")
+        _write(os.path.join(self.root, "features/by-class.md"),
+               "---\nid: by-class\nupdated: 2026-07-01\n---\n**Role:** C.\n**Code:** `Deep`, `src/`.\n")
+
+    def _ids(self, exts=None):
+        return [(h[1], h[3]) for h in self.mod.cmd_covers(self.root, self.TARGET, exts)]
+
+    def test_default_keeps_every_dir_hit(self):
+        self.assertIn(("root-dir", "dir src/"), self._ids())
+        self.assertIn(("three-dir", "dir src/a/b/"), self._ids())
+
+    def test_cuts_shallow_dirs_keeps_deep_exact_and_class(self):
+        self._set_config({"min-dir-depth": 4, "class-file-extensions": [".java"]})
+        exts = self.mod.class_file_extensions(self.mod.load_config(self.root))
+        self.assertEqual(self._ids(exts), [
+            ("exact", "exact"),
+            ("by-class", "class Deep"),
+            ("four-dir", "dir src/a/b/c/"),
+        ])
+        # The hook note follows the same filter.
+        root_abs = os.path.abspath(self.root).replace("\\", "/")
+        note, _ = self.mod.build_covers_note(self.root, root_abs, {"file_path": self.TARGET}, exts)
+        self.assertNotIn("three-dir", note)
+        self.assertNotIn("root-dir", note)
+
+    def test_shallow_exact_citation_is_never_cut(self):
+        # An exact citation shallower than N is a file named outright, not a
+        # broad folder — the threshold only ever applies to dir hits.
+        self._set_config({"min-dir-depth": 4})
+        hits = self.mod.cmd_covers(self.root, "src/orders/OrderManager.java")
+        self.assertEqual([(h[1], h[3]) for h in hits], [("order-engine", "exact")])
+
+    def test_doctor_and_neighbors_unchanged(self):
+        self._set_config({"min-dir-depth": 4})
+        self.assertIn(("root-dir", "src/"),
+                      [(d[0], d[2]) for d in self.mod.cmd_doctor(self.root)],
+                      "a short dir citation is still checked by doctor")
+        self.assertIn(("cite-path", "src/a/b/", ""),
+                      self.mod.cmd_neighbors(self.root, "three-dir"))
+
+    def test_bad_value_is_a_config_error(self):
+        for bad in (-1, "4", 2.5, True):
+            self._set_config({"min-dir-depth": bad})
+            self.assertEqual(len(self.mod.config_errors(self.root)), 1, bad)
+            self.assertIn(("root-dir", "dir src/"), self._ids(), "bad value → off, never a crash")
+
+
 class TestDecisionBodyPaths(GraphFixture):
     def setUp(self):
         super().setUp()

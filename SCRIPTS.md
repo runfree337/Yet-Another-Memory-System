@@ -750,12 +750,17 @@ no memory cites: src/Ui/Menu.cs
 `self-extra-dirs`, `class-file-extensions`, `code-roots`, and two opt-in sources of citations —
 `recipe-dirs` (dirs, repo-root relative, recursive `.md`; default `[]` = off; also
 self-suppressed by the hooks) and `decision-body-paths` (`true` = a decision's body backticked
-paths count; default `false`). See `checks-config.example.json` for each key.
+paths count; default `false`). With those two on, root folders named in passing (`Assets/`,
+`src/`) cover every file and drown the real signals — measured on a host: 268 of 294 hits on
+12 files were `dir` hits. `min-dir-depth` (integer, default `0` = off) keeps a `dir` hit only
+when the cited directory has at least N segments (`Assets/Project/Scripts/Combat/` = 4), for
+every node kind and in the hook note; `exact`/`class`/`tag` hits are never cut, and `doctor` /
+`neighbors` still see the edge. See `checks-config.example.json` for each key.
 
 **Exit codes:** `0` (every command but doctor, which answers `0` clean · `2` dead citation or
 config error) · `covers --diff` → `2` on a git failure (bad base, not a repo) · hook mode →
 always `0`. A config error (a listed recipe dir that does not exist, a non-boolean
-`decision-body-paths`) is printed on stderr by `covers`/`match`/`neighbors` and ignored, is a
+`decision-body-paths`, a `min-dir-depth` that is not a non-negative integer) is printed on stderr by `covers`/`match`/`neighbors` and ignored, is a
 blocking `CFG-INVALID` line under `doctor` (chained into `memory-audit.py --tier1`), and is
 silently ignored by the hooks.
 
