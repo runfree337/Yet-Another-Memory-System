@@ -716,6 +716,55 @@ python3 hooks/normative-write-guard.py --path CLAUDE.md      # exit 2 if normati
 echo '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md","content":"…"}}' | python3 hooks/normative-write-guard.py --stdin-json
 ```
 
+### `memory-graph.py`
+**Intent:** not a guard — a router aid (`hooks/README.md §Router aid`). Derives, on every call
+and never stored, a typed graph over the memory channels (decisions, features, memory,
+backlog) plus, opt-in, the **recipes** agents follow (skills, rules), and answers "which
+memory explains this file?" — at scoping (files about to be touched) and at closure (files
+changed: every doc, decision or recipe still explaining the old contract,
+`backlog/README.md` DoD step 1). Contract in the module docstring.
+
+| Command / parameter | Effect | Default |
+|---|---|---|
+| `covers <path> [path…]` | memories citing each path, or a parent dir of it (exact containment, never a substring); only `active` decisions. Each hit says **why** it matches, right after its id: `[exact]`, `[class <Name>]`, `[dir <cited-dir>]` (an incidental broad citation reads as such), `[tag <tag>]`. Ranked in that order — a class hit names the file itself, so it beats any folder citation; dirs deepest first | — |
+| `covers --diff <base>` | adds every file changed since `<base>`: committed on the branch (`<base>...HEAD`), staged, unstaged, untracked; deleted and renamed-away files **kept** (their explainers are what closure looks for) | — |
+| `match <term…>` | lexical match (≥4 chars, case/accent-insensitive) on decision ids/titles/tags, feature ids/Roles, recipe titles | — |
+| `neighbors <id> [--depth N]` | typed edges in and out of a node | depth 1 |
+| `doctor` | every feature/backlog `cite-path` must resolve on disk (recipe and decision citations excluded: doc-refs' job, and dated records) | — |
+| `--root <dir>` | repo root | `.` |
+| `--stdin-json --mode covers\|match` | Claude Code hook adapter (`--marker`, `--prefilter-cache`) | disabled |
+
+**Output of `covers`.** One path: one line per hit, nothing when uncovered (the historical
+form). Several paths or `--diff`: a `<path>:` header per covered file with its hits indented,
+then one closing line naming every uncovered file — silence made visible:
+
+```
+src/Combat/CombatManager.cs:
+  recipe .claude/skills/combat/SKILL.md [exact] — Adding a card effect to combat.
+  feature combat-engine [exact] — Resolves a combat round.
+  feature rundata-save [dir src/Combat/] — Save and load the run.
+no memory cites: src/Ui/Menu.cs
+```
+
+**Settings** (`memory-graph` block of the global settings file, all optional): `channels-base`,
+`self-extra-dirs`, `class-file-extensions`, `code-roots`, and two opt-in sources of citations —
+`recipe-dirs` (dirs, repo-root relative, recursive `.md`; default `[]` = off; also
+self-suppressed by the hooks) and `decision-body-paths` (`true` = a decision's body backticked
+paths count; default `false`). See `checks-config.example.json` for each key.
+
+**Exit codes:** `0` (every command but doctor, which answers `0` clean · `2` dead citation or
+config error) · `covers --diff` → `2` on a git failure (bad base, not a repo) · hook mode →
+always `0`. A config error (a listed recipe dir that does not exist, a non-boolean
+`decision-body-paths`) is printed on stderr by `covers`/`match`/`neighbors` and ignored, is a
+blocking `CFG-INVALID` line under `doctor` (chained into `memory-audit.py --tier1`), and is
+silently ignored by the hooks.
+
+```bash
+python3 hooks/memory-graph.py covers src/orders/OrderManager.java
+python3 hooks/memory-graph.py covers --diff main      # closure: everything this branch touched
+python3 hooks/memory-graph.py doctor
+```
+
 ## The framework's own tests
 
 ### `run-tests.py` (repo root)
