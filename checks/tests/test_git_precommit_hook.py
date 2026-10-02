@@ -112,7 +112,10 @@ class GitPreCommitHook(unittest.TestCase):
         self.git("commit", "-q", "-m", "c2")
         # Simulate the post-conflict state: a sister head + a re-staged STATE.md.
         git_dir = self.git("rev-parse", "--absolute-git-dir").stdout.strip()
-        with open(os.path.join(git_dir, "MERGE_HEAD"), "w", encoding="utf-8") as fh:
+        # newline="\n": in text mode Windows writes "\r\n", and git rejects the file as
+        # "Corrupt MERGE_HEAD" — the test then failed on the platform, never on the hook.
+        with open(os.path.join(git_dir, "MERGE_HEAD"), "w", encoding="utf-8",
+                  newline="\n") as fh:
             fh.write(first + "\n")
         self.write_state(OLD.replace("[todo]", "[done]"))
         self.git("add", "-A")
