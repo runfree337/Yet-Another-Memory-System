@@ -81,7 +81,8 @@ Rules:
                                   is skipped; `validation`+ needs every build task done;
                                   `closure` needs `validation.md` with `verdict: pass`.
   E-PHASE-ORDER  (BLOCKING)      a build task (label starting with
-                                  `backlog.build-task-prefix`, default `Lot`) is `done`
+                                  `backlog.build-task-prefix`, default `Batch`, Markdown
+                                  emphasis around the word ignored) is `done`
                                   while the plan audit has not passed. Stated on the PROOF,
                                   not the phase, so stepping a phase back never trips it.
   E-SKIP         (BLOCKING)      the spec's `skip:` names something other than
@@ -95,6 +96,22 @@ Rules:
                                   Re-validating keeps the same line, so the gesture is: drop
                                   `validated:` (stepping back, one commit), set it again
                                   (another commit).
+  E-VALIDATION-STALE (TO-CONFIRM) in `closure`, a build task is `done` at HEAD that was
+                                  not `done` in STATE.md as read at the last commit of
+                                  `validation.md` (`git show`, same parse as everywhere):
+                                  the validation did not see it. Judged in `closure` only
+                                  (before, the validation has not served as a gate yet);
+                                  compares labels, so rewording a done batch is reported.
+  E-PHASE-LATE   (TO-CONFIRM)    a build task `in-progress` while the phase is before
+                                  `build` — the work moved without its phase. `done` is
+                                  not judged here: before the audit it is E-PHASE-ORDER,
+                                  after it a legitimate step back.
+  E-STATUS-PHASE (BLOCKING)      `status: todo` with a phase past `framing`.
+  E-ARCH-PATH    (BLOCKING)      `architecture:` absolute (`/x`, a backslash, `C:x`) or
+                                  with a `..` segment — it leaves the repository.
+  E-BUILD-PREFIX (TO-CONFIRM)    a task starting with a plural of the build prefix
+                                  (`Batches`, `Lots`): invisible to the gates. Known limit:
+                                  `Batch:` or `Batch1` are not recognized either, silently.
   E-PLAN-DRIFT   (BLOCKING)      from `build` on, a commit touches `plan.md` after the last
                                   commit touching `audit-plan.md` (verdict `pass` at HEAD):
                                   the audit approved another plan. Silent before `build` —
@@ -194,7 +211,9 @@ IMPACT_KEYWORDS = {"decision", "feature", "memory"}
 PHASES = ["framing", "architecture", "plan", "plan-audit", "build", "validation", "closure"]
 SKIPPABLE = {"architecture", "plan-audit"}
 REQUIRE_PHASE = entrylib.cfg_get(_CFG, ("backlog", "require-phase"), False) is True
-BUILD_TASK_PREFIX = str(entrylib.cfg_get(_CFG, ("backlog", "build-task-prefix"), "Lot"))
+DEFAULT_BUILD_TASK_PREFIX = "Batch"
+BUILD_TASK_PREFIX = str(entrylib.cfg_get(_CFG, ("backlog", "build-task-prefix"),
+                                         DEFAULT_BUILD_TASK_PREFIX))
 
 # DoD (cf. backlog/README.md). `{target}` = the work item to remove. Step 1 is a CHECK
 # (capitalization already happened task by task), not heavy lifting. Step 3 REQUIRES the
@@ -420,7 +439,8 @@ def check_impacts(path: str, meta: dict) -> list[Finding]:
 
 # --------------------------------------------------------------------------- #
 # Phases and gates — E-PHASE / E-PHASE-MISSING / E-GATE / E-PHASE-ORDER /      #
-# E-SKIP / E-SPEC-DRIFT / E-PLAN-DRIFT                                         #
+# E-SKIP / E-SPEC-DRIFT / E-PLAN-DRIFT / E-VALIDATION-STALE / E-PHASE-LATE /   #
+# E-STATUS-PHASE / E-ARCH-PATH / E-BUILD-PREFIX                                #
 # --------------------------------------------------------------------------- #
 
 def _as_list(value):
@@ -442,9 +462,24 @@ def _companion_meta(cdir, name, declared):
     return meta or {}
 
 
-def is_build_task(label):
+def _first_word(label):
+    """First word of a task label, Markdown emphasis around it removed (`**Batch**`)."""
     words = label.split()
-    return bool(words) and words[0].casefold() == BUILD_TASK_PREFIX.casefold()
+    return words[0].strip("*_`") if words else ""
+
+
+def is_build_task(label):
+    return _first_word(label).casefold() == BUILD_TASK_PREFIX.casefold()
+
+
+def _done_build_labels(tasks):
+    return {lb for _ln, st, lb in tasks if st == "done" and is_build_task(lb)}
+
+
+def _arch_path_escapes(arch):
+    """An `architecture:` value that leaves the repository: absolute (`/x`, a backslash,
+    `C:x`) or with a `..` segment — written by hand, so judged the same on every platform."""
+    return bool(re.match(r"^([A-Za-z]:|[/\\])", arch)) or ".." in re.split(r"[/\\]", arch)
 
 
 def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
@@ -481,6 +516,25 @@ def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
                                         "has not passed (`audit-plan.md` with "
                                         "`verdict: pass`, or `skip: [plan-audit]`)."))
 
+    plural = {(BUILD_TASK_PREFIX + "s").casefold(), (BUILD_TASK_PREFIX + "es").casefold()}
+    for lineno, _state, label in tasks:
+        if _first_word(label).casefold() in plural:
+            findings.append(Finding(TO_CONFIRM, "E-BUILD-PREFIX", state_rel, lineno,
+                                    f"task « {label} » starts with a plural of "
+                                    f"`{BUILD_TASK_PREFIX}` — not a build task to the gates; "
+                                    "one task, one batch."))
+    if idx is not None and idx < PHASES.index("build"):
+        for lineno, state, label in build:
+            if state == "in-progress":
+                findings.append(Finding(TO_CONFIRM, "E-PHASE-LATE", state_rel, lineno,
+                                        f"build task « {label} » is in progress while "
+                                        f"`phase: {phase}` is before `build` — the work moved "
+                                        "without its phase."))
+    if idx is not None and idx > 0 and meta.get("status") == "todo":
+        findings.append(Finding(BLOCKING, "E-STATUS-PHASE", state_rel, 1,
+                                f"`status: todo` with `phase: {phase}` — a work item past "
+                                "`framing` has started."))
+
     def gate(reached, missing):
         findings.append(Finding(BLOCKING, "E-GATE", state_rel, 1,
                                 f"`phase: {phase}` is past the {reached} gate, but {missing}."))
@@ -492,7 +546,12 @@ def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
                  "approval)" if spec is not None else "`spec.md` is not a declared companion")
         if idx >= 2 and "architecture" not in skip:
             arch = str((spec or {}).get("architecture") or "").strip()
-            if not arch:
+            if arch and _arch_path_escapes(arch):
+                findings.append(Finding(BLOCKING, "E-ARCH-PATH", state_rel, 1,
+                                        f"`architecture: {arch}` leaves the repository "
+                                        "(absolute, or a `..` segment) — name a companion of "
+                                        "the folder or a path from the repository root."))
+            elif not arch:
                 gate("architecture", "spec.md names no `architecture:` doc (nor "
                      "`skip: [architecture]`)")
             elif "/" in arch:
@@ -540,6 +599,25 @@ def check_phase(cdir, state_rel, meta, tasks, declared) -> list[Finding]:
                                     f"({gate_commit[:8]}) — the audit approved another plan. "
                                     "Re-run the audit and commit it with `audit-plan.md`, or "
                                     "step back to `plan`."))
+
+    if idx == PHASES.index("closure"):
+        val = _companion_meta(cdir, "validation.md", declared)
+        if val is not None and val.get("verdict") == "pass":
+            gate_commit = entrylib.git_gate_commit(rel(os.path.join(cdir, "validation.md")),
+                                                   cwd=ROOT)
+            then = entrylib.git_show(gate_commit, rel(os.path.join(cdir, "STATE.md")), cwd=ROOT)
+            if then is not None:
+                _h, sections = parse_state(then)
+                then_tasks = []
+                for ln, raw in sections.get("Tasks", []):
+                    st, lb, _doc = parse_task(raw)
+                    then_tasks.append((ln, st, lb))
+                new = sorted(_done_build_labels(tasks) - _done_build_labels(then_tasks))
+                if new:
+                    findings.append(Finding(TO_CONFIRM, "E-VALIDATION-STALE", state_rel, 1,
+                                            f"{len(new)} build task(s) done after the "
+                                            f"validation ({gate_commit[:8]}), « {new[0]} »… — "
+                                            "replay the validation on what they touch."))
     return findings
 
 

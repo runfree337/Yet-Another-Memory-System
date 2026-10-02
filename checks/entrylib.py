@@ -526,6 +526,22 @@ def git_touched_since(gate: str, relpath: str, cwd: str = None) -> str | None:
     return r.stdout.strip() or None
 
 
+def git_show(rev: str, relpath: str, cwd: str = None) -> str | None:
+    """Text of `relpath` at `rev`, or None. `git show <rev>:<path>` reads the path from the
+    REPOSITORY root whatever the working directory — `./` makes it relative to `cwd`, which
+    is what a framework nested in a host's subfolder (`Docs/`) needs."""
+    if not rev or is_shallow(cwd):
+        return None
+    path = "./" + relpath.replace(os.sep, "/")
+    try:
+        r = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=cwd, env=git_env(),
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=20)
+    except Exception:
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
 def repo_root(start: str = None) -> str:
     """Absolute path of the enclosing git repository, or `start` when there is no git.
 
