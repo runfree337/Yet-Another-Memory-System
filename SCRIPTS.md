@@ -755,7 +755,10 @@ paths count; default `false`). With those two on, root folders named in passing 
 12 files were `dir` hits. `min-dir-depth` (integer, default `0` = off) keeps a `dir` hit only
 when the cited directory has at least N segments (`Assets/Project/Scripts/Combat/` = 4), for
 every node kind and in the hook note; `exact`/`class`/`tag` hits are never cut, and `doctor` /
-`neighbors` still see the edge. See `checks-config.example.json` for each key.
+`neighbors` still see the edge. With `recipe-dirs` on, a recipe's **example** path must be a
+placeholder (`src/<module>/`), never a real file or class: a real name makes the recipe cover
+that file as if it governed it (measured on a host: two tooling skills surfaced on a combat AI
+file they only used as an illustration). See `checks-config.example.json` for each key.
 
 **Exit codes:** `0` (every command but doctor, which answers `0` clean · `2` dead citation or
 config error) · `covers --diff` → `2` on a git failure (bad base, not a repo) · hook mode →

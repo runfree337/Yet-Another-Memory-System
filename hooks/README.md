@@ -85,7 +85,9 @@ memory-graph`): **`recipe-dirs`** — the skills and rules agents follow to the 
 `recipe` nodes (their cited paths and identifiers, like a fiche's; excluded from `doctor`, whose
 dead-path job on prose is `doc-refs-check`'s; self-suppressed like a channel) — and
 **`decision-body-paths`** — an active decision's body citations count, not only its INDEX line.
-That is the closure sweep: *what still explains the contract I just changed?*
+That is the closure sweep: *what still explains the contract I just changed?* A recipe that
+illustrates with a real file name covers that file too — write examples as placeholders
+(`src/<module>/`).
 
 Two things keep it honest:
 
