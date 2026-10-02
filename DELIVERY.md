@@ -47,7 +47,10 @@ everything it needs lives in the repository:
   by a human.
 - **Check the surface on disk** before cutting: `git log --name-only` also lists files touched,
   then deleted.
-- **Build tasks start with `Lot`** (`backlog/README.md §Phases`).
+- **Build tasks start with `Batch`** — or the word the project set (`backlog/README.md §Phases`).
+- **Touching an approved file reopens its gate**: an edited spec steps back to `framing` (drop
+  `validated:`, ask, set it again in another commit); a plan edited in `build` needs its audit
+  re-run, committed with `audit-plan.md`.
 
 ## The batch prompt — frozen, copied for every batch
 

@@ -42,8 +42,8 @@ mechanically stamped by `backlog-check.py --stamp`, never by hand.
 - [done] Architecture → architecture.md
 - [done] Plan → plan.md
 - [done] Plan audit, passed → audit-plan.md
-- [in-progress] Lot 1 — the resolution engine broken into testable bricks
-- [todo] Lot 2 — integration tests once the breakdown is stable
+- [in-progress] Batch 1 — the resolution engine broken into testable bricks
+- [todo] Batch 2 — integration tests once the breakdown is stable
 - [todo] Validation against the spec's success criteria
 - [todo] Definition of Done
 <!-- /template -->
@@ -54,8 +54,9 @@ this template — it's not a format to copy into a real `STATE.md`'s comments. T
 - `- [<state>] <short label> → <working-doc.md>` — the detail lives in the working doc (inside
   the work item's folder), the label stays short.
 
-States: `todo | in-progress | blocked | done`. A **build task starts with the word `Lot`**: it is
-how the check sees code done before the plan audit passed (`README.md §Phases`).
+States: `todo | in-progress | blocked | done`. A **build task starts with the word `Batch`**
+(`backlog.build-task-prefix`): it is how the check sees code done before the plan audit passed
+(`README.md §Phases`).
 
 ## Remaining
 
