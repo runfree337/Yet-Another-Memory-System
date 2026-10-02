@@ -110,10 +110,14 @@ a corrective work item, if the result doesn't suit).
 |---|---|
 | `architecture` and later | `spec.md` (declared in `docs:`) whose frontmatter carries `validated: <date>` — set **only on the user's explicit approval** |
 | `plan` and later | the architecture doc **named by the spec** (`architecture:` in its frontmatter): a companion of the folder (no `/`), or a durable doc it modified (a path from the repository root) |
-| `plan-audit` and later | `plan.md` |
-| `build` and later | `audit-plan.md` whose frontmatter says `verdict: pass` — an **independent** audit of spec + architecture + plan against the real code, never by whoever wrote the plan |
-| `validation` and later | every build task `done` |
-| `closure` | `validation.md` with `verdict: pass` — for **each success criterion of the spec**: what was exercised, the evidence (capture, log, measure), the verdict; plus a last line, "left for the human to judge" |
+| `plan-audit` and later | `plan.md` (declared in `docs:`) |
+| `build` and later | `audit-plan.md` (declared in `docs:`) whose frontmatter says `verdict: pass` — an **independent** audit of spec + architecture + plan against the real code, never by whoever wrote the plan |
+| `validation` and later | every build task `done` — with no build task at all, this gate is empty and passes: name the build in tasks |
+| `closure` | `validation.md` (declared in `docs:`) whose frontmatter says `verdict: pass` — for **each success criterion of the spec**: what was exercised, the evidence (capture, log, measure), the verdict; plus a last line, "left for the human to judge" |
+
+A companion missing from `docs:` reads as absent. `validated:` and `verdict: pass|fail` live in the
+file's **YAML frontmatter** (between `---`), never in its body: a "PASS" copied at the top of a
+report does not open the gate.
 
 - **Only `architecture` and `plan-audit` may be skipped** — `skip: [architecture]` in the spec's
   frontmatter, the reason in its prose (`E-SKIP` otherwise). Framing, plan and validation never
