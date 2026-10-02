@@ -120,6 +120,17 @@ in its frontmatter.
    + the memory channels it touches (`FEATURE_MAP`…) — the durable *carries the content*, not a
    promise. Run `backlog-check.py --checklist <id>`: it enumerates the work item's `impacts:`
    ledger (see above) as a **nominative checklist** for this step, instead of relying on recall.
+   **If the work item changed a contract** — a default flipped, a guard moved, an API replaced, a
+   symbol removed — also ask **what still EXPLAINS the old one**, not what calls it: the compiler
+   and the tests find the callers, nothing finds the explainers. `grep` the contract's
+   **vocabulary**, not only the symbol (an explainer often describes a behavior without naming a
+   line of code), in this order of measured frequency: the summary comment above the code itself,
+   the tests and their assertion messages, the work item's own tracking (written *during* the
+   change, outdated *by* it), feature entries and durable docs, then the recipes agents follow
+   (`knowledge-capture.md §3`). A stale explainer breaks nothing — it **teaches the old contract**
+   to the next reader, often an agent that applies it to the letter. *Measured on a host project:
+   a skill kept teaching a call to a class deleted three months earlier; the deleting commit had
+   swept the callers and none of the explainers.*
 2. **Decision** recorded if the closure settles a structural choice.
 3. **Review** — the standard's own tier-1 checks first (`checks/memory-audit.py --tier1`, then
    `checks/coverage-check.py <work-item-dir>` if any of its documents dispatches an enumerated

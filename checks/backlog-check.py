@@ -169,6 +169,12 @@ CLOSURE_STEPS = [
     ("Capitalization", "ask the question \"reusable method learning?\" and route if so"),
 ]
 
+# Appended to the Durable step whatever its wording (generic or the `impacts:` list): a
+# changed contract leaves explainers behind that no compiler finds (backlog/README.md §DoD 1).
+_EXPLAINERS = ("; if a contract changed, grep its VOCABULARY for what still EXPLAINS the "
+               "old one (summary comment, tests, docs, recipes) — the callers are the "
+               "compiler's job, the explainers nobody's")
+
 
 def _durable_step_wording(impacts):
     """Enumerates a work item's declared `impacts:` for the closure checklist's Durable
@@ -217,7 +223,7 @@ def closure_checklist(target="the work item's folder", impacts=None):
     for i, (t, d) in enumerate(CLOSURE_STEPS, 1):
         desc = d.format(target=target)
         if t == "Durable":
-            desc = _durable_step_wording(impacts) or desc
+            desc = (_durable_step_wording(impacts) or desc) + _EXPLAINERS
         elif t == "Review":
             desc = _review_step_wording(_CFG) or desc
         rows.append(f"  [ ] {i}. **{t}** — {desc}")
