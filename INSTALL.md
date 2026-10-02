@@ -69,6 +69,8 @@ index, capture policies, memory graph and nudges, tier-2 semantic audits, `index
 | **Doc-backed backlog items** (`<id>/STATE.md`, `STATE.template.md`) + `--board` | An inline line stops holding a work item — it has its own spec, tasks and dependencies. |
 | **Memory channel** (`memory/` + `MEMORY.md`) + `memory-check.py` | The same convention gets restated (or contradicted) across sessions, and it belongs to nobody's code in particular. |
 | `--stamp --staged` at pre-commit | `updated` dates start drifting because they are being written by hand. |
+| `checks/coverage-check.py` (declarative markers in the documents themselves) | A plan or an audit dispatches an enumerated list into batches, and closing it on the table's authority has already let an item fall through. `backlog/README.md` runs it at a work item's closure. |
+| `checks/measures-check.py` + a project measures module (`measures.module` in `checks-config.json`) | Numbers copied from the code into the docs (a class size, an asset count) keep being found stale. Inactive without the module. |
 
 ### Profile `full` — the whole thing
 
@@ -140,8 +142,9 @@ flowchart TD
    template, to be copied as-is into `backlog/<id>/STATE.md`), `features/`
    (Feature channel, `FEATURE_MAP.md` as index), `checks/`, `hooks/`, `adapters/` (Claude Code
    adapter ready to wire — skills + hooks, see step 4), `ENTRY-TEMPLATE.md`, `MEMORY.md`,
-   `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md` from this framework into the host project,
-   **only if missing**.
+   `FEATURE_MAP.md`, `DASHBOARD.md`, `WORKFLOW.md`, `DELIVERY.md`, `knowledge-capture.md`,
+   `SCRIPTS.md` from this framework into the host project, **only if missing** — the last three
+   are cited by `WORKFLOW.md`, `backlog/README.md` and the adapter skills.
    *Installer:* copies + leaves existing files untouched; explicit `--force` to overwrite.
    > **Copy the folders WHOLE — a "scripts-only" cherry-pick bites back.** `checks/` and
    > `hooks/` include their `README.md` files and `checks/TEMPLATE.md`, which cross-reference
@@ -192,7 +195,8 @@ flowchart TD
      `checks-config.json` <!-- template --> (root) to tune the thresholds every check and guard
      reads (`SCRIPTS.md §The global settings file`): the `audit` section (when the deterministic
      report recommends a tier-2 audit — per-channel volume alerts, ratification-inbox nudges,
-     batch size), the `sizes` section (entry-granularity signals per channel), and the `guards`
+     batch size), the `sizes` section (entry-granularity signals per channel), the `measures`
+     section (the project's own module behind `measures-check.py`), and the `guards`
      section (**extension-only** surveillance lists — extra watched instruction files for the
      poisoning scan, extra path-regex allowlist entries for the secret scan; no key can disable
      a guard). Skipping the copy is a valid choice: absent file = the built-in defaults, today's
@@ -219,7 +223,10 @@ flowchart TD
    > rubrics). Materialize each one as `.claude/skills/<name>/SKILL.md` in the host repo
    > (thin glue pointing at the canonical `checks/*.md` rubrics — never a second copy of
    > the scale). A method install that stops at scripts + hooks leaves tier 2 with no
-   > entry point — measured on a real adoption.
+   > entry point — measured on a real adoption. The fourth template,
+   > `adapters/claude-code/skills/deliver-work-item.md`, is the entry point of `DELIVERY.md` (carrying a work
+   > item alone once its spec is validated): materialize it once doc-backed backlog items
+   > are adopted, and fill in its roles table with the project's own agents.
    *Installer:* for Claude Code, **ready-made** hooks already exist in
    `adapters/claude-code/hooks/` (`SessionStart` sweep, `Stop` report, security guards,
    `pre-commit-stamp.sh` — the `PreToolUse(git commit)` hook delegates to the stamp home
