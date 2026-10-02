@@ -220,10 +220,15 @@ is the exact fix, after which a project's patterns simply empty out.
 | *(settings)* `doc-refs.ghost-exclude-patterns` | case-insensitive segment regexes suppressing R-GHOST-ABSENCE where they match — a project's grammar as config data, suppressive only | `[]` |
 | *(settings)* `doc-refs.code-roots` | dedicated corpus dirs for the two symbol rules, resolved from the repo root — set with `code-extensions`, replaces the `index-config.json` fallback | `[]` |
 | *(settings)* `doc-refs.code-extensions` | file extensions of the dedicated corpus (e.g. `.cs`) — set with `code-roots` | `[]` |
+| *(settings)* `doc-refs.extra-roots` | dirs, resolved from the repo root, the DEFAULT run walks in addition to the framework root — where the host keeps the instructions its agents follow (skills, agent definitions, rules: `knowledge-capture.md §3`), outside a framework nested under `Docs/`. Additive; a listed dir that does not exist is a BLOCKING `CFG-INVALID` | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the
-channel checks).
+channel checks — and `ARG-MISSING`, an explicit target that does not exist). A folder argument
+is walked for `.md` files. The OK line states how many files were scanned, and a run that read
+none says `nothing verified`: until 2026-10, a folder or an absent path reached the scanner,
+which read nothing from it, and the run answered "OK — no dead references", exit 0 — the shape
+of a full pass, while this very section already promised the one-subfolder form below.
 
 **Template exemption:** an example path (never meant to exist — naming template, config not
 yet created by the project…) escapes the scan via an explicit **HTML marker in
@@ -340,6 +345,59 @@ founding incident (must fail on the document as it stood before the gap was caug
 python3 checks/coverage-check.py docs/
 python3 checks/coverage-check.py --diff --staged
 python3 checks/coverage-check.py docs/ --json
+```
+
+### `measures-check.py`
+**Intent:** flag a **number in the docs that no longer matches what it measures**. A figure copied
+from the repo into a doc (a class size, a count of assets or keys) ages in silence: the code moves,
+the number stays, and the next reader trusts it. Motivating measurement: of 13 doc↔code drifts one
+daily audit surfaced on the reference project, 8 were such copied numbers — and the remedy the
+audit itself prescribed ("re-measure, date it") only wrote a fresh number that would age the same way.
+
+**Declarative, and the measures are the project's.** The number carries, right after it on the
+same line, a marker naming its measure; the check recomputes it and reports the gap. Counting a
+project's assets or sizing its classes is tech-specific, so the framework ships the mechanism and
+no measure: the project declares a Python module in `checks-config.json` (`measures.module`,
+resolved from the repo root) exporting `MEASURES = {"name": fn}`, each `fn(arg) -> number`. A
+measure is reviewed code — never a command read from a doc. Without the key the check is inactive
+(one-line message, exit 0), which is the framework repo's own state.
+
+| Marker | Where | Effect |
+|---|---|---|
+| `<!-- measure: <name>[:<arg>] -->` | right after the number, same line | the LAST number before the marker is compared to `MEASURES[name](arg)` |
+
+What carries **no** marker, on purpose: a dated measurement that cannot be reproduced ("measured
+in play on …"), and a **design value** ("reference dose: 2 × 3 turns"). They are facts or choices,
+not copies of the repo. A marker **quoted as code** — backticks or a fenced block — is a citation,
+not a declaration (the `coverage-check.py` lesson): this very section never triggers the check.
+
+| Rule | Severity | What it proves |
+|---|---|---|
+| `MS-UNKNOWN` | blocking | the marker names a measure the module does not declare — the number is checked by nothing |
+| `MS-NO-NUMBER` | blocking | a marker with no number before it on its line |
+| `MS-STALE` | to-confirm | the number differs from the measure. Not blocking: code moving is normal and must not block an unrelated commit — the doc is due a recount, and the human judges whether the new number changes what the doc concludes |
+| `MS-UNMEASURABLE` | to-confirm | the measure raised — its target is gone or its argument wrong; the doc likely cites something dead |
+| `CFG-INVALID` | blocking | `measures.module` set but missing, unloadable, or without a `MEASURES` dict |
+
+| Parameter | Effect | Default |
+|---|---|---|
+| `<path…>` | files or folders to scan (`.md` only) | the framework root |
+| `--diff` / `--staged` | what changed / what is about to be committed | — |
+| `--value <name[:arg]>` | print the current value of a measure — to write the number in the first place | — |
+| `--list` | the declared measures, with the first docstring line of each | — |
+| `--json` | findings as JSON | text report |
+
+**Exit codes:** `0` clean · `1` only TO-CONFIRM · `2` at least one BLOCKING. A clean run says
+**how much** it verified (`OK — N marked number(s) recomputed in M file(s)`), and a run that read no
+marker says `nothing verified` — an absent path or an empty folder must never answer like a full
+pass (the defect `doc-refs-check.py` still has on a folder argument).
+Regression suite: `checks/tests/test_measures_check.py`, including a replay of the founding
+incident (a class size kept in a work item after the class grew).
+
+```bash
+python3 checks/measures-check.py
+python3 checks/measures-check.py --value class-size:src/Scorer.cs
+python3 checks/measures-check.py --staged
 ```
 
 ### `entrylib.py`

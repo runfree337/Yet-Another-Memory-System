@@ -331,6 +331,20 @@ if bool(CODE_ROOTS) != bool(CODE_EXTENSIONS):
         "doc-refs.code-roots / doc-refs.code-extensions: set together — one without the "
         "other activates nothing")
 
+# `doc-refs.extra-roots` — dirs (REPO-root relative) the DEFAULT run walks in addition to
+# the framework root. The instructions agents follow (skills, agent definitions, rules) are
+# docs too, and more dangerous ones: an agent applies a stale recipe to the letter. With the
+# framework nested under `Docs/`, they sit OUTSIDE the default corpus — measured on a host
+# project 2026-10-02: a skill cited a class deleted three months earlier, read by no check.
+# Additive only; a listed dir that does not exist is a BLOCKING CFG-INVALID (a corpus the
+# user believes covered), never silently skipped. Absent (default) ⇒ unchanged.
+EXTRA_ROOTS = tuple(r for r in entrylib.cfg_get(_CFG, ("doc-refs", "extra-roots"), [])
+                    if isinstance(r, str) and r)
+for _r in EXTRA_ROOTS:
+    if not os.path.isdir(os.path.join(REPO, _r)):
+        _CFG_KEY_ERRS.append(f"doc-refs.extra-roots: `{_r}` is not a directory "
+                             "(resolved from the repo root)")
+
 
 def exists_somewhere(token, file_dir):
     # os.path.exists, not isfile: a reference to a directory that exists (a package
@@ -628,11 +642,23 @@ def gather(args):
             return []
         return [f for f in out.splitlines() if f.endswith(".md") and os.path.isfile(f)]
     if args.paths:
-        return args.paths
+        # A folder argument is WALKED, and an absent path is reported by main(): both used to
+        # pass straight to scan_file, which reads nothing from either — and the run answered
+        # "OK — no dead references" with exit 0, the exact shape of a full pass.
+        out = []
+        for p in args.paths:
+            if os.path.isdir(p):
+                for dpath, _, names in os.walk(p):
+                    out += [os.path.join(dpath, n) for n in names if n.endswith(".md")]
+            else:
+                out.append(p)
+        return out
     found = []
-    for dpath, _, names in os.walk(FRAMEWORK):
-        found += [os.path.join(dpath, n) for n in names if n.endswith(".md")]
-    return found
+    for root in (FRAMEWORK, *(os.path.join(REPO, r) for r in EXTRA_ROOTS)):
+        for dpath, _, names in os.walk(root):
+            found += [os.path.join(dpath, n) for n in names if n.endswith(".md")]
+    # A root nested in another (or listed twice) must not scan a file twice.
+    return list(dict.fromkeys(os.path.realpath(f) for f in found))
 
 
 def main():
@@ -649,15 +675,25 @@ def main():
     for err in _CFG_KEY_ERRS:
         findings.append(("BLOCKING", entrylib.CHECKS_CONFIG_NAME, 1,
                          "CFG-INVALID", err))
+    scanned = 0
     for f in gather(a):
+        if not os.path.isfile(f):
+            # An explicit target that does not exist: the caller believes it was checked.
+            findings.append(("BLOCKING", f, 0, "ARG-MISSING",
+                             "target not found — nothing was read from it"))
+            continue
+        scanned += 1
         findings += scan_file(f)
 
     blocking = [x for x in findings if x[0] == "BLOCKING"]
     for sev, path, line, rule, msg in findings:
         print(f"{sev:11} {path}:{line}  {rule:15} {msg}")
     blind = history_is_blind()
+    if not findings and not scanned:
+        print("doc-refs: no .md file in scope — nothing verified.")
+        return 0
     if not findings:
-        print("doc-refs: OK — no dead references.")
+        print(f"doc-refs: OK — no dead references ({scanned} file(s) scanned).")
         if blind:
             print(entrylib.SHALLOW_NOTICE)
         return 0

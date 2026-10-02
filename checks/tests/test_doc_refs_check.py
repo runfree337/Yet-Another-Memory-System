@@ -311,5 +311,73 @@ class TestIgnorePragma(SymbolTuningBase):
         self.assertEqual([f[2] for f in finds if f[3] == "R-DEAD-SYMBOL"], [2])
 
 
+class TestTargetsAreRead(unittest.TestCase):
+    """A run that read nothing must never answer like a full pass. A folder argument and an
+    absent path both used to reach scan_file, which reads nothing from either — and the run
+    printed "OK — no dead references", exit 0 (measured on a host project 2026-10-02: a
+    routine was told to pass FILES because a folder 'passed' without being read)."""
+
+    def _run(self, *args):
+        import subprocess, sys
+        return subprocess.run([sys.executable, os.path.join(CHECKS_DIR, "doc-refs-check.py"), *args],
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+
+    def test_folder_argument_is_walked(self):
+        sub = os.path.join(self.tmp, "nested")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "doc.md"), "w", encoding="utf-8") as fh:
+            fh.write("See `nowhere/really/ghost_file.py` for details.\n")
+        r = self._run(self.tmp)
+        self.assertIn("R-DEAD-PATH", r.stdout)
+        self.assertNotIn("OK", r.stdout)
+
+    def test_absent_target_is_blocking(self):
+        r = self._run(os.path.join(self.tmp, "absent.md"))
+        self.assertIn("ARG-MISSING", r.stdout)
+        self.assertEqual(r.returncode, 2)
+
+    def test_empty_folder_says_nothing_verified(self):
+        r = self._run(self.tmp)
+        self.assertIn("nothing verified", r.stdout)
+        self.assertNotIn("OK", r.stdout)
+
+
+class TestExtraRoots(unittest.TestCase):
+    """`doc-refs.extra-roots`: the default run also walks the listed dirs (repo-root
+    relative) — where a host keeps the instructions its agents follow, outside a framework
+    nested under `Docs/`. Additive: the framework root stays walked."""
+
+    def setUp(self):
+        import argparse
+        self.mod = _load_module()
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        for d, name in (("Docs", "a.md"), (os.path.join(".agents", "skills"), "b.md")):
+            os.makedirs(os.path.join(self.tmp, d), exist_ok=True)
+            open(os.path.join(self.tmp, d, name), "w").close()
+        self.mod.REPO = self.tmp
+        self.mod.FRAMEWORK = os.path.join(self.tmp, "Docs")
+        self.args = argparse.Namespace(staged=False, diff=False, paths=[])
+
+    def _names(self):
+        return sorted(os.path.basename(f) for f in self.mod.gather(self.args))
+
+    def test_absent_key_walks_the_framework_only(self):
+        self.mod.EXTRA_ROOTS = ()
+        self.assertEqual(self._names(), ["a.md"])
+
+    def test_extra_root_is_walked_too(self):
+        self.mod.EXTRA_ROOTS = (".agents",)
+        self.assertEqual(self._names(), ["a.md", "b.md"])
+
+    def test_nested_root_scans_a_file_once(self):
+        self.mod.EXTRA_ROOTS = (".agents", os.path.join(".agents", "skills"))
+        self.assertEqual(self._names(), ["a.md", "b.md"])
+
+
 if __name__ == "__main__":
     unittest.main()
