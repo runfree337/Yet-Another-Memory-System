@@ -84,7 +84,9 @@ Rules:
                                   `backlog.build-task-prefix`, default `Batch`, Markdown
                                   emphasis around the word ignored) is `done`
                                   while the plan audit has not passed. Stated on the PROOF,
-                                  not the phase, so stepping a phase back never trips it.
+                                  not the phase, so stepping a phase back never trips it — but
+                                  a re-audit that FAILs does: every done batch is reported
+                                  until an audit passes again (the current plan is unaudited).
   E-SKIP         (BLOCKING)      the spec's `skip:` names something other than
                                   `architecture` / `plan-audit` — framing, plan and
                                   validation never skip.

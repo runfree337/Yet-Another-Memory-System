@@ -162,8 +162,9 @@ report does not open the gate.
   **short** — the same independent auditor, bounded to the amendment, against the code the done
   batches already delivered —, add that audit as a section of `audit-plan.md`, and commit the
   amendment and its audit **together**: that commit becomes the gate. A short audit that FAILs
-  flips the single `verdict:` of `audit-plan.md` to `fail` (`E-GATE` then holds the phase) and the
-  phase steps back to `plan`.
+  flips the single `verdict:` of `audit-plan.md` to `fail` and the phase steps back to `plan`: the
+  batches already done then surface as `E-PHASE-ORDER` (blocking) until a re-audit passes — the
+  plan they would continue is no longer audited. Fix the amendment, audit it again, commit both.
 - `status: todo` past `framing` (`E-STATUS-PHASE`) and an `architecture:` path that leaves the
   repository (`E-ARCH-PATH`, absolute or `..`) block.
 - **Resuming a work item that predates phases** (migrated to `framing`): name its existing
