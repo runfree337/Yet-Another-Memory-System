@@ -26,6 +26,7 @@
 | `hooks/edit-nudge.sh` | `hooks/memory-graph.py --stdin-json --mode covers` (which memory governs the edited file) | `PreToolUse(Write\|Edit)` |
 | `skills/decisions-audit.md` | `checks/decisions-audit.md` recipe | skill + subagent (on demand / volume) |
 | `skills/memory-audit.md` | `checks/memory-audit.md` recipe | skill + subagent (on demand / volume) |
+| `skills/deliver-work-item.md` | `DELIVERY.md` recipe over `backlog/README.md §Phases` — the project fills in its roles table | skill (a work item to frame, carry, resume or close) |
 | `routines/audit-decisions.md` | prompt for a scheduled agent producing the decisions audit (ephemeral-session variant of the OS cron) | scheduled routine (weekly) |
 
 All `.sh` scripts are **silent on success**, except `security-guards.sh` (blocks with a message on
