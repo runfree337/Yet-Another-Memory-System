@@ -61,6 +61,12 @@ from config (`checks-config.json → memory-graph`), never hardcoded:
     `cite-path` edges (see above). A listed recipe dir that does not exist is
     a config error: the hook ignores it silently, the CLI says it on stderr,
     `doctor` reports it as a blocking CFG-INVALID line.
+  - **Root-folder noise** (`min-dir-depth`, default `0` = off): a cited
+    directory shallower than N segments yields no `covers` hit — recipes and
+    decision bodies name `Assets/`-like roots in passing, and those would
+    cover every file below. Only `dir` hits are cut; the edge stays for
+    `doctor`/`neighbors`. A non-integer or negative value is a config error,
+    reported like the others.
 
 Four CLI commands (see each `cmd_*` docstring for the exact contract):
 
@@ -222,7 +228,8 @@ def load_config(root):
     (subdir the four channels live under, default repo root), `self-extra-dirs`
     (extra self-suppression roots), `code-roots` (ambiguity-guard scan scope),
     `recipe-dirs` (opt-in recipe nodes), `decision-body-paths` (opt-in
-    decision body citations).
+    decision body citations), `min-dir-depth` (shallowest cited directory
+    that still produces a covers hit).
     A broken config must never crash a nudge, so every failure degrades to the
     agnostic defaults."""
     try:
@@ -296,12 +303,26 @@ def decision_body_paths(cfg):
     return False, ["memory-graph.decision-body-paths must be true or false, got %r" % (raw,)]
 
 
+def min_dir_depth(cfg):
+    """`(n, errors)` for `memory-graph.min-dir-depth`: the minimum segment
+    count of a cited DIRECTORY for it to produce a `covers` hit (see
+    `cmd_covers`). Absent → 0 (off). A non-integer (a bool included) or a
+    negative value → 0 + an error (same reporting split as `recipe_dirs`)."""
+    raw = cfg.get("min-dir-depth")
+    if raw is None:
+        return 0, []
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return 0, ["memory-graph.min-dir-depth must be a non-negative integer, got %r" % (raw,)]
+    return raw, []
+
+
 def config_errors(root, cfg=None):
     """Every memory-graph config error this engine can name (see `recipe_dirs`
-    / `decision_body_paths`) — what the CLI prints on stderr and `doctor`
-    reports as CFG-INVALID."""
+    / `decision_body_paths` / `min_dir_depth`) — what the CLI prints on
+    stderr and `doctor` reports as CFG-INVALID."""
     cfg = load_config(root) if cfg is None else cfg
-    return recipe_dirs(cfg, root)[1] + decision_body_paths(cfg)[1]
+    return (recipe_dirs(cfg, root)[1] + decision_body_paths(cfg)[1]
+            + min_dir_depth(cfg)[1])
 
 
 def _join_base(base, p):
@@ -886,12 +907,23 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
     Recipe nodes (`recipe-dirs`, opt-in) take part like features: in #1 by
     their cited paths, in #2 by their cited identifiers. Decision nodes take
     part in #1 only when `decision-body-paths` is on (otherwise they have no
-    cites)."""
+    cites).
+
+    `min-dir-depth` (default 0 = off): a `dir` hit is kept only when the cited
+    directory has at least N path segments (`src/orders/` = 2). Measured on a
+    host with recipes and decision bodies on: 268 of 294 hits over 12 files
+    were `dir` hits, dominated by root folders (`Assets/`, `Assets/Project/`)
+    that recipes and decisions name in passing — they drowned the class and
+    deep-dir signals. Only `dir` hits are cut, for every node kind and in the
+    hook note alike; `exact`/`class`/`tag` hits never are, and the
+    `cite-path` edge itself stays (`doctor` still checks it, `neighbors`
+    still shows it)."""
     class_exts = class_exts or set()
     root_abs = os.path.abspath(root).replace("\\", "/")
     target_n = norm_path(target_path, root_abs)
     if nodes is None:
         nodes, _edges = load_graph(root)
+    min_depth = min_dir_depth(load_config(root))[0]
 
     hits, seen = [], set()
 
@@ -911,6 +943,10 @@ def cmd_covers(root, target_path, class_exts=None, nodes=None):
         matched = [(cited.rstrip("/").count("/") + 1, cited)
                    for cited in node.get("cites", [])
                    if is_contained(target_n, cited)]
+        # `min-dir-depth`: a DIRECTORY citation shallower than N segments
+        # covers nothing (an exact citation is never cut — see docstring).
+        matched = [(d, c) for d, c in matched
+                   if d >= min_depth or c.rstrip("/") == target_n]
         if matched:
             depth, cited = max(matched, key=lambda m: m[0])
             via = "exact" if cited.rstrip("/") == target_n else "dir %s" % cited
