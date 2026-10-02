@@ -220,6 +220,7 @@ is the exact fix, after which a project's patterns simply empty out.
 | *(settings)* `doc-refs.ghost-exclude-patterns` | case-insensitive segment regexes suppressing R-GHOST-ABSENCE where they match — a project's grammar as config data, suppressive only | `[]` |
 | *(settings)* `doc-refs.code-roots` | dedicated corpus dirs for the two symbol rules, resolved from the repo root — set with `code-extensions`, replaces the `index-config.json` fallback | `[]` |
 | *(settings)* `doc-refs.code-extensions` | file extensions of the dedicated corpus (e.g. `.cs`) — set with `code-roots` | `[]` |
+| *(settings)* `doc-refs.extra-roots` | dirs, resolved from the repo root, the DEFAULT run walks in addition to the framework root — where the host keeps the instructions its agents follow (skills, agent definitions, rules: `knowledge-capture.md §3`), outside a framework nested under `Docs/`. Additive; a listed dir that does not exist is a BLOCKING `CFG-INVALID` | `[]` |
 
 **Exit codes:** `0` no dead reference · `1` only "to-confirm" · `2` at least one "BLOCKING"
 (including `CFG-INVALID` — `checks-config.json` present but broken, same convention as the

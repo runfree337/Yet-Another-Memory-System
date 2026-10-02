@@ -45,6 +45,14 @@ Classify the learning by what it should *become* — a **function**, not a tool:
 | regression test | project's test suite | same | same |
 | personal memory | auto-memory | personal custom instructions | your tool's memory |
 
+> **A recipe, once written, is a doc that prescribes — and it ages like any doc.** An agent
+> applies a stale recipe to the letter: a skill citing a class deleted months earlier teaches a
+> dead call to every agent that loads it. So wherever the recipes and shared rules land (the
+> column above), put that place **inside the checks' corpus**: `doc-refs.extra-roots` in
+> `checks-config.json` makes the default `doc-refs-check.py` run walk it, and the tier-2 doc
+> review covers it like the durable docs. Measured on a host project: its skills sat outside
+> every check for months, and the first pass over them found a three-month-old dead reference.
+
 > The logic (**1 + 2**) does **not** change from one tool to another. Only the table's **column** in step **3** changes. Filling in/adapting that column for your tool is the same operation as choosing where to drop the framework.
 
 ## Capture policy — who may write what, and what enforces it

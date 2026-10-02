@@ -346,5 +346,38 @@ class TestTargetsAreRead(unittest.TestCase):
         self.assertNotIn("OK", r.stdout)
 
 
+class TestExtraRoots(unittest.TestCase):
+    """`doc-refs.extra-roots`: the default run also walks the listed dirs (repo-root
+    relative) — where a host keeps the instructions its agents follow, outside a framework
+    nested under `Docs/`. Additive: the framework root stays walked."""
+
+    def setUp(self):
+        import argparse
+        self.mod = _load_module()
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        for d, name in (("Docs", "a.md"), (os.path.join(".agents", "skills"), "b.md")):
+            os.makedirs(os.path.join(self.tmp, d), exist_ok=True)
+            open(os.path.join(self.tmp, d, name), "w").close()
+        self.mod.REPO = self.tmp
+        self.mod.FRAMEWORK = os.path.join(self.tmp, "Docs")
+        self.args = argparse.Namespace(staged=False, diff=False, paths=[])
+
+    def _names(self):
+        return sorted(os.path.basename(f) for f in self.mod.gather(self.args))
+
+    def test_absent_key_walks_the_framework_only(self):
+        self.mod.EXTRA_ROOTS = ()
+        self.assertEqual(self._names(), ["a.md"])
+
+    def test_extra_root_is_walked_too(self):
+        self.mod.EXTRA_ROOTS = (".agents",)
+        self.assertEqual(self._names(), ["a.md", "b.md"])
+
+    def test_nested_root_scans_a_file_once(self):
+        self.mod.EXTRA_ROOTS = (".agents", os.path.join(".agents", "skills"))
+        self.assertEqual(self._names(), ["a.md", "b.md"])
+
+
 if __name__ == "__main__":
     unittest.main()

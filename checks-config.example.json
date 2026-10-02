@@ -38,7 +38,8 @@
     "neg-words": [],
     "ghost-exclude-patterns": [],
     "code-roots": [],
-    "code-extensions": []
+    "code-extensions": [],
+    "extra-roots": []
   },
 
   "_memory-graph": "Settings for `hooks/memory-graph.py`. `channels-base` = the subdir the four memory channels live under, for a project that nests them (e.g. \"Docs\" → Docs/decisions/…); \"\" (default) = repo root, the framework's own layout. `self-extra-dirs` = tooling dirs to also self-suppress nudges on (default [\"checks\",\"hooks\",\"adapters\"]; a Claude Code project might use [\".claude\"]). `class-file-extensions` = extensions whose basename equals a source symbol (one-symbol-per-file), e.g. [\".java\"]; empty (default) → covers matches by cited-path containment only, fully language-agnostic. `code-roots` = dirs the class/tag ambiguity guard scans (default: index-config roots, else the repo).",

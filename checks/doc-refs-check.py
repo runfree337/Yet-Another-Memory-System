@@ -331,6 +331,20 @@ if bool(CODE_ROOTS) != bool(CODE_EXTENSIONS):
         "doc-refs.code-roots / doc-refs.code-extensions: set together — one without the "
         "other activates nothing")
 
+# `doc-refs.extra-roots` — dirs (REPO-root relative) the DEFAULT run walks in addition to
+# the framework root. The instructions agents follow (skills, agent definitions, rules) are
+# docs too, and more dangerous ones: an agent applies a stale recipe to the letter. With the
+# framework nested under `Docs/`, they sit OUTSIDE the default corpus — measured on a host
+# project 2026-10-02: a skill cited a class deleted three months earlier, read by no check.
+# Additive only; a listed dir that does not exist is a BLOCKING CFG-INVALID (a corpus the
+# user believes covered), never silently skipped. Absent (default) ⇒ unchanged.
+EXTRA_ROOTS = tuple(r for r in entrylib.cfg_get(_CFG, ("doc-refs", "extra-roots"), [])
+                    if isinstance(r, str) and r)
+for _r in EXTRA_ROOTS:
+    if not os.path.isdir(os.path.join(REPO, _r)):
+        _CFG_KEY_ERRS.append(f"doc-refs.extra-roots: `{_r}` is not a directory "
+                             "(resolved from the repo root)")
+
 
 def exists_somewhere(token, file_dir):
     # os.path.exists, not isfile: a reference to a directory that exists (a package
@@ -640,9 +654,11 @@ def gather(args):
                 out.append(p)
         return out
     found = []
-    for dpath, _, names in os.walk(FRAMEWORK):
-        found += [os.path.join(dpath, n) for n in names if n.endswith(".md")]
-    return found
+    for root in (FRAMEWORK, *(os.path.join(REPO, r) for r in EXTRA_ROOTS)):
+        for dpath, _, names in os.walk(root):
+            found += [os.path.join(dpath, n) for n in names if n.endswith(".md")]
+    # A root nested in another (or listed twice) must not scan a file twice.
+    return list(dict.fromkeys(os.path.realpath(f) for f in found))
 
 
 def main():
