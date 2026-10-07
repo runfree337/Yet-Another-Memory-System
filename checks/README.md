@@ -161,7 +161,10 @@ sets. Recounting those stays a human act, which is what the review step of the D
 > mechanical field (e.g. an equivalent freshness date elsewhere) — same triple safeguard,
 > same single home.
 
-**Semantic — agent, memory↔code:** the `memory-audit` audit (tier 2, all 3 channels) **is not a hook** — it requires *retrieve-then-verify* judgment and can't run silently every session. Its regime: **Volume trigger** (on the Decision side, the only channel that swells enough for it), **or scheduled**, **or on demand**. For scheduled *while away*, the report loop (see `INSTALL.md` step 5): an **OS cron** runs `decisions-audit.py --report` → writes a **deterministic** report (tier 1, **no LLM**, 0 tokens) to `$YAMS_MEMORY_REPORT_DIR` (default `.memory-reports/`, **to be gitignored**); the `SessionStart` sweep above **detects and surfaces** it; the agent **asks**, the user **decides** whether to wake up tier 2 (LLM, on demand — `memory-audit.py --tier1` first if the Feature/Memory channels are also in doubt). In every case it **reports**; pruning stays **ratified by a human** — a cron never fixes anything on its own.
+**Semantic — agent, memory↔code:** the `memory-audit` audit (tier 2, all 3 channels) **is not a hook** — it requires *retrieve-then-verify* judgment and can't run silently every session. Its regime: **Volume trigger** (on the Decision side, the only channel that swells enough for it), **or scheduled**, **or on demand**. For scheduled *while away*, the report loop (see `INSTALL.md` step 5): an **OS cron** runs `decisions-audit.py --report` → writes a **deterministic** report (tier 1, **no LLM**, 0 tokens) to `$YAMS_MEMORY_REPORT_DIR` (default `.memory-reports/`, **to be gitignored**); the `SessionStart` sweep above **detects and surfaces** it; the agent **asks**, the user **decides** whether to wake up tier 2 (LLM, on demand — `memory-audit.py --tier1` first if the Feature/Memory channels are also in doubt). In every case it **reports**; pruning stays **ratified by a human** — a cron never fixes anything on its own. The one exception
+is opt-in and written: a project whose decision journal delegates correction to its scheduled
+routines (`checks/decisions-audit.md §Safeguard`, "Delegated correction") lets a scheduled agent
+— never the OS cron — correct prose after re-measuring, under green gates.
 
 > **Producer variant — a scheduled AGENT session instead of the OS cron.** The report loop
 > above assumes a **persistent local machine**: the cron writes a gitignored file, the next
@@ -175,7 +178,9 @@ sets. Recounting those stays a human act, which is what the review step of the D
 > proposal branch pushed** (never merged, never touching the default branch), not a
 > local file surfaced by a hook. The **Safeguard is unchanged**: the agent PRODUCES and
 > PROPOSES, a human RATIFIES — the routine merges nothing, deletes nothing, promotes no entry
-> to `confidence: verified`. Choice criterion: **persistent local machine → OS cron**
+> to `confidence: verified` — unless the project opted into delegated correction
+> (`checks/decisions-audit.md §Safeguard`): then it corrects prose itself, lands fast-forward on
+> the default branch, and reports only what it could not handle. Choice criterion: **persistent local machine → OS cron**
 > (deterministic, 0 LLM tokens, silent consumer); **ephemeral remote sessions → scheduled
 > agent** (survives the container, hands back a reviewable branch). See
 > `adapters/claude-code/routines/audit-decisions.md` for a routine prompt implementing this

@@ -415,6 +415,42 @@ class TestDecisionBodyPaths(GraphFixture):
                          "a decision's body citation never feeds doctor")
 
 
+class TestBacklogCode(GraphFixture):
+    """`code:` in a STATE.md — the code paths where a work item declares a limit."""
+
+    def setUp(self):
+        super().setUp()
+        _write(os.path.join(self.root, "backlog/refacto-x/design.md"), "# design\n")
+        _write(os.path.join(self.root, "src/orders/OrderManager.java"), "class OrderManager {}")
+        _write(os.path.join(self.root, "src/orders/TaxCalculator.java"), "class TaxCalculator {}")
+
+    def _state(self, code_line):
+        _write(os.path.join(self.root, "backlog/limits/STATE.md"),
+               "---\nid: limits\ntitle: Declares a limit\nstatus: in-progress\nafter: []\n"
+               "docs: []\n%s\nupdated: 2026-10-07\n---\n## Tasks\n- [todo] x\n" % code_line)
+
+    def test_covers_surfaces_the_work_item_declaring_a_limit_in_the_file(self):
+        # Without `code:`, a work item cites only its own docs: covers on the
+        # code file it declares a limit in stays silent on it.
+        self._state("code: []")
+        self.assertNotIn("limits", [h[1] for h in self.mod.cmd_covers(
+            self.root, "src/orders/TaxCalculator.java")])
+        self._state("code: [src/orders/TaxCalculator.java, ./src/billing/]")
+        hits = self.mod.cmd_covers(self.root, "src/orders/TaxCalculator.java")
+        self.assertIn(("limits", "exact"), [(h[1], h[3]) for h in hits])
+        # Taken as written, never colocated under backlog/<id>/ like `docs:`;
+        # a leading `./` is dropped, a directory covers its subtree.
+        hits = self.mod.cmd_covers(self.root, "src/billing/Invoice.java")
+        self.assertEqual([(h[1], h[3]) for h in hits], [("limits", "dir src/billing/")])
+
+    def test_doctor_checks_code_paths_and_reports_escapes(self):
+        self._state("code: [src/orders/TaxCalculator.java, src/gone/Old.java, ../outside.java]")
+        dead = sorted((d[0], d[2]) for d in self.mod.cmd_doctor(self.root))
+        self.assertEqual(dead, [("limits", "../outside.java"), ("limits", "src/gone/Old.java")])
+        # The escape never became an edge — covers cannot follow it.
+        self.assertNotIn("../outside.java", self.mod.load_graph(self.root)[0]["limits"]["cites"])
+
+
 class TestMultiPath(GraphFixture):
     def test_grouped_report_and_visible_silence(self):
         lines = self.mod.covers_report(

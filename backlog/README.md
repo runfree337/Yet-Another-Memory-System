@@ -19,13 +19,14 @@ backlog. A doc-backed work item makes the chain explicit and checkable through i
 - Small item → an **inline** line in `INDEX.md` (status carried by a badge on the line,
   `[todo]` / `[in-progress]`).
 - **Doc-backed** work item → a `backlog/<id>/` folder whose `STATE.md` opens with a **frontmatter**
-  using **English** keys (`id / title / status / milestone / after / docs / updated`, the
+  using **English** keys (`id / title / status / milestone / after / docs / code / updated`, the
   **source of truth for state**), followed by a **mandatory** `## Tasks` section (see below); its
   companion docs (spec, manifest, task working docs) live in the same folder.
 - Key semantics (unchanged, only the vocabulary changes): `after` = dependency (formerly
   `apres`); `docs` = the folder's companion docs; `updated` = last-touched date (formerly `maj`),
   **mechanically stamped** at pre-commit; `milestone` = milestone (formerly `jalon`), an integer or
-  `null` (Unplanned); `impacts` = the **impact ledger** (see below).
+  `null` (Unplanned); `impacts` = the **impact ledger** (see below); `code` = the code paths where
+  the work item declares a limit (§The `code:` key, below).
 - `phase` = where a doc-backed work item stands in its delivery (§Phases); `status` only says
   whether work has started. A work item in `framing` may be `todo`; past it, `in-progress`.
 - `status: todo | in-progress` (in the frontmatter for a doc-backed item, the badge for an inline
@@ -37,7 +38,11 @@ backlog. A doc-backed work item makes the chain explicit and checkable through i
   item's folder and `git log`, never in the index.
 - **Opening** a doc-backed work item = `mkdir <id>/` + a `STATE.md` copied from
   `STATE.template.md` (frontmatter with `phase: framing` + `## Tasks` + `## Remaining`) + a
-  `spec.md` carrying only the **intent**, written at once + its line in `INDEX.md` (no badge).
+  `spec.md` written at once, carrying the **intent** and an **Existing docs** section + its line
+  in `INDEX.md` (no badge). Existing docs = one pointer per durable doc that already governs the
+  subject — rule, architecture doc, feature entry, decision —, found with the memory graph's
+  coverage query (`hooks/memory-graph.py covers`) when the project runs one: framing starts from
+  what is written, never from a blank page. None found is an answer too — say so in the section.
   The only task is framing it (`- [todo] Frame the work item with the user → spec.md`), and the
   AI **asks the user whether to frame it now**. An inline item has no phase; one that needs a
   doc becomes a doc-backed work item.
@@ -124,6 +129,18 @@ report does not open the gate.
   skip: a validation can be short (re-read a doc against the spec), it is not skipped. The
   architecture step is due when the work item modifies an existing architecture, or adds a
   feature that changes the existing docs.
+- **A work item that consumes facts another layer produces proves it by a provenance table** —
+  in its architecture doc (in `plan.md` when architecture is skipped): one row per fact consumed
+  → the producer's data that carries it (the record, the field), rare cases included (an empty
+  collection, two occurrences at once, each side when there are two). "The producer already
+  carries everything" is not asserted: it is read in this table. A fact with no carrier opens a
+  **producer batch at the head of the plan** — the data and its test —, or a prior work item
+  (`after:`) when that is too big; never a deduction on the consumer side declared a "known
+  limit". The plan audit checks the table against the real code: a missing table, or a fact with
+  no carrier, is blocking. A work item that consumes no other layer's facts owes no table.
+  *Measured on a host project: a work item asserted the producer carried everything, unchecked at
+  architecture and through three plan-audit rounds; three facts with no carrier surfaced in
+  build, guessed by the consumer, and a producer work item had to open afterwards.*
 - **`architecture:` and `skip:` are written before the user validates the spec** — adding them
   afterwards would be editing a validated spec.
 - **Build tasks start with the word `Batch`** (`backlog.build-task-prefix` — a project may set its
@@ -192,6 +209,30 @@ work item looks ready to close with an empty ledger (`E-IMPACT-EMPTY`, to-confir
 while tasks remain open). `--checklist <id>` reads the ledger back: its **Durable** step (DoD 1
 below) enumerates the declared impacts instead of the generic wording, so closure stops relying on
 recall.
+
+## The `code:` key — where a work item's limits live
+
+A work item cites its own docs (`docs:`), never the code its limits live in — so the coverage
+query (`hooks/memory-graph.py covers <file>`) cannot surface it from that file. When a work item
+**declares a limit** — a hole left open, a case declared "out of reach", a tolerated shortcut —,
+its `STATE.md` lists the file where that limit lives in `code:` (repo-relative paths, a
+directory with its trailing `/`; taken as written, never resolved against the work item's
+folder):
+
+```
+code: [src/orders/TaxCalculator.java, src/billing/]
+```
+
+`covers` on that file then names the work item, and `doctor` checks that every path resolves (a
+path leaving the repository is reported, never followed). The key is optional: a work item that
+declares no limit carries none.
+
+**Before fixing anything outside a work item** — a defect, a patch, a reviewer's ask —, run
+`covers` on the files about to change and read what comes out: a work item declaring a limit
+there is exactly what a neighbouring fix risks making reachable. *Measured on a host project: a
+defect fix made reachable a hole an open work item declared "out of reach"; nothing in the
+process flagged it, only the independent review caught it.* A project with a defect protocol of
+its own writes this step into it.
 
 ## Milestones — ordered grouping
 

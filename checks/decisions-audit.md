@@ -78,6 +78,37 @@ ratified `NOT-A-DECISION` is **reclassified**, not archived: its content migrate
 home (feature entry / architecture doc), the entry is deleted — a misfiled fact leaves no
 tombstone.
 
+**Delegated correction — opt-in, off by default.** The Safeguard above is the default for every
+project, and stays so until the project lifts it **in writing**: a decision of its own journal
+that delegates correction to its scheduled audit routines and draws the scope below. Without that
+decision, nothing in this paragraph applies. With it, a routine may chain detection and
+correction in one run:
+
+- **Two agents, never one**: the detection tier judges and writes nothing; a **separate**
+  correction subagent re-measures each finding against the repository before acting — a verdict
+  is a hypothesis, written against the repository of its date. A finding that no longer
+  reproduces is closed as such, and said.
+- **Scope = prose, never behavior**: the project's docs, code comments (never an executable
+  line), and the decision journal **through the protocol's own gestures only** (a dated banner
+  that bounds or declares dead, the INDEX gist, archiving on the protocol's criteria, reciprocal
+  `replaces`). Never executable code, data, a team norm, the canonical tooling, a **new**
+  decision, a deleted decision file, a promotion to `confidence: verified`. A `CODE-DRIFT` is
+  settled by a banner only when `git log -S` and the moving commit's message show a deliberate
+  move; otherwise it stays the user's.
+- **Gates green before and after**: the tier-1 checks run before the correction and again after
+  it, by the routine — not by the agent that wrote; a correction that turns a gate red is
+  withdrawn and its finding reported.
+- **Landing**: one commit per run, its message naming each closed finding and its gesture,
+  pushed **fast-forward only** to the default branch — never a force push. Git is the record:
+  every correction stays reviewable and revertible in one gesture.
+- **The report carries only what was not handled** — out of scope, two defensible readings, a
+  correction the gates refused. A run that closed everything files **no report**.
+
+The delegation counts as ratification for the protocol's gestures only; a structural choice
+still goes to the user. *Measured on a host project: two reports, 33 findings, nearly all closed
+by the default gesture the rubric already recommended — at the cost of three ratification rounds
+for the user.*
+
 ## Packaging per tool
 
 The recipe is agnostic; each tool **packages** it its own way (same logic as the

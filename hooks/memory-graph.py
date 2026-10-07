@@ -18,8 +18,10 @@ invocation:
     `{a,b,c}` brace alternation, the sibling-files shorthand).
   - **memory**    `memory/*.md` frontmatter (id, links) only.
   - **backlog**   `backlog/*/STATE.md` frontmatter (id, title, status, after,
-    docs) — `docs:` is a list of doc filenames colocated with the `STATE.md`,
-    resolved here to repo-relative paths.
+    docs, code) — `docs:` is a list of doc filenames colocated with the
+    `STATE.md`, resolved here to repo-relative paths; `code:` (optional) lists
+    repo-relative code paths where the work item declares a limit, taken as
+    written.
   - **recipe**    (opt-in, `recipe-dirs`, default OFF) every `.md` under the
     listed dirs — the skills, rules and agent definitions agents follow to
     the letter. Not a memory channel: a fifth node KIND read where the
@@ -693,13 +695,48 @@ def load_memory(root, base=""):
     return nodes, edges
 
 
+def _backlog_code_paths(raw):
+    """The optional `code:` list of a `STATE.md` — repo-relative paths (files,
+    or directories with a trailing `/`) where the work item declares a limit,
+    a hole or a tolerated shortcut. Taken AS WRITTEN, never colocated (unlike
+    `docs:`): a leading `./` is dropped, nothing else is rewritten. A path
+    that leaves the repository (absolute, or with a `..` segment) is not a
+    citation the graph can follow: it is returned apart, as an escape, and
+    `doctor` reports it — never silently dropped. Returns (paths, escapes)."""
+    if isinstance(raw, str):
+        raw = [raw] if raw.strip() else []
+    paths, escapes = [], []
+    for item in raw:
+        p = item.strip().strip("'\"").replace("\\", "/")
+        while p.startswith("./"):
+            p = p[2:]
+        if not p:
+            continue
+        is_abs = p.startswith("/") or (len(p) >= 2 and p[0].isalpha() and p[1] == ":")
+        if is_abs or ".." in p.rstrip("/").split("/"):
+            escapes.append(p)
+        elif p not in paths:
+            paths.append(p)
+    return paths, escapes
+
+
 def load_backlog(root, base=""):
-    """`backlog/*/STATE.md` frontmatter (id, title, status, after, docs) only
-    — no body parsing. `docs:` lists doc filenames colocated with `STATE.md`;
-    each is resolved here to a repo-relative path and becomes a `cite-path`
-    edge (these companion docs live under `backlog/`, so in practice the hook's
-    self-suppression guard makes them unreachable via `covers` from a live edit
-    — they still matter for `neighbors`)."""
+    """`backlog/*/STATE.md` frontmatter (id, title, status, after, docs, code)
+    only — no body parsing. `docs:` lists doc filenames colocated with
+    `STATE.md`; each is resolved here to a repo-relative path and becomes a
+    `cite-path` edge (these companion docs live under `backlog/`, so in
+    practice the hook's self-suppression guard makes them unreachable via
+    `covers` from a live edit — they still matter for `neighbors`).
+
+    `code:` (optional) lists the code paths where the work item declares a
+    limit, a hole or a tolerated shortcut (`backlog/README.md §The code:
+    key`). Each becomes a `cite-path` edge too, taken as written
+    (`_backlog_code_paths`) — so `covers <file>` surfaces the work item that
+    declared a limit IN that file, the one thing a work item citing only its
+    own docs could never do. Measured on a host project: a defect fix made a
+    hole reachable that an open work item declared "out of reach"; the hole
+    lived in a code file no memory cited, so `covers` on it stayed silent,
+    and only the independent review caught it."""
     nodes, edges = {}, []
     bdir_rel = _join_base(base, BACKLOG_DIR)
     bdir = os.path.join(root, bdir_rel)
@@ -721,6 +758,8 @@ def load_backlog(root, base=""):
         bid = fm.get("id") or d
         docs = fm.get("docs", [])
         cites = [bdir_rel + "/" + d + "/" + doc for doc in docs]
+        code, escapes = _backlog_code_paths(fm.get("code", []))
+        cites += [c for c in code if c not in cites]
         nodes[bid] = {
             "type": "backlog",
             "id": bid,
@@ -729,6 +768,7 @@ def load_backlog(root, base=""):
             "updated": fm.get("updated", ""),
             "path": bdir_rel + "/" + d + "/STATE.md",
             "cites": cites,
+            "code-escapes": escapes,
         }
         for aid in fm.get("after", []):
             edges.append((bid, "after", aid))
@@ -1064,7 +1104,11 @@ def cmd_doctor(root):
     the file it removed."""
     nodes, edges = load_graph(root)
     root_abs = os.path.abspath(root)
-    dead = []
+    # A backlog `code:` path that leaves the repository never became an edge
+    # (`_backlog_code_paths`): it is reported here, as dead as an unresolved one.
+    dead = [(nid, node.get("path", ""), esc)
+            for nid, node in nodes.items() if node["type"] == "backlog"
+            for esc in node.get("code-escapes", [])]
     for src, etype, dst in edges:
         if etype != "cite-path":
             continue
