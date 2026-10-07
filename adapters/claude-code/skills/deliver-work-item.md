@@ -10,7 +10,7 @@
 
 **Trigger** — a doc-backed work item to resume, drive or close; a batch about to go to a
 subagent; "carry this work item", "execute this work item". Opening a new work item: write the
-intent in `spec.md`, open it in `framing`, and **ask the user whether to frame it now**. A work
+intent and its Existing docs in `spec.md` (`backlog/README.md §Structure`), open it in `framing`, and **ask the user whether to frame it now**. A work
 item still in `framing` is framed **with** the user (a questioning skill, one question at a time
 with a recommended answer) — the AI never carries it alone before `validated:` is set on the
 user's explicit approval.

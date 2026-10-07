@@ -29,10 +29,10 @@ everything it needs lives in the repository:
 
 | Phase | What the orchestrator does |
 |---|---|
-| `framing` | with the user, question by question, until the intent, scope and success criteria are shared; writes `spec.md` (`architecture:` / `skip:` included) and sets `validated:` **only on the user's explicit approval** |
-| `architecture` | when an existing architecture changes or a feature changes the existing docs: where each piece lives, the contracts, the risks; a structural choice also goes to the decision log |
+| `framing` | with the user, question by question, starting from the spec's **Existing docs**, until the intent, scope and success criteria are shared; writes `spec.md` (`architecture:` / `skip:` included) and sets `validated:` **only on the user's explicit approval** |
+| `architecture` | when an existing architecture changes or a feature changes the existing docs: where each piece lives, the contracts, the risks; a structural choice also goes to the decision log. A work item consuming another layer's facts writes its **provenance table** — fact → the producer's data that carries it; a fact with no carrier becomes a producer batch at the head of the plan (`backlog/README.md §Phases`) |
 | `plan` | batches (below), their order, the proof of each, how the spec's criteria will be validated |
-| `plan-audit` | an **independent** auditor — never whoever wrote the plan — confronts spec, architecture and plan with the **real code**: false premises, holes, broken order, underestimated cost. The orchestrator writes `audit-plan.md`; no blocking finding open ⟹ `verdict: pass` |
+| `plan-audit` | an **independent** auditor — never whoever wrote the plan — confronts spec, architecture and plan with the **real code**: false premises, holes, broken order, underestimated cost — and opens each row of a provenance table to check the field exists and says that fact (missing table or fact with no carrier = blocking). The orchestrator writes `audit-plan.md`; no blocking finding open ⟹ `verdict: pass` |
 | `build` | batches, delegated or not; the proof never delegated (below); a per-batch review |
 | `validation` | each success criterion of the spec exercised for real — run, played, read — with its evidence; `validation.md` |
 | `closure` | the Definition of Done (`backlog/README.md`), including the overall review once the code no longer moves |
@@ -45,6 +45,8 @@ everything it needs lives in the repository:
 - **Small enough to be read, audited and reverted in one gesture** — the project sets the cap (a
   host project uses 5 files). It is not a context limit: past it, a batch is no longer reviewable
   by a human.
+- **A work item declaring a limit** (a hole left open, a tolerated shortcut) lists the file it
+  lives in under `code:` in `STATE.md` (`backlog/README.md §The code: key`).
 - **Check the surface on disk** before cutting: `git log --name-only` also lists files touched,
   then deleted.
 - **Build tasks start with `Batch`** — or the word the project set (`backlog/README.md §Phases`).
