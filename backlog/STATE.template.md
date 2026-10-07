@@ -28,7 +28,8 @@ item is **removed**, not marked). `phase` = `framing | architecture | plan | pla
 validation | closure` — each phase past `framing` requires its gate files (`README.md §Phases`);
 a new work item opens in `framing`, with a `spec.md` that carries only its intent. `milestone` = integer (milestone) or `null` (Unplanned).
 `after` = list of work-item `id`s this one depends on. `docs` = list of the folder's companion
-`.md` files (excluding `STATE.md` itself). `impacts` = the **impact ledger**: fill it in **as you
+`.md` files (excluding `STATE.md` itself). `code` (optional, add it when needed) = repo-relative code paths
+where the work item declares a limit (`README.md §The code: key`). `impacts` = the **impact ledger**: fill it in **as you
 learn**, during work, as soon as you know a durable doc/memory will need updating — each entry is
 either a target path (e.g. `WORKFLOW.md`, `features/x.md` — no existence requirement, it may be a <!-- template -->
 doc to create at closure) or a channel keyword (`decision | feature | memory`). Consumed at
