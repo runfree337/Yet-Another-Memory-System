@@ -5,7 +5,9 @@
 > in **ephemeral remote sessions** where a cron-written gitignored report would die with the
 > container. The routine **produces and proposes**; **ratification stays human**
 > (Safeguard of `checks/decisions-audit.md`): it merges nothing, deletes nothing, never touches
-> the default branch.
+> the default branch. A project that opted into **delegated correction** (same file, written
+> delegation in its own journal) rewrites the ABSOLUTE RULE below to that scope — this prompt is
+> the default, not the variant.
 
 ## Recommended wiring
 
